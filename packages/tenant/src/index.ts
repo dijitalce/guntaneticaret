@@ -12,12 +12,27 @@ import {
 let redis: IORedis | null = null;
 function getRedis() {
   if (!process.env.REDIS_URL) return null;
-  redis ??= new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+  if (!redis) {
+    redis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+    // ioredis crashes the whole process on an unhandled "error" event; the
+    // cache is optional here, so swallow connection errors and let callers'
+    // try/catch fall back to reading straight from the database.
+    redis.on("error", () => {});
+  }
   return redis;
 }
 
 export function normalizeHost(host: string): string {
   return host.replace(/:\d+$/, "").replace(/^www\./i, "").toLowerCase();
+}
+
+async function safeCacheSet(cache: IORedis | null, key: string, value: string, ttlSeconds: number) {
+  if (!cache) return;
+  try {
+    await cache.set(key, value, "EX", ttlSeconds);
+  } catch {
+    /* cache optional */
+  }
 }
 
 export async function resolveTenantByHost(rawHost: string): Promise<TenantPublicConfig | null> {
@@ -42,13 +57,13 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     .limit(1);
 
   if (!domain) {
-    await cache?.set(cacheKey, "null", "EX", TENANT_HOST_CACHE_TTL_SECONDS);
+    await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
     return null;
   }
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, domain.tenantId)).limit(1);
   if (!tenant || tenant.status === TENANT_STATUS.DRAFT) {
-    await cache?.set(cacheKey, "null", "EX", TENANT_HOST_CACHE_TTL_SECONDS);
+    await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
     return null;
   }
 
@@ -86,8 +101,8 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     allCatalogUrl: settings?.socialJson?.allCatalogUrl ?? null,
   };
 
-  await cache?.set(cacheKey, JSON.stringify(config), "EX", TENANT_HOST_CACHE_TTL_SECONDS);
-  await cache?.set(CACHE_KEYS.tenantConfig(tenant.id), JSON.stringify(config), "EX", TENANT_CONFIG_CACHE_TTL_SECONDS);
+  await safeCacheSet(cache, cacheKey, JSON.stringify(config), TENANT_HOST_CACHE_TTL_SECONDS);
+  await safeCacheSet(cache, CACHE_KEYS.tenantConfig(tenant.id), JSON.stringify(config), TENANT_CONFIG_CACHE_TTL_SECONDS);
   return config;
 }
 
@@ -111,5 +126,9 @@ export function themeToCssVars(theme: ThemeTokens): string {
 export async function invalidateTenantCache(tenantId: string, hostnames: string[]) {
   const cache = getRedis();
   if (!cache) return;
-  await cache.del(CACHE_KEYS.tenantConfig(tenantId), ...hostnames.map((h) => CACHE_KEYS.tenantHost(normalizeHost(h))));
+  try {
+    await cache.del(CACHE_KEYS.tenantConfig(tenantId), ...hostnames.map((h) => CACHE_KEYS.tenantHost(normalizeHost(h))));
+  } catch {
+    /* cache optional */
+  }
 }

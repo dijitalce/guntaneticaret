@@ -16,7 +16,6 @@ function pkgDir(name: string) {
 }
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   outputFileTracingRoot: repoRoot,
   transpilePackages: [
     "@guntan/auth",
