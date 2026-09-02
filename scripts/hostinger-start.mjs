@@ -1,24 +1,23 @@
-import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Dedicated, argument-free entry point for hosts (like Hostinger's "Application
 // startup file" field) that execute a single JS file directly with `node`
-// rather than running an npm script. Always starts the storefront in
-// production mode, regardless of how it's invoked.
+// rather than running an npm script.
+//
+// Runs Next's CLI in-process (instead of spawning a child process) so the
+// process this host actually manages is the one holding the server socket.
+// If we spawned a child here, a SIGTERM sent by the host's process manager
+// to restart the app would only reach this wrapper, not the child, leaving
+// an orphaned process still bound to the port and causing EADDRINUSE on the
+// next restart attempt.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const require = createRequire(join(root, "apps/storefront/package.json"));
-const nextBin = require.resolve("next/dist/bin/next");
+const appDir = join(root, "apps/storefront");
+process.chdir(appDir);
 
-const result = spawnSync(
-  process.execPath,
-  [nextBin, "start", "--hostname", "0.0.0.0", "--port", process.env.PORT ?? "3000"],
-  {
-    cwd: join(root, "apps/storefront"),
-    stdio: "inherit",
-    env: process.env,
-  }
-);
+const require = createRequire(join(appDir, "package.json"));
+const port = process.env.PORT ?? "3000";
+process.argv = [process.argv[0], "next", "start", "--hostname", "0.0.0.0", "--port", port];
 
-process.exit(result.status ?? 1);
+require("next/dist/bin/next");
