@@ -13,4 +13,3 @@ uploads
 docker/minio-data
 playwright-report
 test-results
-products.xml
