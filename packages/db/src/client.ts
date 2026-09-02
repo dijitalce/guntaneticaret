@@ -3,12 +3,13 @@ import postgres from "postgres";
 import * as schema from "./schema";
 
 const connectionString = process.env.DATABASE_URL ?? "postgres://guntan:guntan@localhost:5432/guntan";
+const isLocalDb = /localhost|127\.0\.0\.1/.test(connectionString);
 
 const globalForDb = globalThis as unknown as {
   pg: ReturnType<typeof postgres> | undefined;
 };
 
-export const pg = globalForDb.pg ?? postgres(connectionString, { max: 10 });
+export const pg = globalForDb.pg ?? postgres(connectionString, { max: 10, ssl: isLocalDb ? undefined : "require" });
 if (process.env.NODE_ENV !== "production") {
   globalForDb.pg = pg;
 }
