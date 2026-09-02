@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "start": "pnpm --filter @guntan/storefront start",
     "lint": "turbo lint",
     "test": "turbo test",
     "test:e2e": "playwright test",
