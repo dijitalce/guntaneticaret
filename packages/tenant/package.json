@@ -9,6 +9,7 @@
     "@guntan/config": "workspace:*",
     "@guntan/db": "workspace:*",
     "@guntan/types": "workspace:*",
+    "drizzle-orm": "^0.40.0",
     "ioredis": "^5.6.0"
   }
 }
