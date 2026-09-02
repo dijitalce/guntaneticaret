@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BrandMark } from "./brand-mark";
 import { foldTr } from "./format";
+import { IconBack } from "./icons";
 
 export type VehicleNavItem = {
   name: string;
@@ -17,11 +18,15 @@ export function VehicleNav({
   items,
   activeSlug,
   searchable = false,
+  backHref,
+  backLabel = "Markalara dön",
 }: {
   title: string;
   items: VehicleNavItem[];
   activeSlug?: string;
   searchable?: boolean;
+  backHref?: string;
+  backLabel?: string;
 }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -37,17 +42,27 @@ export function VehicleNav({
   return (
     <nav className="vehicle-nav" aria-label={title}>
       <div className="vehicle-nav-head">{title}</div>
-      {searchable && (
+      {(searchable || backHref) && (
         <div className="vehicle-nav-search">
-          <label className="sr-only" htmlFor={`nav-search-${title}`}>{searchPlaceholder}</label>
-          <input
-            id={`nav-search-${title}`}
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={searchPlaceholder}
-            autoComplete="off"
-          />
+          {searchable && (
+            <>
+              <label className="sr-only" htmlFor={`nav-search-${title}`}>{searchPlaceholder}</label>
+              <input
+                id={`nav-search-${title}`}
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={searchPlaceholder}
+                autoComplete="off"
+              />
+            </>
+          )}
+          {backHref && (
+            <Link href={backHref} className="vehicle-nav-back">
+              <IconBack />
+              {backLabel}
+            </Link>
+          )}
         </div>
       )}
       <ul className="vehicle-nav-list">

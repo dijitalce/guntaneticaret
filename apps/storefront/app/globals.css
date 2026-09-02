@@ -585,6 +585,26 @@ body {
   background: #fff;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
 }
+.vehicle-nav-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+.vehicle-nav-search input + .vehicle-nav-back { margin-top: 0.45rem; }
+.vehicle-nav-back:hover {
+  background: #fff;
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  color: var(--primary);
+}
 .vehicle-nav-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; min-height: 0; }
 .vehicle-nav-empty {
   padding: 0.85rem 0.9rem;

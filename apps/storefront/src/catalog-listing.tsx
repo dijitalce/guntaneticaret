@@ -61,7 +61,14 @@ export function CatalogListing({
     <div className="container catalog-page">
       <div className="catalog-layout">
         <aside className="catalog-aside">
-          <VehicleNav title={navTitle} items={navItems} activeSlug={activeSlug} searchable />
+          <VehicleNav
+            title={navTitle}
+            items={navItems}
+            activeSlug={activeSlug}
+            searchable
+            backHref="/"
+            backLabel="Markalara dön"
+          />
           {featured.length > 0 && (
             <div className="aside-block">
               <div className="vehicle-nav-head">Çok satanlar</div>
