@@ -1,6 +1,8 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   transpilePackages: [
     "@guntan/auth",
     "@guntan/catalog",
@@ -14,7 +16,7 @@ const nextConfig: NextConfig = {
     "@guntan/ui",
   ],
   images: { remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }] },
-  serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch", "saxes"],
+  serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch", "saxes", "drizzle-orm"],
 };
 
 export default nextConfig;
