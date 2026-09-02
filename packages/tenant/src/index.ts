@@ -13,7 +13,16 @@ let redis: IORedis | null = null;
 function getRedis() {
   if (!process.env.REDIS_URL) return null;
   if (!redis) {
-    redis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+    redis = new IORedis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 2,
+      lazyConnect: true,
+      // If REDIS_URL points at something unreachable (e.g. a leftover
+      // "localhost" value in production with no Redis running there), the
+      // default 10s connect timeout would otherwise stall every single
+      // request on every domain by that long before falling back to the DB.
+      connectTimeout: 1500,
+      retryStrategy: () => null,
+    });
     // ioredis crashes the whole process on an unhandled "error" event; the
     // cache is optional here, so swallow connection errors and let callers'
     // try/catch fall back to reading straight from the database.
