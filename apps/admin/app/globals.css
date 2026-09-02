@@ -1,0 +1,13 @@
+@import "@guntan/ui/styles.css";
+
+.admin-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.admin-nav { background: #16181d; color: #f3f4f6; padding: 1.25rem 1rem; }
+.admin-nav a { display: block; padding: 0.45rem 0.35rem; color: #e5e7eb; border-radius: 0.35rem; }
+.admin-nav a:hover { background: #2a2e36; }
+.admin-main { padding: 1.5rem; background: #f7f5f2; }
+.table { width: 100%; border-collapse: collapse; background: #fff; }
+.table th, .table td { border-bottom: 1px solid var(--border); padding: 0.55rem 0.6rem; text-align: left; font-size: 0.9rem; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+.kpi { padding: 1rem; }
+.wizard { display: grid; gap: 0.75rem; max-width: 640px; }
+@media (max-width: 800px) { .admin-shell { grid-template-columns: 1fr; } .kpis { grid-template-columns: 1fr 1fr; } }

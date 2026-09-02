@@ -1,0 +1,14 @@
+{
+  "name": "@guntan/tenant",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "echo ok", "test": "vitest run" },
+  "dependencies": {
+    "@guntan/config": "workspace:*",
+    "@guntan/db": "workspace:*",
+    "@guntan/types": "workspace:*",
+    "ioredis": "^5.6.0"
+  }
+}

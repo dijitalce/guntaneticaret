@@ -1,0 +1,12 @@
+{
+  "name": "@guntan/observability",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "echo ok" },
+  "dependencies": {
+    "@guntan/db": "workspace:*",
+    "pino": "^9.6.0"
+  }
+}

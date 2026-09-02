@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<products>
+  <product>
+    <id>XML-001</id>
+    <sku>XML-OIL-CIVIC</sku>
+    <name>Honda Civic XML Yağ Filtresi</name>
+    <description>Fixture ürün</description>
+    <manufacturer>MANN-FILTER</manufacturer>
+    <category>Yağ Filtresi</category>
+    <price>199.00</price>
+    <compareAtPrice>249.00</compareAtPrice>
+    <stock>11</stock>
+    <barcode>8690000000011</barcode>
+    <oem>15400-PLM-A99</oem>
+    <image></image>
+    <fitment>
+      <brand>Honda</brand>
+      <model>Civic</model>
+      <generation>8. Nesil</generation>
+      <engine>1.6</engine>
+    </fitment>
+  </product>
+  <product>
+    <id>XML-002</id>
+    <sku>XML-BRAKE-COROLLA</sku>
+    <name>Toyota Corolla XML Fren Balatası</name>
+    <description>Fixture ürün</description>
+    <manufacturer>Bosch</manufacturer>
+    <category>Fren Sistemi</category>
+    <price>890.00</price>
+    <stock>5</stock>
+    <barcode>8690000000012</barcode>
+    <oem>04465-02180</oem>
+    <fitment>
+      <brand>Toyota</brand>
+      <model>Corolla</model>
+      <generation>E150</generation>
+      <engine>1.6</engine>
+    </fitment>
+  </product>
+</products>

@@ -1,0 +1,14 @@
+{
+  "name": "@guntan/ui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": { "lint": "echo ok" },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

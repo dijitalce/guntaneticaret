@@ -1,0 +1,32 @@
+{
+  "name": "@guntan/admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@guntan/auth": "workspace:*",
+    "@guntan/config": "workspace:*",
+    "@guntan/db": "workspace:*",
+    "@guntan/ecommerce": "workspace:*",
+    "@guntan/import": "workspace:*",
+    "@guntan/observability": "workspace:*",
+    "@guntan/search": "workspace:*",
+    "@guntan/tenant": "workspace:*",
+    "@guntan/types": "workspace:*",
+    "@guntan/ui": "workspace:*",
+    "bullmq": "^5.44.0",
+    "ioredis": "^5.6.0",
+    "next": "^15.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4"
+  }
+}

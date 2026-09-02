@@ -1,0 +1,30 @@
+{
+  "name": "@guntan/storefront",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@guntan/auth": "workspace:*",
+    "@guntan/catalog": "workspace:*",
+    "@guntan/config": "workspace:*",
+    "@guntan/db": "workspace:*",
+    "@guntan/ecommerce": "workspace:*",
+    "@guntan/email": "workspace:*",
+    "@guntan/search": "workspace:*",
+    "@guntan/tenant": "workspace:*",
+    "@guntan/types": "workspace:*",
+    "@guntan/ui": "workspace:*",
+    "next": "^15.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4"
+  }
+}

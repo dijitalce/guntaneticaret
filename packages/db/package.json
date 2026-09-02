@@ -1,0 +1,29 @@
+{
+  "name": "@guntan/db",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./vehicle-catalog": "./src/vehicle-catalog.ts"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts",
+    "sync-catalog": "tsx src/sync-vehicle-catalog.ts",
+    "sync-tenants": "tsx src/sync-tenants.ts",
+    "studio": "drizzle-kit studio",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@guntan/types": "workspace:*",
+    "drizzle-orm": "^0.40.0",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.5",
+    "tsx": "^4.19.3"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "guntaneticaret",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @guntan/db generate",
+    "db:migrate": "pnpm --filter @guntan/db migrate",
+    "db:seed": "pnpm --filter @guntan/db seed",
+    "db:sync-catalog": "pnpm --filter @guntan/db sync-catalog",
+    "db:sync-tenants": "pnpm --filter @guntan/db sync-tenants",
+    "import:xml": "pnpm --filter @guntan/import guntan-xml",
+    "db:studio": "pnpm --filter @guntan/db studio",
+    "worker": "pnpm --filter @guntan/worker dev"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@types/node": "^22.13.10",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}
