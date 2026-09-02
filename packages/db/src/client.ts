@@ -17,6 +17,14 @@ export const pg =
     // Supabase's transaction pooler (pgbouncer) doesn't support session-level
     // prepared statements across its multiplexed connections.
     prepare: isLocalDb,
+    // pgbouncer (transaction mode) silently drops idle server-side
+    // connections. If postgres.js still has one open when that happens, it
+    // can throw an uncatchable exception on the next write (see
+    // https://github.com/porsager/postgres/issues/1208). Closing idle
+    // connections client-side first, well before the pooler would, avoids
+    // racing that server-side termination.
+    idle_timeout: isLocalDb ? undefined : 20,
+    max_lifetime: isLocalDb ? undefined : 60 * 30,
   });
 if (process.env.NODE_ENV !== "production") {
   globalForDb.pg = pg;
