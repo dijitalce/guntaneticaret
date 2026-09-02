@@ -4,9 +4,9 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "turbo dev",
-    "build": "pnpm --filter @guntan/storefront build",
+    "build": "node scripts/hostinger-next.mjs build",
     "build:all": "turbo build",
-    "start": "pnpm --filter @guntan/storefront start",
+    "start": "node scripts/hostinger-next.mjs start",
     "lint": "turbo lint",
     "test": "turbo test",
     "test:e2e": "playwright test",
