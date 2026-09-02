@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import type { NextConfig } from "next";
@@ -6,7 +7,12 @@ const require = createRequire(__filename);
 const repoRoot = path.join(__dirname, "../..");
 
 function pkgDir(name: string) {
-  return path.dirname(require.resolve(`${name}/package.json`));
+  let dir = path.dirname(require.resolve(name));
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    dir = path.dirname(dir);
+  }
+  return dir;
 }
 
 const nextConfig: NextConfig = {
