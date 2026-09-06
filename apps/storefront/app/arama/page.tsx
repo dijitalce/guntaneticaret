@@ -5,9 +5,14 @@ import { getTenant } from "../../src/tenant";
 import { ProductCard } from "../../src/product-card";
 import { redirect } from "next/navigation";
 
-export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; brand?: string }> }) {
+export default async function SearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; brand?: string; category?: string }>;
+}) {
   const sp = await searchParams;
   const tenant = await getTenant();
+  if (sp.category && !sp.q) redirect(`/kategori/${sp.category}`);
   if (sp.brand && !sp.q) redirect(`/${sp.brand}`);
   const indexed = sp.q ? await searchProducts(tenant.tenant.id, sp.q, 24).catch(() => []) : [];
   const catalogHits = indexed.length === 0 && sp.q ? await searchCatalog(tenant.tenant.id, sp.q, 24) : [];
@@ -38,6 +43,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                 sku: h.sku,
                 price: "price" in h && h.price != null ? String(h.price) : undefined,
                 manufacturerName: h.manufacturer,
+                imageUrl: "thumbnail" in h && h.thumbnail ? String(h.thumbnail) : null,
                 stockStatus: "in_stock",
               }}
               placeholder={tenant.placeholderImageUrl}
@@ -55,7 +61,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           {fallback.length > 0 && (
             <div className="product-grid" style={{ marginTop: "1.25rem" }}>
               {fallback.map((p) => (
-                <ProductCard key={p.id} product={{ ...p, imageUrl: null }} placeholder={tenant.placeholderImageUrl} />
+                <ProductCard key={p.id} product={p} placeholder={tenant.placeholderImageUrl} />
               ))}
             </div>
           )}

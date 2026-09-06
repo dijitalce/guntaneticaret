@@ -102,16 +102,28 @@ export async function compileVisibility(db: Database, tenantId?: string) {
 
     if (excludeBrands.length > 0) {
       const rows = await db
-        .select({ productId: productFitments.productId, brandId: productFitments.vehicleBrandId })
+        .select({ productId: productFitments.productId })
         .from(productFitments)
         .where(inArray(productFitments.vehicleBrandId, excludeBrands));
-      const excludedProductIds = new Set(rows.map((r) => r.productId));
-      for (const pid of excludedProductIds) {
-        const other = await db
-          .select({ brandId: productFitments.vehicleBrandId })
+      const excludedProductIds = [...new Set(rows.map((r) => r.productId))];
+      if (excludedProductIds.length === 0) {
+        /* nothing */
+      } else if (allowedBrandIds.length === 0) {
+        for (const pid of excludedProductIds) visibleIds.delete(pid);
+      } else {
+        const otherFits = await db
+          .select({ productId: productFitments.productId })
           .from(productFitments)
-          .where(and(eq(productFitments.productId, pid), inArray(productFitments.vehicleBrandId, allowedBrandIds)));
-        if (other.length === 0) visibleIds.delete(pid);
+          .where(
+            and(
+              inArray(productFitments.productId, excludedProductIds),
+              inArray(productFitments.vehicleBrandId, allowedBrandIds),
+            ),
+          );
+        const hasAllowedFitment = new Set(otherFits.map((f) => f.productId));
+        for (const pid of excludedProductIds) {
+          if (!hasAllowedFitment.has(pid)) visibleIds.delete(pid);
+        }
       }
     }
 

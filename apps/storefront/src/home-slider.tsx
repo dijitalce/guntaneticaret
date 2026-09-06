@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 type Slide = {
   alt: string;
@@ -32,7 +33,14 @@ export function HomeSlider({ slides }: { slides: Slide[] }) {
       onMouseLeave={() => setPaused(false)}
     >
       <Link className="home-slide" href={slide.href} key={slide.image}>
-        <img src={slide.image} alt={slide.alt} />
+        <Image
+          src={slide.image}
+          alt={slide.alt}
+          width={1200}
+          height={480}
+          sizes="(max-width: 960px) 100vw, 70vw"
+          priority={i === 0}
+        />
       </Link>
       <div className="home-slider-nav">
         <button type="button" className="home-slider-arrow" onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(-1); }} aria-label="Önceki slayt">‹</button>

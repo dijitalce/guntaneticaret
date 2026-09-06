@@ -1,26 +1,87 @@
 import Link from "next/link";
-import { featuredProducts, listPopularCategories, listVisibleBrands } from "@guntan/catalog";
+import type { Metadata } from "next";
+import { featuredProducts } from "@guntan/catalog";
 import { getTenant } from "../src/tenant";
+import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { ProductCard } from "../src/product-card";
 import { VehicleFinder } from "../src/vehicle-finder";
 import { VehicleNav } from "../src/vehicle-nav";
 import { HomeSlider } from "../src/home-slider";
 import { sentenceCaseTr } from "../src/format";
 import { IconBox, IconShield, IconTag, IconTruck } from "../src/icons";
+import {
+  JsonLd,
+  absoluteUrl,
+  itemListJsonLd,
+} from "../src/seo";
 
 export const revalidate = 60;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await getTenant();
+  const title = tenant.defaultMetaTitle ?? `${tenant.siteName} | Oto Yedek Parça`;
+  const description =
+    tenant.defaultMetaDescription ??
+    `${tenant.siteName} — araç marka ve modeline uygun yedek parça. KDV dahil fiyat, stokta ürün, hızlı tedarik.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, "/") },
+    openGraph: {
+      title,
+      description,
+      url: absoluteUrl(tenant.tenant.canonicalHost, "/"),
+      type: "website",
+      images: tenant.ogImageUrl ? [tenant.ogImageUrl] : undefined,
+    },
+  };
+}
 
 export default async function HomePage() {
   const tenant = await getTenant();
   const [brands, featured, cats] = await Promise.all([
-    listVisibleBrands(tenant.tenant.id),
+    cachedVisibleBrands(tenant.tenant.id),
     featuredProducts(tenant.tenant.id, 8),
-    listPopularCategories(6),
+    cachedPopularCategories(8),
   ]);
   const rootCats = cats.filter((c) => !c.parentId);
+  const host = tenant.tenant.canonicalHost;
+  const seoBody =
+    tenant.seoContent ??
+    tenant.defaultMetaDescription ??
+    `${tenant.siteName} oto yedek parça kataloğunda marka ve modele göre filtreleyerek fren, motor, süspansiyon ve bakım parçalarına ulaşabilirsiniz.`;
 
   return (
     <div className="container home">
+      <JsonLd
+        data={[
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: tenant.siteName,
+            url: absoluteUrl(host, "/"),
+            potentialAction: {
+              "@type": "SearchAction",
+              target: `${absoluteUrl(host, "/arama")}?q={search_term_string}`,
+              "query-input": "required name=search_term_string",
+            },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: tenant.siteName,
+            url: absoluteUrl(host, "/"),
+            logo: tenant.logoUrl ? absoluteUrl(host, tenant.logoUrl) : undefined,
+            telephone: tenant.phone ?? undefined,
+            email: tenant.email ?? undefined,
+            address: tenant.address
+              ? { "@type": "PostalAddress", streetAddress: tenant.address, addressCountry: "TR" }
+              : undefined,
+          },
+          itemListJsonLd(host, "Çok satanlar", featured),
+        ]}
+      />
+      <h1 className="home-h1">{tenant.siteName} — Oto Yedek Parça</h1>
       <div className="home-ia">
         <VehicleNav
           title="Markalar"
@@ -60,6 +121,25 @@ export default async function HomePage() {
         <div className="trust-item"><span><IconShield /></span>Havale ile güvenli ödeme</div>
       </div>
 
+      {rootCats.length > 0 && (
+        <section className="home-categories" aria-labelledby="home-cats-title">
+          <div className="section-head">
+            <div>
+              <h2 id="home-cats-title">Ürün kategorileri</h2>
+              <p>Fren, motor ve bakım parçalarına kategori sayfalarından ulaş</p>
+            </div>
+          </div>
+          <div className="category-grid">
+            {rootCats.map((c) => (
+              <Link key={c.id} className="category-tile" href={`/kategori/${c.slug}`}>
+                <strong>{sentenceCaseTr(c.name)}</strong>
+                <span>İncele</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="section-head">
         <div>
           <h2>Çok satanlar</h2>
@@ -67,27 +147,26 @@ export default async function HomePage() {
         </div>
         <div className="section-tabs">
           <Link className="is-active" href="/">Tümü</Link>
-          {rootCats.map((c) => (
-            <Link key={c.id} href={`/arama?category=${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
+          {rootCats.slice(0, 6).map((c) => (
+            <Link key={c.id} href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
           ))}
         </div>
       </div>
       <div className="product-grid">
-        {featured.map((p) => (
+        {featured.map((p, i) => (
           <ProductCard
             key={p.id}
-            product={{ ...p, imageUrl: null, oem: null, stockStatus: p.stockStatus }}
+            product={{ ...p, oem: null }}
             placeholder={tenant.placeholderImageUrl}
+            priority={i < 4}
           />
         ))}
       </div>
 
-      {tenant.defaultMetaDescription && (
-        <section className="seo-block">
-          <h2>{tenant.siteName}</h2>
-          <p>{tenant.defaultMetaDescription}</p>
-        </section>
-      )}
+      <section className="seo-block">
+        <h2>{tenant.siteName}</h2>
+        <p>{seoBody}</p>
+      </section>
     </div>
   );
 }

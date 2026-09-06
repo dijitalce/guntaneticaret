@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { type ListingSort } from "@guntan/types";
+import { type ListingSort, LISTING_SORT } from "@guntan/types";
 import { ProductCard, ProductMiniCard } from "./product-card";
 import { VehicleNav, type VehicleNavItem } from "./vehicle-nav";
 import { sentenceCaseTr } from "./format";
@@ -24,6 +24,14 @@ type Facets = {
   engines: { id: string; name: string; slug: string }[];
 };
 
+function pageHref(basePath: string, page: number, sort: ListingSort) {
+  const params = new URLSearchParams();
+  if (sort !== LISTING_SORT.RECOMMENDED) params.set("sort", sort);
+  if (page > 1) params.set("page", String(page));
+  const q = params.toString();
+  return q ? `${basePath}?${q}` : basePath;
+}
+
 export function CatalogListing({
   crumbs,
   title,
@@ -36,8 +44,11 @@ export function CatalogListing({
   activeCategorySlug,
   items,
   total,
+  page = 1,
+  pageSize = 24,
   sort,
   placeholder,
+  listBasePath,
 }: {
   crumbs: { href?: string; label: string }[];
   title: string;
@@ -50,12 +61,17 @@ export function CatalogListing({
   activeCategorySlug?: string;
   items: Product[];
   total: number;
+  page?: number;
+  pageSize?: number;
   sort: ListingSort;
   placeholder: string | null;
+  listBasePath?: string;
 }) {
   const categories = [...(facets?.categories ?? [])].sort(
     (a, b) => Number(b.count) - Number(a.count) || a.name.localeCompare(b.name, "tr"),
   );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const paginationBase = listBasePath ?? categoryBase;
 
   return (
     <div className="container catalog-page">
@@ -121,6 +137,19 @@ export function CatalogListing({
               <h2>Bu seçimde ürün yok</h2>
               <p>Başka bir model veya kategori dene.</p>
             </div>
+          )}
+          {paginationBase && totalPages > 1 && (
+            <nav className="catalog-pagination" aria-label="Sayfalar">
+              {page > 1 && (
+                <Link href={pageHref(paginationBase, page - 1, sort)}>Önceki</Link>
+              )}
+              <span>
+                {page} / {totalPages}
+              </span>
+              {page < totalPages && (
+                <Link href={pageHref(paginationBase, page + 1, sort)}>Sonraki</Link>
+              )}
+            </nav>
           )}
         </section>
       </div>

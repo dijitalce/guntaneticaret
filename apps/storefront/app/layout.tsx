@@ -1,24 +1,22 @@
 import type { CSSProperties } from "react";
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { cookies } from "next/headers";
+import Image from "next/image";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
-import { COOKIE_CART } from "@guntan/config";
-import { listPopularCategories, listVisibleBrands } from "@guntan/catalog";
-import { cartQty } from "@guntan/ecommerce";
 import { getTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
+import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
-import { IconCart, IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
+import { CartBadge, CartBadgeFallback } from "../src/cart-badge";
+import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "600", "700"],
 });
-
-export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenant();
@@ -49,12 +47,12 @@ function cssVars(css: string): CSSProperties {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getTenant();
   const [brands, categories] = await Promise.all([
-    listVisibleBrands(tenant.tenant.id),
-    listPopularCategories(8),
+    cachedVisibleBrands(tenant.tenant.id),
+    cachedPopularCategories(8),
   ]);
   const navCats = categories.filter((c) => !c.parentId);
-  const qty = await cartQty(tenant.tenant.id, (await cookies()).get(COOKIE_CART)?.value);
   const allParts = allCatalogHref(tenant);
+  const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
 
   return (
     <html lang="tr" className={font.className}>
@@ -74,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="container header-inner">
             <Link className="logo" href="/" aria-label={tenant.siteName}>
               <span className="logo-badge">
-                <img src={`${tenant.logoUrl ?? "/brand/logo.png"}?v=3`} alt="" width={320} height={157} />
+                <Image src={logoSrc} alt="" width={320} height={157} priority />
               </span>
             </Link>
             <SearchBox brands={brands} />
@@ -87,11 +85,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <IconHeart />
                 <span>Favoriler</span>
               </Link>
-              <Link className="icon-btn cart-chip" href="/sepet">
-                <IconCart />
-                <span>Sepet</span>
-                {qty > 0 && <em>{qty}</em>}
-              </Link>
+              <Suspense fallback={<CartBadgeFallback />}>
+                <CartBadge tenantId={tenant.tenant.id} />
+              </Suspense>
             </nav>
           </div>
           <nav className="site-nav" aria-label="Ana menü">
@@ -110,7 +106,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="site-nav-links">
                 <Link href="/">Ana sayfa</Link>
                 {navCats.map((c) => (
-                  <Link key={c.id} href={`/arama?category=${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
+                  <Link key={c.id} href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
                 ))}
                 <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
                 <Link href="/iletisim">İletişim</Link>

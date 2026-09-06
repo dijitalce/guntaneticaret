@@ -1,5 +1,3 @@
-"use client";
-
 export function CheckoutForm() {
   return (
     <form className="card" style={{ padding: "1rem", display: "grid", gap: "0.6rem", maxWidth: 480 }} action="/api/checkout" method="post">

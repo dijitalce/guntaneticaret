@@ -673,6 +673,59 @@ body {
   overflow-wrap: anywhere;
 }
 .catalog-count { color: var(--muted-foreground); margin: 0.25rem 0 0; }
+.home-h1 {
+  font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+  letter-spacing: -0.03em;
+  margin: 0 0 1rem;
+  line-height: 1.2;
+}
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+}
+.category-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.category-tile:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.category-tile strong { font-size: 0.95rem; }
+.category-tile span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.category-seo-lead {
+  color: var(--muted-foreground);
+  margin: 0 0 1rem;
+  max-width: 52rem;
+}
+.catalog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1.5rem 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.catalog-pagination a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.catalog-pagination a:hover { text-decoration: underline; }
 .catalog-cats {
   display: flex;
   flex-wrap: nowrap;

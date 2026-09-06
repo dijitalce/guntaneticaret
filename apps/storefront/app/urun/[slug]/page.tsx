@@ -1,9 +1,10 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getProductBySlug, productImageUrl, relatedProducts } from "@guntan/catalog";
+import { productImageUrl, relatedProducts } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
-import { getTenant } from "../../../src/tenant";
+import { getTenant, getCachedProductBySlug } from "../../../src/tenant";
 import { ProductCard } from "../../../src/product-card";
 
 export const revalidate = 300;
@@ -11,7 +12,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const tenant = await getTenant();
-  const product = await getProductBySlug(tenant.tenant.id, slug);
+  const product = await getCachedProductBySlug(tenant.tenant.id, slug);
   if (!product) return {};
   return {
     title: `${product.product.name} | ${tenant.siteName}`,
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const tenant = await getTenant();
-  const data = await getProductBySlug(tenant.tenant.id, slug);
+  const data = await getCachedProductBySlug(tenant.tenant.id, slug);
   if (!data) notFound();
   const { product } = data;
   const img = productImageUrl(data.images[0]?.url, tenant.placeholderImageUrl);
@@ -62,7 +63,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       </nav>
       <div className="pdp">
         <div className="pdp-media">
-          <img src={img} alt={product.name} />
+          <Image
+            src={img}
+            alt={product.name}
+            width={800}
+            height={800}
+            sizes="(max-width: 768px) 100vw, 50vw"
+            priority
+          />
         </div>
         <div className="pdp-info">
           {data.manufacturerName && <div className="badge">{data.manufacturerName}</div>}

@@ -108,6 +108,7 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     gtmId: settings?.gtmId ?? null,
     customScripts: settings?.customScripts ?? null,
     allCatalogUrl: settings?.socialJson?.allCatalogUrl ?? null,
+    seoContent: settings?.seoContent ?? null,
   };
 
   await safeCacheSet(cache, cacheKey, JSON.stringify(config), TENANT_HOST_CACHE_TTL_SECONDS);

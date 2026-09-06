@@ -4,6 +4,7 @@ export const RESERVED_PATH_SLUGS = [
   "odeme",
   "hesabim",
   "arama",
+  "kategori",
   "sayfa",
   "blog",
   "favoriler",

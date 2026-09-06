@@ -4,6 +4,7 @@ import {
   db,
   manufacturers,
   productFitments,
+  productImages,
   productOems,
   products,
   tenantCatalogIndex,
@@ -59,6 +60,10 @@ export async function reindexAll() {
     .from(productCategories)
     .innerJoin(categories, eq(productCategories.categoryId, categories.id));
   const mfrs = await db.select().from(manufacturers);
+  const images = await db
+    .select({ productId: productImages.productId, url: productImages.url, sortOrder: productImages.sortOrder })
+    .from(productImages)
+    .where(inArray(productImages.productId, ids));
 
   const oemBy = new Map<string, string[]>();
   for (const o of oems) {
@@ -84,6 +89,10 @@ export async function reindexAll() {
     arr.push(c.name);
     catBy.set(c.productId, arr);
   }
+  const thumbBy = new Map<string, string>();
+  for (const img of images.sort((a, b) => a.sortOrder - b.sortOrder)) {
+    if (!thumbBy.has(img.productId)) thumbBy.set(img.productId, img.url);
+  }
   const mfrName = Object.fromEntries(mfrs.map((m) => [m.id, m.name]));
 
   const docs = all.map((p) => ({
@@ -99,7 +108,7 @@ export async function reindexAll() {
     price: Number(p.price),
     in_stock: p.stockStatus === "in_stock",
     slug: p.slug,
-    thumbnail: "",
+    thumbnail: thumbBy.get(p.id) ?? "",
     tenant_ids: tenantBy.get(p.id) ?? [],
   }));
 
@@ -107,10 +116,17 @@ export async function reindexAll() {
 }
 
 export async function searchProducts(tenantId: string, q: string, limit = 8) {
-  await ensureIndex();
   const res = await getMeili().index(INDEX).search(q, {
     filter: `tenant_ids = "${tenantId}"`,
     limit,
   });
-  return res.hits as Array<{ id: string; title: string; slug: string; sku: string; manufacturer: string }>;
+  return res.hits as Array<{
+    id: string;
+    title: string;
+    slug: string;
+    sku: string;
+    manufacturer: string;
+    price?: number;
+    thumbnail?: string;
+  }>;
 }

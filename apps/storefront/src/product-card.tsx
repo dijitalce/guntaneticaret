@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
 
@@ -9,6 +10,7 @@ function formatPrice(value: string) {
 export function ProductCard({
   product,
   placeholder,
+  priority = false,
 }: {
   product: {
     name: string;
@@ -22,6 +24,7 @@ export function ProductCard({
     stockStatus?: string;
   };
   placeholder: string | null;
+  priority?: boolean;
 }) {
   const img = productImageUrl(product.imageUrl, placeholder);
   const disc = product.price ? discountPercent(product.price, product.compareAtPrice ?? null) : null;
@@ -30,7 +33,14 @@ export function ProductCard({
     <article className="product-card">
       <Link className="product-card-media" href={`/urun/${product.slug}`}>
         {disc != null && <span className="product-card-disc">%{disc}</span>}
-        <img src={img} alt={product.name} />
+        <Image
+          src={img}
+          alt={product.name}
+          width={400}
+          height={400}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          priority={priority}
+        />
       </Link>
       <div className="product-card-body">
         {product.manufacturerName && <span className="product-card-mfr">{product.manufacturerName}</span>}
@@ -68,7 +78,7 @@ export function ProductMiniCard({
   const img = productImageUrl(product.imageUrl, placeholder);
   return (
     <Link className="product-mini" href={`/urun/${product.slug}`}>
-      <img src={img} alt="" />
+      <Image src={img} alt="" width={54} height={54} sizes="54px" />
       <span>
         <b>{product.name}</b>
         <em>{formatPrice(product.price)}</em>

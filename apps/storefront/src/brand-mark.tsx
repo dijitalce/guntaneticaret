@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export function BrandMark({
   name,
   logoUrl,
@@ -9,13 +11,14 @@ export function BrandMark({
 }) {
   if (logoUrl) {
     return (
-      <img
+      <Image
         className="brand-mark"
         src={logoUrl}
         alt=""
         width={size}
         height={size}
         style={{ width: size, height: size }}
+        sizes={`${size}px`}
       />
     );
   }

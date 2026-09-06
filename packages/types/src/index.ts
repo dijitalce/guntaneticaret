@@ -208,6 +208,7 @@ export type TenantPublicConfig = {
   gtmId: string | null;
   customScripts: string | null;
   allCatalogUrl: string | null;
+  seoContent: string | null;
 };
 
 export const XML_FIELD_KEYS = [
