@@ -91,6 +91,40 @@ export async function logoutCustomer(token: string) {
   await db.delete(customerSessions).where(eq(customerSessions.tokenHash, hashToken(token)));
 }
 
+export async function updateCustomerProfile(
+  customerId: string,
+  data: { firstName: string; lastName: string; phone?: string | null },
+) {
+  const [row] = await db
+    .update(customers)
+    .set({
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      phone: data.phone?.trim() || null,
+      updatedAt: new Date(),
+    })
+    .where(eq(customers.id, customerId))
+    .returning();
+  return row ?? null;
+}
+
+export async function changeCustomerPassword(
+  customerId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  const [user] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+  if (!user || !verifyPassword(currentPassword, user.passwordHash)) return false;
+  await db
+    .update(customers)
+    .set({
+      passwordHash: hashPassword(newPassword),
+      updatedAt: new Date(),
+    })
+    .where(eq(customers.id, customerId));
+  return true;
+}
+
 export async function loginAdmin(email: string, password: string) {
   const [user] = await db.select().from(adminUsers).where(eq(adminUsers.email, email.toLowerCase().trim())).limit(1);
   if (!user || user.isActive !== "true" || !verifyPassword(password, user.passwordHash)) return null;

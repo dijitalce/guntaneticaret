@@ -844,6 +844,238 @@ body {
 .footer-copy { margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 0.9rem; font-size: 0.8rem; }
 
 .page-surface { padding: 1.25rem 0 2rem; }
+
+.account-page { max-width: 1100px; }
+.account-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.account-hero h1 {
+  margin: 0.15rem 0 0.25rem;
+  font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+  letter-spacing: -0.03em;
+}
+.account-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.account-lead { margin: 0.35rem 0 1.25rem; max-width: 42rem; }
+.account-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.account-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.6rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  position: sticky;
+  top: 5.5rem;
+}
+.account-nav-link {
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  color: var(--foreground);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.account-nav-link:hover { background: var(--muted); }
+.account-nav-link.is-active {
+  background: color-mix(in srgb, var(--primary) 10%, #fff);
+  color: var(--primary);
+}
+.account-main { min-width: 0; }
+.account-auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.account-panel {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.account-panel h2, .account-panel h3 {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+}
+.account-panel label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.account-panel textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  resize: vertical;
+}
+.account-panel.is-highlight {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, #fff);
+}
+.account-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+.account-check {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.account-alert {
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.account-alert.is-bad {
+  background: color-mix(in srgb, var(--destructive) 12%, #fff);
+  color: var(--destructive);
+}
+.account-alert.is-ok {
+  background: color-mix(in srgb, #15803d 12%, #fff);
+  color: #166534;
+}
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.account-stat {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  display: grid;
+  gap: 0.2rem;
+}
+.account-stat strong, .account-stat a {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.account-stat span { font-size: 0.82rem; color: var(--muted-foreground); }
+.account-section { display: grid; gap: 0.85rem; }
+.account-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.account-section-head h2 { margin: 0; font-size: 1.15rem; }
+.account-section-head a { font-weight: 700; font-size: 0.9rem; }
+.account-order-list, .account-address-list, .account-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.account-order-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  text-decoration: none;
+  color: inherit;
+}
+.account-order-row:hover { border-color: var(--primary); }
+.account-order-row > div { display: grid; gap: 0.2rem; }
+.account-order-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+.account-order-meta b { font-size: 0.95rem; }
+.order-badge {
+  display: inline-flex;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.order-badge.is-warn { background: #fff7ed; color: #c2410c; }
+.order-badge.is-ok { background: #ecfdf5; color: #047857; }
+.order-badge.is-info { background: #eff6ff; color: #1d4ed8; }
+.order-badge.is-bad { background: #fef2f2; color: #b91c1c; }
+.account-empty { text-align: left; padding: 1.25rem; border: 1px dashed var(--border); border-radius: 12px; }
+.account-empty h3 { margin: 0 0 0.35rem; }
+.account-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 1rem;
+  align-items: start;
+}
+.account-side-stack { display: grid; gap: 0.75rem; }
+.account-item-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.account-item-list li:last-child { border-bottom: 0; }
+.account-item-list li > div { display: grid; gap: 0.15rem; }
+.account-totals { margin: 0.75rem 0 0; display: grid; gap: 0.35rem; }
+.account-totals > div { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.92rem; }
+.account-totals .is-grand { font-weight: 800; font-size: 1rem; padding-top: 0.35rem; border-top: 1px solid var(--border); }
+.account-address-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.account-panel code {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .account-layout, .account-auth-grid, .account-detail-grid, .account-stats, .account-field-row {
+    grid-template-columns: 1fr;
+  }
+  .account-nav { position: static; flex-direction: row; flex-wrap: wrap; }
+  .account-order-row { flex-direction: column; align-items: flex-start; }
+}
+
 .sticky-atc {
   display: none;
   position: sticky;

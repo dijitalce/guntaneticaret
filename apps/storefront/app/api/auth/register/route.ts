@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { COOKIE_CUSTOMER_SESSION } from "@guntan/config";
 import { createCustomer, loginCustomer } from "@guntan/auth";
 
 export async function POST(request: Request) {
   const form = await request.formData();
-  await createCustomer({
-    email: String(form.get("email")),
-    password: String(form.get("password")),
-    firstName: String(form.get("firstName")),
-    lastName: String(form.get("lastName")),
-  });
-  const result = await loginCustomer(String(form.get("email")), String(form.get("password")));
-  const res = NextResponse.redirect(new URL("/hesabim", request.url), 303);
+  const email = String(form.get("email") ?? "");
+  const password = String(form.get("password") ?? "");
+  const firstName = String(form.get("firstName") ?? "");
+  const lastName = String(form.get("lastName") ?? "");
+  const phone = String(form.get("phone") ?? "").trim() || undefined;
+
+  if (!email || !password || password.length < 6 || !firstName || !lastName) {
+    return NextResponse.redirect(new URL("/hesabim?kayit=1", request.url), 303);
+  }
+
+  try {
+    await createCustomer({ email, password, firstName, lastName, phone });
+  } catch {
+    return NextResponse.redirect(new URL("/hesabim?kayit=email", request.url), 303);
+  }
+
+  const result = await loginCustomer(email, password);
+  const res = NextResponse.redirect(new URL("/hesabim?kayit=1", request.url), 303);
   if (result) {
     res.cookies.set(COOKIE_CUSTOMER_SESSION, result.token, {
       httpOnly: true,
       sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 24 * 14,
     });
