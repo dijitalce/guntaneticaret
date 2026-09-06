@@ -26,9 +26,10 @@ export const pg =
     idle_timeout: isLocalDb ? undefined : 20,
     max_lifetime: isLocalDb ? undefined : 60 * 30,
   });
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.pg = pg;
-}
+// Always pin on globalThis so Next.js module duplication (or HMR) cannot open
+// extra postgres pools — each pool holds real connections/file descriptors
+// that Hostinger counts toward process limits.
+globalForDb.pg = pg;
 
 export const db = drizzle(pg, { schema });
 export type Database = typeof db;

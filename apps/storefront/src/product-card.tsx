@@ -38,7 +38,7 @@ export function ProductCard({
           alt={product.name}
           width={400}
           height={400}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 25vw"
           priority={priority}
         />
       </Link>
@@ -59,7 +59,10 @@ export function ProductCard({
           {inStock && product.slug && (
             <form action="/api/cart" method="post">
               <input type="hidden" name="slug" value={product.slug} />
-              <button className="btn btn-primary" type="submit">Sepete ekle</button>
+              <button className="btn btn-primary" type="submit">
+                <span className="label-full">Sepete ekle</span>
+                <span className="label-short">Sepete</span>
+              </button>
             </form>
           )}
         </div>

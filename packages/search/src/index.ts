@@ -17,10 +17,14 @@ import {
 const INDEX = "products";
 
 export function getMeili() {
-  return new MeiliSearch({
-    host: process.env.MEILI_HOST ?? "http://localhost:7700",
-    apiKey: process.env.MEILI_MASTER_KEY ?? "dev_meili_master_key_change_me",
-  });
+  const g = globalThis as unknown as { __guntanMeili?: MeiliSearch };
+  if (!g.__guntanMeili) {
+    g.__guntanMeili = new MeiliSearch({
+      host: process.env.MEILI_HOST ?? "http://localhost:7700",
+      apiKey: process.env.MEILI_MASTER_KEY ?? "dev_meili_master_key_change_me",
+    });
+  }
+  return g.__guntanMeili;
 }
 
 export async function ensureIndex() {

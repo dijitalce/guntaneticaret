@@ -81,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <IconUser />
                 <span>Hesabım</span>
               </Link>
-              <Link className="icon-btn" href="/favoriler">
+              <Link className="icon-btn header-fav" href="/favoriler">
                 <IconHeart />
                 <span>Favoriler</span>
               </Link>

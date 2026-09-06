@@ -29,7 +29,12 @@ const nextConfig: NextConfig = {
     "@guntan/types",
     "@guntan/ui",
   ],
-  images: { remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }] },
+  // Hostinger shared Node plans count image-optimizer / sharp work toward the
+  // "Maksimum İşlem" process cap. Serve images as-is unless explicitly enabled.
+  images: {
+    unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED !== "false",
+    remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }],
+  },
   serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch", "saxes"],
   webpack: (config) => {
     config.resolve.modules = [

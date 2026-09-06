@@ -12,6 +12,8 @@ import {
 let redis: IORedis | null = null;
 function getRedis() {
   if (!process.env.REDIS_URL) return null;
+  const g = globalThis as unknown as { __guntanRedis?: IORedis | null };
+  if (g.__guntanRedis !== undefined) return g.__guntanRedis;
   if (!redis) {
     redis = new IORedis(process.env.REDIS_URL, {
       maxRetriesPerRequest: 2,
@@ -22,12 +24,14 @@ function getRedis() {
       // request on every domain by that long before falling back to the DB.
       connectTimeout: 1500,
       retryStrategy: () => null,
+      enableOfflineQueue: false,
     });
     // ioredis crashes the whole process on an unhandled "error" event; the
     // cache is optional here, so swallow connection errors and let callers'
     // try/catch fall back to reading straight from the database.
     redis.on("error", () => {});
   }
+  g.__guntanRedis = redis;
   return redis;
 }
 

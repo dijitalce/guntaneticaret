@@ -103,6 +103,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
       </div>
       <h2 className="pdp-section">Bu ürün hangi araçlarla uyumlu?</h2>
+      <div className="table-scroll">
       <table className="fitment-table">
         <thead><tr><th>Marka</th><th>Model</th><th>Kasa</th><th>Yıl</th><th>Motor</th></tr></thead>
         <tbody>
@@ -117,6 +118,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           ))}
         </tbody>
       </table>
+      </div>
       <h2 className="pdp-section">Açıklama</h2>
       <p className="pdp-desc">{product.description}</p>
       {related.length > 0 && (
