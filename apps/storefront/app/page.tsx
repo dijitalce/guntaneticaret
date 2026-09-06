@@ -81,7 +81,6 @@ export default async function HomePage() {
           itemListJsonLd(host, "Çok satanlar", featured),
         ]}
       />
-      <h1 className="home-h1">{tenant.siteName} — Oto Yedek Parça</h1>
       <div className="home-ia">
         <VehicleNav
           title="Markalar"
