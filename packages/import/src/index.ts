@@ -21,6 +21,7 @@ import {
   xmlFeeds,
 } from "@guntan/db";
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type XmlFieldMapping } from "@guntan/types";
+import { applyMarginToPriceString } from "./price-tiers";
 
 export type MappedProduct = {
   externalId: string;
@@ -95,7 +96,7 @@ export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping): 
     description: mapping.description ? getPath(raw, mapping.description) : undefined,
     manufacturer: mapping.manufacturer ? getPath(raw, mapping.manufacturer) : undefined,
     category: mapping.category ? getPath(raw, mapping.category) : undefined,
-    price,
+    price: applyMarginToPriceString(price),
     compareAtPrice: mapping.compareAtPrice ? getPath(raw, mapping.compareAtPrice) : undefined,
     stock: Number(stockValue(mapping.stock ? getPath(raw, mapping.stock) : undefined)),
     barcode: mapping.barcode ? getPath(raw, mapping.barcode) : undefined,

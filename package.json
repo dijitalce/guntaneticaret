@@ -19,6 +19,7 @@
     "import:xml": "pnpm --filter @guntan/import guntan-xml",
     "import:basbug": "pnpm --filter @guntan/import basbug-json",
     "import:dedupe": "pnpm --filter @guntan/import dedupe-cheapest",
+    "import:price-tiers": "pnpm --filter @guntan/import price-tiers",
     "db:studio": "pnpm --filter @guntan/db studio",
     "worker": "pnpm --filter @guntan/worker dev"
   },

@@ -1,5 +1,6 @@
 import { normalizeOem, type MappedProduct } from "./index";
 import { inferFitments, type InferredFitment } from "./fitment-from-name";
+import { applyMarginToPrice } from "./price-tiers";
 
 export type BasbugRaw = {
   no?: string;
@@ -79,6 +80,7 @@ export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv()): MappedPr
   const lf = Number(row.lf);
   if (!Number.isFinite(lf) || lf < 0) return null;
   const priceTry = priceToTry(lf, row.dc, rates);
+  const sellTry = applyMarginToPrice(priceTry);
   const oems = splitOems(row.oe);
   const category = row._listeGrubuAd?.trim() || row.lgk?.trim() || undefined;
   return {
@@ -88,7 +90,7 @@ export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv()): MappedPr
     description: [row.m, row.mo, row.y].filter(Boolean).join(" | ") || undefined,
     manufacturer: row.uk?.trim() || undefined,
     category,
-    price: priceTry.toFixed(2),
+    price: sellTry.toFixed(2),
     stock: 4,
     oem: oems[0],
   };

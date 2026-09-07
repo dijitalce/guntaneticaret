@@ -9,7 +9,8 @@
     "test": "vitest run",
     "guntan-xml": "tsx src/cli.ts",
     "basbug-json": "tsx src/basbug-cli.ts",
-    "dedupe-cheapest": "tsx src/dedupe-cli.ts"
+    "dedupe-cheapest": "tsx src/dedupe-cli.ts",
+    "price-tiers": "tsx src/apply-price-tiers-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",

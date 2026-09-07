@@ -24,7 +24,7 @@ describe("basbug mapping", () => {
       externalId: "FILT OE 693/1",
       sku: "FILT OE 693/1",
       manufacturer: "FILTRON",
-      price: "100.00",
+      price: "130.00",
       category: "AĞIR VASITA",
       stock: 4,
     });
@@ -38,7 +38,7 @@ describe("basbug mapping", () => {
     expect(priceToTry(2, "USD", rates)).toBe(80);
     expect(priceToTry(2, "TL", rates)).toBe(2);
     const mapped = mapBasbugRow({ no: "X1", ac: "P", oe: "12345678", uk: "B", dc: "EUR", lf: 2 }, rates);
-    expect(mapped?.price).toBe("100.00");
+    expect(mapped?.price).toBe("130.00");
   });
 
   it("infers fitments from liste grubu + model field", () => {
