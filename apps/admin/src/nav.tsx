@@ -73,7 +73,9 @@ export function AdminShellClient({
 
   return (
     <div className={`admin-shell${open ? " nav-open" : ""}`}>
-      <button type="button" className="admin-backdrop" aria-label="Menüyü kapat" onClick={() => setOpen(false)} />
+      {open ? (
+        <button type="button" className="admin-backdrop" aria-label="Menüyü kapat" onClick={() => setOpen(false)} />
+      ) : null}
       <aside className="admin-nav" aria-label="Yönetim menüsü">
         <div className="admin-brand">
           <div className="admin-brand-mark" aria-hidden>G</div>
