@@ -5,11 +5,12 @@ import { getAdminBySession } from "@guntan/auth";
 import { runXmlImport } from "@guntan/import";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { adminRedirect } from "../../../../../src/paths";
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
   const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(new URL("/login", request.url), 303);
+  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
   const { id } = await ctx.params;
   try {
     const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
@@ -19,5 +20,5 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch {
     await runXmlImport(id);
   }
-  return NextResponse.redirect(new URL("/integrations/xml", request.url), 303);
+  return NextResponse.redirect(adminRedirect("/integrations/xml", request), 303);
 }

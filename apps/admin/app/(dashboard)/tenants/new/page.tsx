@@ -1,4 +1,5 @@
 import { AdminShell, requireAdmin } from "@/src/shell";
+import { withBase } from "@/src/paths";
 import { db, brandGroups } from "@guntan/db";
 
 export default async function NewTenantPage() {
@@ -7,7 +8,7 @@ export default async function NewTenantPage() {
   return (
     <AdminShell>
       <h1>Yeni site</h1>
-      <form className="wizard" action="/api/tenants" method="post">
+      <form className="wizard" action={withBase("/api/tenants")} method="post">
         <h2>1. Kimlik</h2>
         <input className="input" name="name" placeholder="Site adı" required />
         <input className="input" name="slug" placeholder="slug" required />

@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 import { db, xmlFeeds, xmlImportRuns, xmlImportRowErrors } from "@guntan/db";
 import { AdminShell, requireAdmin } from "@/src/shell";
+import { withBase } from "@/src/paths";
 
 export default async function XmlPage() {
   await requireAdmin();
@@ -11,7 +12,7 @@ export default async function XmlPage() {
     <AdminShell>
       <h1>XML import</h1>
       {feeds.map((f) => (
-        <form key={f.id} action={`/api/xml/${f.id}/run`} method="post" className="card" style={{ padding: "1rem", marginBottom: "0.75rem" }}>
+        <form key={f.id} action={withBase(`/api/xml/${f.id}/run`)} method="post" className="card" style={{ padding: "1rem", marginBottom: "0.75rem" }}>
           <strong>{f.name}</strong>
           <p>{f.filePath ?? f.url}</p>
           <button className="btn btn-primary">Şimdi senkronize et</button>

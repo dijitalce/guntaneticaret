@@ -8,11 +8,12 @@ import { CATALOG_RULE_KIND, DEFAULT_THEME_TOKENS } from "@guntan/types";
 import { invalidateTenantCache } from "@guntan/tenant";
 import { db as database, tenantDomains } from "@guntan/db";
 import { writeAudit } from "@guntan/observability";
+import { adminRedirect } from "../../../../src/paths";
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
   const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(new URL("/login", request.url), 303);
+  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
   const { id } = await ctx.params;
   const form = await request.formData();
   const [before] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
@@ -58,5 +59,5 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     before,
     after: { visibilityMode: form.get("visibilityMode") },
   });
-  return NextResponse.redirect(new URL(`/tenants/${id}`, request.url), 303);
+  return NextResponse.redirect(adminRedirect(`/tenants/${id}`, request), 303);
 }

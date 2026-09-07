@@ -6,11 +6,12 @@ import { compileVisibility, db, tenantBankAccounts, tenantCatalogRules, tenantDo
 import { DEFAULT_THEME_TOKENS } from "@guntan/types";
 import { writeAudit } from "@guntan/observability";
 import { CATALOG_RULE_KIND } from "@guntan/types";
+import { adminRedirect } from "../../../src/paths";
 
 export async function POST(request: Request) {
   const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
   const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(new URL("/login", request.url), 303);
+  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
   const form = await request.formData();
   const name = String(form.get("name"));
   const slug = String(form.get("slug"));
@@ -61,5 +62,5 @@ export async function POST(request: Request) {
     action: "create",
     after: { name, hostname, visibilityMode },
   });
-  return NextResponse.redirect(new URL(`/tenants/${tenant!.id}`, request.url), 303);
+  return NextResponse.redirect(adminRedirect(`/tenants/${tenant!.id}`, request), 303);
 }

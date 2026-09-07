@@ -11,6 +11,7 @@ import {
   vehicleBrands,
 } from "@guntan/db";
 import { AdminShell, requireAdmin } from "@/src/shell";
+import { withBase } from "@/src/paths";
 
 export default async function TenantEditPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -28,7 +29,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   return (
     <AdminShell>
       <h1>{tenant.name}</h1>
-      <form action={`/api/tenants/${tenant.id}`} method="post" className="wizard">
+      <form action={withBase(`/api/tenants/${tenant.id}`)} method="post" className="wizard">
         <input className="input" name="name" defaultValue={tenant.name} />
         <select className="select" name="status" defaultValue={tenant.status}>
           <option value="draft">draft</option>

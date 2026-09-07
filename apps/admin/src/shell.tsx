@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { COOKIE_ADMIN_SESSION } from "@guntan/config";
 import { getAdminBySession } from "@guntan/auth";
+import { withBase } from "./paths";
 
 export async function requireAdmin() {
   const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
@@ -32,7 +33,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <Link href="/integrations/xml">XML</Link>
         <Link href="/system/users">Kullanıcılar</Link>
         <Link href="/system/audit">Audit</Link>
-        <form action="/api/logout" method="post"><button className="btn btn-ghost" style={{ color: "#fff" }}>Çıkış</button></form>
+        <form action={withBase("/api/logout")} method="post"><button className="btn btn-ghost" style={{ color: "#fff" }}>Çıkış</button></form>
       </aside>
       <div className="admin-main">{children}</div>
     </div>

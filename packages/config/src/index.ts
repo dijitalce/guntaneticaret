@@ -16,6 +16,7 @@ export const RESERVED_PATH_SLUGS = [
   "sitemap.xml",
   "api",
   "admin",
+  "yonetim",
 ] as const;
 
 export function isReservedSlug(slug: string): boolean {

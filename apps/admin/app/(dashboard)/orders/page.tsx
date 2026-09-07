@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 import { db, orders, tenants } from "@guntan/db";
 import { AdminShell, requireAdmin } from "@/src/shell";
+import { withBase } from "@/src/paths";
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ tenant?: string }> }) {
   await requireAdmin();
@@ -30,12 +31,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
               <td>{o.status}</td>
               <td>
                 {o.status === "pending_payment" && (
-                  <form action={`/api/orders/${o.id}/confirm`} method="post">
+                  <form action={withBase(`/api/orders/${o.id}/confirm`)} method="post">
                     <button className="btn btn-primary" type="submit">Ödeme alındı</button>
                   </form>
                 )}
                 {o.status === "pending_payment" && (
-                  <form action={`/api/orders/${o.id}/cancel`} method="post">
+                  <form action={withBase(`/api/orders/${o.id}/cancel`)} method="post">
                     <button className="btn btn-secondary" type="submit">İptal</button>
                   </form>
                 )}
