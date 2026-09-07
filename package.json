@@ -13,6 +13,7 @@
     "db:generate": "pnpm --filter @guntan/db generate",
     "db:migrate": "pnpm --filter @guntan/db migrate",
     "db:seed": "pnpm --filter @guntan/db seed",
+    "db:ensure-admin": "pnpm --filter @guntan/db ensure-admin",
     "db:sync-catalog": "pnpm --filter @guntan/db sync-catalog",
     "db:sync-tenants": "pnpm --filter @guntan/db sync-tenants",
     "import:xml": "pnpm --filter @guntan/import guntan-xml",
