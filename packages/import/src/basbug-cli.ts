@@ -192,11 +192,8 @@ async function main() {
   }
 
   const uniqueFits = new Map<string, { brand: string; model: string }>();
-  const fitByExternal = new Map<string, Array<{ brand: string; model: string }>>();
-  for (const { raw, mapped } of mappedPairs) {
-    const fits = inferBasbugFitments(raw);
-    fitByExternal.set(mapped.externalId, fits);
-    for (const f of fits) uniqueFits.set(`${f.brand}::${f.model}`, f);
+  for (const { raw } of mappedPairs) {
+    for (const f of inferBasbugFitments(raw)) uniqueFits.set(`${f.brand}::${f.model}`, f);
   }
   console.log(`Unique inferred fitments: ${uniqueFits.size}`);
   const fitIds = new Map<string, { brandId: string; modelId: string }>();
@@ -205,10 +202,11 @@ async function main() {
     const model = await ensureModel(brand.id, f.model);
     fitIds.set(`${f.brand}::${f.model}`, { brandId: brand.id, modelId: model.id });
   }
+  console.log("Fitment IDs ready, starting product upsert…");
 
   let created = 0;
   let failed = 0;
-  const chunk = 400;
+  const chunk = 200;
   const usedSlugs = new Set<string>();
 
   for (let i = 0; i < mappedPairs.length; i += chunk) {
@@ -217,7 +215,7 @@ async function main() {
     for (const { mapped: row } of batch) {
       const mfr = row.manufacturer ? await ensureMfr(row.manufacturer) : null;
       let slug = slugify(`bb-${row.sku}`) || `bb-${row.externalId}`;
-      if (usedSlugs.has(slug)) slug = `${slug}-${slugify(row.externalId).slice(0, 12)}`;
+      if (usedSlugs.has(slug)) slug = `${slug}-${i}`;
       usedSlugs.add(slug);
       values.push({
         supplierId: supplier!.id,
@@ -266,22 +264,23 @@ async function main() {
       const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
       const cats: Array<{ productId: string; categoryId: string }> = [];
       const fits: Array<{ productId: string; vehicleBrandId: string; vehicleModelId: string }> = [];
+      const insertedByExt = new Map(inserted.map((r) => [r.externalId, r.id]));
       for (const { raw, mapped: row } of batch) {
-        const rec = inserted.find((r) => r.externalId === row.externalId);
-        if (!rec) continue;
+        const productId = insertedByExt.get(row.externalId);
+        if (!productId) continue;
         for (const oem of allOemsForRow(raw)) {
-          oems.push({ productId: rec.id, raw: oem.raw, normalized: oem.normalized });
+          oems.push({ productId, raw: oem.raw, normalized: oem.normalized });
         }
         if (row.category) {
           const cat = await ensureCat(row.category);
-          cats.push({ productId: rec.id, categoryId: cat.id });
+          cats.push({ productId, categoryId: cat.id });
         }
-        for (const f of fitByExternal.get(row.externalId) ?? []) {
+        for (const f of inferBasbugFitments(raw)) {
           const ids = fitIds.get(`${f.brand}::${f.model}`);
           if (!ids) continue;
-          if (fits.some((x) => x.productId === rec.id && x.vehicleModelId === ids.modelId)) continue;
+          if (fits.some((x) => x.productId === productId && x.vehicleModelId === ids.modelId)) continue;
           fits.push({
-            productId: rec.id,
+            productId,
             vehicleBrandId: ids.brandId,
             vehicleModelId: ids.modelId,
           });
@@ -295,7 +294,9 @@ async function main() {
       failed += batch.length;
       console.error("Batch failed at", i, err instanceof Error ? err.message : err);
     }
-    if (i % 4000 === 0) console.log(`Imported ${Math.min(i + chunk, mappedPairs.length)} / ${mappedPairs.length}`);
+    if (i % 2000 === 0 || i + chunk >= mappedPairs.length) {
+      console.log(`Imported ${Math.min(i + chunk, mappedPairs.length)} / ${mappedPairs.length} (failed=${failed})`);
+    }
   }
 
   console.log("Running cheapest dedupe…");
