@@ -1,9 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { COOKIE_ADMIN_SESSION } from "@guntan/config";
 import { getAdminBySession } from "@guntan/auth";
-import { withBase } from "./paths";
+import { AdminShellClient } from "./nav";
 
 export async function requireAdmin() {
   const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
@@ -13,29 +12,11 @@ export async function requireAdmin() {
   return session;
 }
 
-export function AdminShell({ children }: { children: React.ReactNode }) {
+export async function AdminShell({ children }: { children: React.ReactNode }) {
+  const session = await requireAdmin();
   return (
-    <div className="admin-shell">
-      <aside className="admin-nav">
-        <strong>Güntan Admin</strong>
-        <Link href="/">Dashboard</Link>
-        <Link href="/catalog/products">Ürünler</Link>
-        <Link href="/catalog/brands">Araç markaları</Link>
-        <Link href="/catalog/models">Modeller</Link>
-        <Link href="/catalog/groups">Marka grupları</Link>
-        <Link href="/tenants">Siteler</Link>
-        <Link href="/tenants/new">Yeni site</Link>
-        <Link href="/orders">Siparişler</Link>
-        <Link href="/customers">Müşteriler</Link>
-        <Link href="/marketing">Pazarlama</Link>
-        <Link href="/content/pages">Sayfalar</Link>
-        <Link href="/content/banners">Bannerlar</Link>
-        <Link href="/integrations/xml">XML</Link>
-        <Link href="/system/users">Kullanıcılar</Link>
-        <Link href="/system/audit">Audit</Link>
-        <form action={withBase("/api/logout")} method="post"><button className="btn btn-ghost" style={{ color: "#fff" }}>Çıkış</button></form>
-      </aside>
-      <div className="admin-main">{children}</div>
-    </div>
+    <AdminShellClient userName={session.user.name} userEmail={session.user.email}>
+      {children}
+    </AdminShellClient>
   );
 }

@@ -12,6 +12,7 @@ import {
 } from "@guntan/db";
 import { AdminShell, requireAdmin } from "@/src/shell";
 import { withBase } from "@/src/paths";
+import { PageHeader, Panel } from "@/src/ui";
 
 export default async function TenantEditPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -28,7 +29,11 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
 
   return (
     <AdminShell>
-      <h1>{tenant.name}</h1>
+      <PageHeader
+        title={tenant.name}
+        description={`Slug: ${tenant.slug} · Domain: ${domains.map((d) => d.hostname).join(", ") || "yok"}`}
+      />
+      <Panel title="Ayarlar">
       <form action={withBase(`/api/tenants/${tenant.id}`)} method="post" className="wizard">
         <input className="input" name="name" defaultValue={tenant.name} />
         <select className="select" name="status" defaultValue={tenant.status}>
@@ -59,10 +64,27 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
         ))}
         <button className="btn btn-primary">Kaydet ve derle</button>
       </form>
-      <h2>Domainler</h2>
-      <ul>{domains.map((d) => <li key={d.id}>{d.hostname} {d.isPrimary ? "(primary)" : ""}</li>)}</ul>
-      <h2>Banka</h2>
-      {banks.map((b) => <p key={b.id}>{b.bankName} {b.iban}</p>)}
+      </Panel>
+      <Panel title="Domainler" padded>
+        <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+          {domains.map((d) => (
+            <li key={d.id}>
+              {d.hostname} {d.isPrimary ? "(primary)" : ""}
+            </li>
+          ))}
+        </ul>
+      </Panel>
+      <Panel title="Banka" padded>
+        {banks.length === 0 ? (
+          <p style={{ margin: 0, color: "#6b7280" }}>Banka hesabı yok.</p>
+        ) : (
+          banks.map((b) => (
+            <p key={b.id} style={{ margin: "0 0 0.35rem" }}>
+              {b.bankName} · {b.iban}
+            </p>
+          ))
+        )}
+      </Panel>
     </AdminShell>
   );
 }
