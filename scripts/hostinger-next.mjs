@@ -2,21 +2,21 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(join(root, "apps/storefront/package.json"));
 const nextBin = require.resolve("next/dist/bin/next");
 const cmd = process.argv[2] ?? "build";
-const extra = cmd === "start"
-  ? ["--hostname", "0.0.0.0", "--port", process.env.PORT ?? "3000"]
-  : [];
 
-const result = spawnSync(process.execPath, [nextBin, cmd, ...extra], {
-  cwd: join(root, "apps/storefront"),
-  stdio: "inherit",
-  env: process.env,
-});
+function runNext(appRel, args) {
+  const result = spawnSync(process.execPath, [nextBin, ...args], {
+    cwd: join(root, appRel),
+    stdio: "inherit",
+    env: process.env,
+  });
+  return result.status ?? 1;
+}
 
 function linkOrCopy(source, target) {
   fs.rmSync(target, { recursive: true, force: true });
@@ -30,13 +30,19 @@ function linkOrCopy(source, target) {
   }
 }
 
-if (cmd === "build" && (result.status ?? 1) === 0) {
-  const appDir = join(root, "apps/storefront");
+if (cmd === "start") {
+  // Tek süreç: Host’a göre admin veya storefront (hostinger-start.mjs).
+  await import(pathToFileURL(join(root, "scripts/hostinger-start.mjs")).href);
+  // hostinger-start kendi listen’ini açar; buradan çıkma.
+} else if (cmd === "build") {
+  const sf = runNext("apps/storefront", ["build"]);
+  if (sf !== 0) process.exit(sf);
+  const adm = runNext("apps/admin", ["build"]);
+  if (adm !== 0) process.exit(adm);
 
-  // Some hosts look for the Next.js output directory (".next") at the repo
-  // root after the build step. Our build actually runs inside
-  // apps/storefront, so mirror the output at the root just in case.
-  linkOrCopy(join(appDir, ".next"), join(root, ".next"));
+  // Bazı hostlar kökte .next arar; vitrin çıktısını aynala.
+  linkOrCopy(join(root, "apps/storefront/.next"), join(root, ".next"));
+  process.exit(0);
+} else {
+  process.exit(runNext("apps/storefront", [cmd]));
 }
-
-process.exit(result.status ?? 1);
