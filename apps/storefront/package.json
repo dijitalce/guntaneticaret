@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
+    "build": "node ../../scripts/hostinger-next.mjs build",
+    "build:app": "next build",
+    "start": "node ../../scripts/hostinger-start.mjs",
+    "start:app": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "lint": "echo ok"
   },
   "dependencies": {
