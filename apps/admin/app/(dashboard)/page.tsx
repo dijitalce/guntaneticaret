@@ -43,8 +43,8 @@ export default async function DashboardPage() {
       </div>
 
       <div className="quick-grid">
-        <QuickLink href="/orders" title="Siparişler" hint="Ödeme onayı ve iptaller" />
-        <QuickLink href="/catalog/products" title="Ürünler" hint="Son güncellenen 100 kayıt" />
+        <QuickLink href="/orders?status=pending_payment" title="Ödeme bekleyenler" hint="Havale onayı" />
+        <QuickLink href="/catalog/products" title="Ürün düzenle" hint="Fiyat / stok / yayın" />
         <QuickLink href="/tenants" title="Siteler" hint="Domain ve görünürlük" />
         <QuickLink href="/integrations/xml" title="XML senkron" hint="Feed çalıştır ve hataları gör" />
       </div>

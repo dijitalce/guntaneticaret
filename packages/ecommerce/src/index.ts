@@ -8,12 +8,13 @@ import {
   payments,
   productImages,
   products,
+  shipments,
   tenantBankAccounts,
   tenantCatalogIndex,
 } from "@guntan/db";
 import { getPaymentProvider } from "@guntan/payments";
 import { getShippingProvider } from "@guntan/shipping";
-import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS } from "@guntan/types";
+import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, type OrderStatus } from "@guntan/types";
 
 export function availableStock(stockQty: number, reservedQty: number): number {
   return Math.max(0, stockQty - reservedQty);
@@ -243,3 +244,109 @@ export async function cancelOrder(orderId: string) {
   await db.update(orders).set({ status: ORDER_STATUS.CANCELLED }).where(eq(orders.id, orderId));
   await db.update(payments).set({ status: PAYMENT_STATUS.CANCELLED }).where(eq(payments.orderId, orderId));
 }
+
+export async function markOrderPreparing(orderId: string) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order || order.status !== ORDER_STATUS.PAID) throw new Error("Sipariş hazırlanamaz.");
+  await db.update(orders).set({ status: ORDER_STATUS.PREPARING, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  return order;
+}
+
+export async function shipOrder(
+  orderId: string,
+  input: { carrier?: string; trackingNo?: string } = {},
+) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order || (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.PREPARING)) {
+    throw new Error("Sipariş kargolanamaz.");
+  }
+  const [existing] = await db.select().from(shipments).where(eq(shipments.orderId, orderId)).limit(1);
+  if (existing) {
+    await db
+      .update(shipments)
+      .set({
+        carrier: input.carrier?.trim() || existing.carrier,
+        trackingNo: input.trackingNo?.trim() || existing.trackingNo,
+        status: "shipped",
+        updatedAt: new Date(),
+      })
+      .where(eq(shipments.id, existing.id));
+  } else {
+    await db.insert(shipments).values({
+      orderId,
+      carrier: input.carrier?.trim() || null,
+      trackingNo: input.trackingNo?.trim() || null,
+      status: "shipped",
+    });
+  }
+  await db.update(orders).set({ status: ORDER_STATUS.SHIPPED, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  return order;
+}
+
+export async function completeOrder(orderId: string) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order || order.status !== ORDER_STATUS.SHIPPED) throw new Error("Sipariş tamamlanamaz.");
+  await db.update(orders).set({ status: ORDER_STATUS.COMPLETED, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  await db
+    .update(shipments)
+    .set({ status: "delivered", updatedAt: new Date() })
+    .where(eq(shipments.orderId, orderId));
+  return order;
+}
+
+export async function getAdminOrder(orderId: string) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order) return null;
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  const paymentRows = await db.select().from(payments).where(eq(payments.orderId, orderId));
+  const shipmentRows = await db.select().from(shipments).where(eq(shipments.orderId, orderId));
+  return { order, items, payments: paymentRows, shipments: shipmentRows };
+}
+
+export function orderStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    [ORDER_STATUS.PENDING_PAYMENT]: "Ödeme bekliyor",
+    [ORDER_STATUS.PAID]: "Ödendi",
+    [ORDER_STATUS.PREPARING]: "Hazırlanıyor",
+    [ORDER_STATUS.SHIPPED]: "Kargoda",
+    [ORDER_STATUS.COMPLETED]: "Tamamlandı",
+    [ORDER_STATUS.CANCELLED]: "İptal",
+    [ORDER_STATUS.REFUNDED]: "İade",
+  };
+  return map[status] ?? status;
+}
+
+export async function updateProductAdmin(
+  productId: string,
+  input: {
+    name?: string;
+    price?: string;
+    stockQty?: number;
+    status?: string;
+    stockStatus?: string;
+  },
+) {
+  const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+  if (!product) throw new Error("Ürün bulunamadı.");
+  const patch: Partial<typeof products.$inferInsert> = { updatedAt: new Date() };
+  if (input.name !== undefined) patch.name = input.name.trim();
+  if (input.price !== undefined) {
+    const n = Number(input.price);
+    if (!Number.isFinite(n) || n < 0) throw new Error("Geçersiz fiyat.");
+    patch.price = n.toFixed(2);
+  }
+  if (input.stockQty !== undefined) {
+    if (!Number.isFinite(input.stockQty) || input.stockQty < 0) throw new Error("Geçersiz stok.");
+    patch.stockQty = Math.floor(input.stockQty);
+    if (input.stockStatus === undefined) {
+      patch.stockStatus = patch.stockQty > 0 ? "in_stock" : "out_of_stock";
+    }
+  }
+  if (input.status !== undefined) patch.status = input.status;
+  if (input.stockStatus !== undefined) patch.stockStatus = input.stockStatus;
+  await db.update(products).set(patch).where(eq(products.id, productId));
+  const [updated] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+  return updated!;
+}
+
+export type { OrderStatus };

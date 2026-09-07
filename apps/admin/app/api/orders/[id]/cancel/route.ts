@@ -19,5 +19,5 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     entityId: id,
     action: "cancel",
   });
-  return NextResponse.redirect(adminRedirect("/orders", request), 303);
+  return NextResponse.redirect(adminRedirect(`/orders/${id}?ok=1`, request), 303);
 }
