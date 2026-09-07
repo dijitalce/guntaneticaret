@@ -21,14 +21,30 @@
   --admin-shadow: 0 1px 2px rgba(18, 20, 26, 0.04), 0 8px 24px rgba(18, 20, 26, 0.06);
   --admin-radius: 14px;
   --admin-nav-w: 268px;
-  --font: var(--font-admin), "Segoe UI", sans-serif;
+  /* @guntan/ui Inter’i ez; yüklenmezse Times’a düşmesin */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 body.admin-body {
-  font-family: var(--font);
+  /* next/font --font-admin; yoksa system stack (Times’a düşmesin) */
+  font-family: var(--font-admin), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--admin-paper);
   color: var(--admin-ink);
   -webkit-font-smoothing: antialiased;
+}
+
+body.admin-body h1,
+body.admin-body h2,
+body.admin-body h3,
+body.admin-body button,
+body.admin-body input,
+body.admin-body select,
+body.admin-body textarea {
+  font-family: inherit;
 }
 
 /* ——— Shell ——— */
@@ -77,7 +93,7 @@ body.admin-body {
   font-size: 0.85rem;
   letter-spacing: -0.02em;
   background: linear-gradient(145deg, #d92d20, #8f1a12);
-  box-shadow: 0 6px 16px rgba(180, 35, 24, 0.35);
+  box-shadow: none;
 }
 
 .admin-brand-text {

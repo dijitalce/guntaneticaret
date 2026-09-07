@@ -1,14 +1,12 @@
 import { db, customers } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel } from "@/src/ui";
 
 export const metadata = { title: "Müşteriler" };
 
 export default async function CustomersPage() {
-  await requireAdmin();
   const rows = await db.select().from(customers).limit(100);
   return (
-    <AdminShell>
+    <>
       <PageHeader title="Müşteriler" description="Kayıtlı müşteri hesapları (ilk 100)." />
       <Panel>
         {rows.length === 0 ? (
@@ -36,6 +34,6 @@ export default async function CustomersPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

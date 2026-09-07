@@ -1,4 +1,3 @@
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { withBase } from "@/src/paths";
 import { PageHeader, Panel } from "@/src/ui";
 import { db, brandGroups } from "@guntan/db";
@@ -6,10 +5,9 @@ import { db, brandGroups } from "@guntan/db";
 export const metadata = { title: "Yeni site" };
 
 export default async function NewTenantPage() {
-  await requireAdmin();
   const groups = await db.select().from(brandGroups);
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Yeni site"
         description="Tenant kimliği, tema, katalog görünürlüğü ve iletişim bilgilerini adım adım girin."
@@ -49,6 +47,6 @@ export default async function NewTenantPage() {
         <button className="btn btn-primary" type="submit">Yayınla</button>
       </form>
       </Panel>
-    </AdminShell>
+    </>
   );
 }

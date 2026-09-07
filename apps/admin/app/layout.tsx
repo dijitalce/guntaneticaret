@@ -15,12 +15,14 @@ const font = Source_Sans_3({
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-admin",
   display: "swap",
+  fallback: ["system-ui", "Segoe UI", "Roboto", "sans-serif"],
+  adjustFontFallback: true,
 });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr">
-      <body className={`admin-body ${font.variable} ${font.className}`}>{children}</body>
+    <html lang="tr" className={font.variable}>
+      <body className={`admin-body ${font.className}`}>{children}</body>
     </html>
   );
 }

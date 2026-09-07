@@ -1,13 +1,11 @@
 import { count, eq, desc } from "drizzle-orm";
 import Link from "next/link";
 import { db, orders, products, tenants, xmlImportRuns } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel, QuickLink, StatusBadge, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Özet" };
 
 export default async function DashboardPage() {
-  await requireAdmin();
   const [productCount] = await db.select({ n: count() }).from(products);
   const [activeCount] = await db.select({ n: count() }).from(products).where(eq(products.status, "active"));
   const [oos] = await db.select({ n: count() }).from(products).where(eq(products.stockStatus, "out_of_stock"));
@@ -28,7 +26,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Özet"
         description="Güntan ekosisteminin anlık durumu. Siparişleri, kataloğu ve XML senkronunu buradan takip edin."
@@ -83,6 +81,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

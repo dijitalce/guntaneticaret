@@ -1,19 +1,17 @@
 import { desc } from "drizzle-orm";
 import { db, xmlFeeds, xmlImportRuns, xmlImportRowErrors } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { withBase } from "@/src/paths";
 import { EmptyState, PageHeader, Panel, StatusBadge, statusTone } from "@/src/ui";
 
 export const metadata = { title: "XML senkron" };
 
 export default async function XmlPage() {
-  await requireAdmin();
   const feeds = await db.select().from(xmlFeeds);
   const runs = await db.select().from(xmlImportRuns).orderBy(desc(xmlImportRuns.createdAt)).limit(20);
   const errors = await db.select().from(xmlImportRowErrors).orderBy(desc(xmlImportRowErrors.createdAt)).limit(20);
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="XML senkron"
         description="Tedarikçi feed’lerini çalıştırın; import sonuçlarını ve satır hatalarını izleyin."
@@ -87,6 +85,6 @@ export default async function XmlPage() {
           </ul>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

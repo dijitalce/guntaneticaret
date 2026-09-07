@@ -1,15 +1,13 @@
 import { asc } from "drizzle-orm";
 import { db, vehicleBrands } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel } from "@/src/ui";
 
 export const metadata = { title: "Araç markaları" };
 
 export default async function BrandsPage() {
-  await requireAdmin();
   const rows = await db.select().from(vehicleBrands).orderBy(asc(vehicleBrands.name));
   return (
-    <AdminShell>
+    <>
       <PageHeader title="Araç markaları" description="Araç markası kataloğu (alfabetik)." />
       <Panel>
         {rows.length === 0 ? (
@@ -37,6 +35,6 @@ export default async function BrandsPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

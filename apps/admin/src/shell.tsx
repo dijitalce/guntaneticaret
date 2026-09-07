@@ -12,10 +12,18 @@ export async function requireAdmin() {
   return session;
 }
 
-export async function AdminShell({ children }: { children: React.ReactNode }) {
-  const session = await requireAdmin();
+/** Senkron sarmalayıcı — sayfalar session’ı bir kez alıp children verir. */
+export function AdminShell({
+  children,
+  userName,
+  userEmail,
+}: {
+  children: React.ReactNode;
+  userName: string;
+  userEmail: string;
+}) {
   return (
-    <AdminShellClient userName={session.user.name} userEmail={session.user.email}>
+    <AdminShellClient userName={userName} userEmail={userEmail}>
       {children}
     </AdminShellClient>
   );

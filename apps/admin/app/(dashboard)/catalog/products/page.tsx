@@ -1,16 +1,14 @@
 import { desc } from "drizzle-orm";
 import { db, products } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel, StatusBadge, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Ürünler" };
 
 export default async function ProductsPage() {
-  await requireAdmin();
   const rows = await db.select().from(products).orderBy(desc(products.updatedAt)).limit(100);
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Ürünler"
         description="Son güncellenen 100 ürün. Detaylı arama vitrin ve XML senkron üzerinden yönetilir."
@@ -54,6 +52,6 @@ export default async function ProductsPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

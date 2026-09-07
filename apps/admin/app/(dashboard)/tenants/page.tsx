@@ -1,17 +1,15 @@
 import Link from "next/link";
 import { db, tenantDomains, tenants } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel, StatusBadge, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Siteler" };
 
 export default async function TenantsPage() {
-  await requireAdmin();
   const rows = await db.select().from(tenants);
   const domains = await db.select().from(tenantDomains);
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Siteler"
         description="Tenant’lar, domain eşlemeleri ve katalog görünürlük modları."
@@ -56,6 +54,6 @@ export default async function TenantsPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

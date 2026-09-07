@@ -1,14 +1,12 @@
 import { db, pages } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel } from "@/src/ui";
 
 export const metadata = { title: "Sayfalar" };
 
 export default async function PagesAdmin() {
-  await requireAdmin();
   const rows = await db.select().from(pages).limit(100);
   return (
-    <AdminShell>
+    <>
       <PageHeader title="Sayfalar" description="Statik içerik sayfaları." />
       <Panel>
         {rows.length === 0 ? (
@@ -36,6 +34,6 @@ export default async function PagesAdmin() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

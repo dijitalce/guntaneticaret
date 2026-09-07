@@ -10,12 +10,10 @@ import {
   tenants,
   vehicleBrands,
 } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { withBase } from "@/src/paths";
 import { PageHeader, Panel } from "@/src/ui";
 
 export default async function TenantEditPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
   const { id } = await params;
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
   if (!tenant) notFound();
@@ -28,7 +26,7 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
   const theme = (settings?.themeTokens ?? {}) as Record<string, string>;
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title={tenant.name}
         description={`Slug: ${tenant.slug} · Domain: ${domains.map((d) => d.hostname).join(", ") || "yok"}`}
@@ -85,6 +83,6 @@ export default async function TenantEditPage({ params }: { params: Promise<{ id:
           ))
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

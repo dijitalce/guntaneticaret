@@ -1,15 +1,13 @@
 import { desc } from "drizzle-orm";
 import { db, auditLogs } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel } from "@/src/ui";
 
 export const metadata = { title: "Audit log" };
 
 export default async function AuditPage() {
-  await requireAdmin();
   const rows = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(100);
   return (
-    <AdminShell>
+    <>
       <PageHeader title="Audit log" description="Yönetim paneli işlem geçmişi (son 100)." />
       <Panel>
         {rows.length === 0 ? (
@@ -43,6 +41,6 @@ export default async function AuditPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

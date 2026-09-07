@@ -1,14 +1,12 @@
 import { db, adminUsers } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel, StatusBadge } from "@/src/ui";
 
 export const metadata = { title: "Kullanıcılar" };
 
 export default async function UsersPage() {
-  await requireAdmin();
   const rows = await db.select().from(adminUsers);
   return (
-    <AdminShell>
+    <>
       <PageHeader title="Kullanıcılar" description="Admin panel hesapları." />
       <Panel>
         {rows.length === 0 ? (
@@ -40,6 +38,6 @@ export default async function UsersPage() {
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

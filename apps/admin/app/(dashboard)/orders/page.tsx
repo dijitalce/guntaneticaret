@@ -1,13 +1,11 @@
 import { desc } from "drizzle-orm";
 import { db, orders, tenants } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { withBase } from "@/src/paths";
 import { EmptyState, PageHeader, Panel, StatusBadge, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Siparişler" };
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ tenant?: string }> }) {
-  await requireAdmin();
   const sp = await searchParams;
   const tenantRows = await db.select().from(tenants);
   const rows = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(100);
@@ -15,7 +13,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const nameBy = Object.fromEntries(tenantRows.map((t) => [t.id, t.name]));
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Siparişler"
         description="Son 100 sipariş. Havale bekleyenleri onaylayın veya iptal edin."
@@ -87,6 +85,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           </div>
         )}
       </Panel>
-    </AdminShell>
+    </>
   );
 }

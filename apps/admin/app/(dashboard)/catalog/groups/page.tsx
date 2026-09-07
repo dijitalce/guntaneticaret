@@ -1,18 +1,16 @@
 import { db, brandGroupMembers, brandGroups, vehicleBrands } from "@guntan/db";
-import { AdminShell, requireAdmin } from "@/src/shell";
 import { EmptyState, PageHeader, Panel } from "@/src/ui";
 
 export const metadata = { title: "Marka grupları" };
 
 export default async function GroupsPage() {
-  await requireAdmin();
   const groups = await db.select().from(brandGroups);
   const members = await db.select().from(brandGroupMembers);
   const brands = await db.select().from(vehicleBrands);
   const nameBy = Object.fromEntries(brands.map((b) => [b.id, b.name]));
 
   return (
-    <AdminShell>
+    <>
       <PageHeader
         title="Marka grupları"
         description="Tenant katalog görünürlüğünde kullanılan marka kümeleri."
@@ -33,6 +31,6 @@ export default async function GroupsPage() {
           </div>
         ))
       )}
-    </AdminShell>
+    </>
   );
 }
