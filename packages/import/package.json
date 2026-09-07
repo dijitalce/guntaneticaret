@@ -7,7 +7,9 @@
   "scripts": {
     "lint": "echo ok",
     "test": "vitest run",
-    "guntan-xml": "tsx src/cli.ts"
+    "guntan-xml": "tsx src/cli.ts",
+    "basbug-json": "tsx src/basbug-cli.ts",
+    "dedupe-cheapest": "tsx src/dedupe-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",

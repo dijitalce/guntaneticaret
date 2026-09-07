@@ -16,6 +16,8 @@
     "db:sync-catalog": "pnpm --filter @guntan/db sync-catalog",
     "db:sync-tenants": "pnpm --filter @guntan/db sync-tenants",
     "import:xml": "pnpm --filter @guntan/import guntan-xml",
+    "import:basbug": "pnpm --filter @guntan/import basbug-json",
+    "import:dedupe": "pnpm --filter @guntan/import dedupe-cheapest",
     "db:studio": "pnpm --filter @guntan/db studio",
     "worker": "pnpm --filter @guntan/worker dev"
   },
