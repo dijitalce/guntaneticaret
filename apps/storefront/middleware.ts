@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { isReservedSlug } from "@guntan/config";
 
 export function middleware(request: NextRequest) {
-  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  const hostHeader = request.headers.get("host") ?? "";
+  const host = (hostHeader.split(":")[0] ?? "").toLowerCase();
 
   // Klasörlü admin.* Node’a gelmez; gelirse ana site paneline yönlendir.
   if (host === "admin.guntanotoyedekparca.com" || host.startsWith("admin.")) {
