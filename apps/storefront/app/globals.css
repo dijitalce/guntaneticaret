@@ -759,6 +759,32 @@ body {
 }
 .catalog-cats a.is-active em,
 .catalog-cats a:hover em { color: rgb(255 255 255 / 0.88); }
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+}
+
+.catalog-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--foreground);
+}
+
+.catalog-filter-chip.is-active,
+.catalog-filter-chip:hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
 .sort-form label { font-size: 0.8rem; color: var(--muted-foreground); display: grid; gap: 0.3rem; }
 .sort-form .select { min-width: 160px; }
 

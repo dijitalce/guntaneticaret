@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCategoryById, getCategoryBySlug, listProducts } from "@guntan/catalog";
+import Link from "next/link";
+import {
+  getBrandBySlug,
+  getCategoryById,
+  getCategoryBySlug,
+  listProducts,
+  listingFacetsForCategory,
+} from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
 import { ProductCard } from "../../../src/product-card";
@@ -13,7 +20,6 @@ import {
   collectionPageJsonLd,
   itemListJsonLd,
 } from "../../../src/seo";
-import Link from "next/link";
 
 export const revalidate = 300;
 
@@ -62,11 +68,24 @@ export default async function CategoryPage({
   const parent = cat.parentId ? await getCategoryById(cat.parentId) : null;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
+  const inStock = sp.stock === "1";
+  const manufacturerSlug = sp.mfr?.trim() || undefined;
+  const brandSlug = sp.brand?.trim() || undefined;
+
+  const facets = await listingFacetsForCategory(tenant.tenant.id, cat.id);
+  const manufacturer = manufacturerSlug
+    ? facets.manufacturers.find((m) => m.slug === manufacturerSlug)
+    : undefined;
+  const brand = brandSlug ? await getBrandBySlug(tenant.tenant.id, brandSlug) : null;
+
   const result = await listProducts({
     tenantId: tenant.tenant.id,
     categoryId: cat.id,
+    manufacturerId: manufacturer?.id,
+    brandId: brand?.id,
     sort,
     page,
+    inStock,
   });
 
   const host = tenant.tenant.canonicalHost;
@@ -77,10 +96,21 @@ export default async function CategoryPage({
     `${sentenceCaseTr(cat.name)} için uyumlu oto yedek parçalar. ${tenant.siteName} güvencesiyle KDV dahil fiyat.`;
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
 
-  function pageHref(p: number) {
+  function href(overrides: Record<string, string | undefined> = {}) {
     const params = new URLSearchParams();
-    if (sort !== LISTING_SORT.RECOMMENDED) params.set("sort", sort);
-    if (p > 1) params.set("page", String(p));
+    const next = {
+      sort: sort !== LISTING_SORT.RECOMMENDED ? sort : undefined,
+      stock: inStock ? "1" : undefined,
+      mfr: manufacturerSlug,
+      brand: brandSlug,
+      page: undefined as string | undefined,
+      ...overrides,
+    };
+    if (next.sort) params.set("sort", next.sort);
+    if (next.stock === "1") params.set("stock", "1");
+    if (next.mfr) params.set("mfr", next.mfr);
+    if (next.brand) params.set("brand", next.brand);
+    if (next.page && next.page !== "1") params.set("page", next.page);
     const q = params.toString();
     return q ? `/kategori/${catSlug}?${q}` : `/kategori/${catSlug}`;
   }
@@ -119,6 +149,83 @@ export default async function CategoryPage({
         <SortSelect value={sort} />
       </div>
       {cat.seoContent && <p className="category-seo-lead">{cat.seoContent}</p>}
+
+      {facets.children.length > 0 && (
+        <nav className="catalog-cats" aria-label="Alt kategoriler">
+          <Link className="is-active" href={href({ mfr: undefined, brand: undefined, page: undefined })}>
+            Tümü
+          </Link>
+          {facets.children.map((c) => (
+            <Link key={c.id} href={`/kategori/${c.slug}`}>
+              {sentenceCaseTr(c.name)}
+              <em>{c.count}</em>
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      <div className="catalog-filters">
+        <Link
+          className={`catalog-filter-chip${!inStock ? " is-active" : ""}`}
+          href={href({ stock: undefined, page: undefined })}
+        >
+          Tüm stok
+        </Link>
+        <Link
+          className={`catalog-filter-chip${inStock ? " is-active" : ""}`}
+          href={href({ stock: "1", page: undefined })}
+        >
+          Stokta olanlar
+        </Link>
+        {(manufacturerSlug || brandSlug) && (
+          <Link className="catalog-filter-chip" href={href({ mfr: undefined, brand: undefined, page: undefined })}>
+            Filtreleri temizle
+          </Link>
+        )}
+      </div>
+
+      {facets.manufacturers.length > 0 && (
+        <nav className="catalog-cats" aria-label="Üretici markalar">
+          <Link
+            className={!manufacturerSlug ? "is-active" : undefined}
+            href={href({ mfr: undefined, page: undefined })}
+          >
+            Tüm üreticiler
+          </Link>
+          {facets.manufacturers.map((m) => (
+            <Link
+              key={m.id}
+              className={manufacturerSlug === m.slug ? "is-active" : undefined}
+              href={href({ mfr: m.slug, page: undefined })}
+            >
+              {m.name}
+              <em>{m.count}</em>
+            </Link>
+          ))}
+        </nav>
+      )}
+
+      {facets.brands.length > 0 && (
+        <nav className="catalog-cats" aria-label="Araç markaları">
+          <Link
+            className={!brandSlug ? "is-active" : undefined}
+            href={href({ brand: undefined, page: undefined })}
+          >
+            Tüm araçlar
+          </Link>
+          {facets.brands.map((b) => (
+            <Link
+              key={b.id}
+              className={brandSlug === b.slug ? "is-active" : undefined}
+              href={href({ brand: b.slug, page: undefined })}
+            >
+              {b.name}
+              <em>{b.count}</em>
+            </Link>
+          ))}
+        </nav>
+      )}
+
       <div className="product-grid">
         {result.items.map((p, i) => (
           <ProductCard
@@ -131,18 +238,20 @@ export default async function CategoryPage({
       </div>
       {result.total === 0 && (
         <div className="empty-state">
-          <h2>Bu kategoride ürün yok</h2>
-          <p>Başka bir kategori seç veya marka/model ile devam et.</p>
-          <Link className="btn btn-primary" href="/">Marka seç</Link>
+          <h2>Bu filtrede ürün yok</h2>
+          <p>Filtreyi genişlet veya başka bir kategori dene.</p>
+          <Link className="btn btn-primary" href={`/kategori/${cat.slug}`}>
+            Filtreleri sıfırla
+          </Link>
         </div>
       )}
       {totalPages > 1 && (
         <nav className="catalog-pagination" aria-label="Sayfalar">
-          {page > 1 && <Link href={pageHref(page - 1)}>Önceki</Link>}
+          {page > 1 && <Link href={href({ page: String(page - 1) })}>Önceki</Link>}
           <span>
             {page} / {totalPages}
           </span>
-          {page < totalPages && <Link href={pageHref(page + 1)}>Sonraki</Link>}
+          {page < totalPages && <Link href={href({ page: String(page + 1) })}>Sonraki</Link>}
         </nav>
       )}
       <section className="seo-block">
