@@ -96,14 +96,16 @@ async function main() {
     await db.update(xmlFeeds).set({ filePath }).where(eq(xmlFeeds.id, feedId));
   }
 
-  const mappedPairs: Array<{ raw: BasbugRaw; mapped: NonNullable<ReturnType<typeof mapBasbugRow>> }> = [];
-  const byExternal = new Map<string, (typeof mappedPairs)[number]>();
+  const byExternal = new Map<
+    string,
+    { raw: BasbugRaw; mapped: NonNullable<ReturnType<typeof mapBasbugRow>> }
+  >();
   for (const raw of rawItems) {
     const mapped = mapBasbugRow(raw, rates);
     if (!mapped) continue;
     byExternal.set(mapped.externalId, { raw, mapped });
   }
-  mappedPairs.push(...byExternal.values());
+  const mappedPairs = Array.from(byExternal.values());
   console.log(`Mapped unique products: ${mappedPairs.length}`);
 
   const [run] = await db
