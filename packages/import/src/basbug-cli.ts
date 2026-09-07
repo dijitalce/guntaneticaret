@@ -206,10 +206,11 @@ async function main() {
 
   let created = 0;
   let failed = 0;
-  const chunk = 200;
+  const chunk = 100;
   const usedSlugs = new Set<string>();
 
   for (let i = 0; i < mappedPairs.length; i += chunk) {
+    if (i === 0) console.log("Preparing first batch…");
     const batch = mappedPairs.slice(i, i + chunk);
     const values = [];
     for (const { mapped: row } of batch) {
@@ -290,18 +291,24 @@ async function main() {
       if (cats.length) await db.insert(productCategories).values(cats).onConflictDoNothing();
       if (fits.length) await db.insert(productFitments).values(fits).onConflictDoNothing();
       created += inserted.length;
+      if (i === 0) console.log(`First batch OK, inserted=${inserted.length}`);
     } catch (err) {
       failed += batch.length;
-      console.error("Batch failed at", i, err instanceof Error ? err.message : err);
+      console.error("Batch failed at", i, err instanceof Error ? err.stack ?? err.message : err);
     }
-    if (i % 2000 === 0 || i + chunk >= mappedPairs.length) {
+    if (i % 1000 === 0 || i + chunk >= mappedPairs.length) {
       console.log(`Imported ${Math.min(i + chunk, mappedPairs.length)} / ${mappedPairs.length} (failed=${failed})`);
     }
   }
 
   console.log("Running cheapest dedupe…");
   const dedupe = await runDedupeCheapest({ compile: false });
-  console.log(dedupe);
+  console.log({
+    candidates: dedupe.candidates,
+    groups: dedupe.groups,
+    deactivated: dedupe.deactivated,
+    activated: dedupe.activated,
+  });
 
   console.log("Compiling visibility…");
   await compileVisibility(db);
@@ -319,7 +326,11 @@ async function main() {
     })
     .where(eq(xmlImportRuns.id, run!.id));
 
-  console.log({ created, failed, total: mappedPairs.length, dedupe });
+  console.log({ created, failed, total: mappedPairs.length, dedupe: {
+    groups: dedupe.groups,
+    deactivated: dedupe.deactivated,
+    activated: dedupe.activated,
+  } });
   await pg.end();
 }
 
