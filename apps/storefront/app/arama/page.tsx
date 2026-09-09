@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { searchProducts } from "@guntan/search";
-import { featuredProducts, searchCatalog } from "@guntan/catalog";
+import { searchCatalog } from "@guntan/catalog";
 import { getTenant } from "../../src/tenant";
 import { ProductCard } from "../../src/product-card";
+import { cachedFeaturedProducts } from "../../src/cached-catalog";
 import { redirect } from "next/navigation";
 
 export default async function SearchPage({
@@ -26,7 +27,7 @@ export default async function SearchPage({
         manufacturer: h.manufacturer ?? "",
         price: h.price,
       }));
-  const fallback = hits.length === 0 ? await featuredProducts(tenant.tenant.id, 8) : [];
+  const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
 
   return (
     <div className="container page-surface">

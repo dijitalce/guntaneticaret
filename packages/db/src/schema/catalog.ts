@@ -1,3 +1,4 @@
+import { desc, sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -146,7 +147,7 @@ export const products = pgTable("products", {
   uniqueIndex("products_slug_uidx").on(t.slug),
   index("products_status_idx").on(t.status),
   index("products_sku_idx").on(t.sku),
-  index("products_barcode_idx").on(t.barcode),
+  index("products_active_stock_idx").on(desc(t.stockQty), desc(t.updatedAt)).where(sql`${t.status} = 'active'`),
 ]);
 
 export const productImages = pgTable("product_images", {
@@ -158,7 +159,7 @@ export const productImages = pgTable("product_images", {
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 }, (t) => [
-  index("product_images_product_idx").on(t.productId),
+  index("product_images_product_idx").on(t.productId, t.sortOrder),
 ]);
 
 export const productOems = pgTable("product_oems", {
@@ -177,6 +178,7 @@ export const productCategories = pgTable("product_categories", {
   categoryId: uuid("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.productId, t.categoryId] }),
+  index("product_categories_category_idx").on(t.categoryId),
 ]);
 
 export const productFitments = pgTable("product_fitments", {
@@ -198,7 +200,6 @@ export const productFitments = pgTable("product_fitments", {
     t.vehicleEngineId,
   ),
   index("product_fitments_brand_model_idx").on(t.vehicleBrandId, t.vehicleModelId),
-  index("product_fitments_product_idx").on(t.productId),
 ]);
 
 export const tenantCatalogIndex = pgTable("tenant_catalog_index", {

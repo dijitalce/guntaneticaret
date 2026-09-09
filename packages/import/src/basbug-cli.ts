@@ -10,6 +10,7 @@ import {
   productFitments,
   productOems,
   products,
+  pruneUnusedCatalog,
   suppliers,
   vehicleBrands,
   vehicleModels,
@@ -225,7 +226,7 @@ async function main() {
         externalId: row.externalId,
         name: row.name,
         slug,
-        description: row.description ?? row.name,
+        description: null,
         price: row.price,
         compareAtPrice: null,
         stockQty: row.stock,
@@ -312,6 +313,10 @@ async function main() {
 
   console.log("Compiling visibility…");
   await compileVisibility(db);
+
+  console.log("Pruning unused catalog rows…");
+  const pruned = await pruneUnusedCatalog();
+  console.log(pruned);
 
   await db
     .update(xmlImportRuns)

@@ -1,9 +1,11 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { pgConnectOptions } from "./pg-options";
 
 const connectionString = process.env.DATABASE_URL ?? "postgres://guntan:guntan@localhost:5432/guntan";
-const isLocalDb = /localhost|127\.0\.0\.1/.test(connectionString);
+
+export { pgConnectOptions };
 
 const globalForDb = globalThis as unknown as {
   pg: ReturnType<typeof postgres> | undefined;
@@ -11,21 +13,7 @@ const globalForDb = globalThis as unknown as {
 
 export const pg =
   globalForDb.pg ??
-  postgres(connectionString, {
-    max: isLocalDb ? 10 : 3,
-    ssl: isLocalDb ? undefined : "require",
-    // Supabase's transaction pooler (pgbouncer) doesn't support session-level
-    // prepared statements across its multiplexed connections.
-    prepare: isLocalDb,
-    // pgbouncer (transaction mode) silently drops idle server-side
-    // connections. If postgres.js still has one open when that happens, it
-    // can throw an uncatchable exception on the next write (see
-    // https://github.com/porsager/postgres/issues/1208). Closing idle
-    // connections client-side first, well before the pooler would, avoids
-    // racing that server-side termination.
-    idle_timeout: isLocalDb ? undefined : 20,
-    max_lifetime: isLocalDb ? undefined : 60 * 30,
-  });
+  postgres(connectionString, pgConnectOptions(connectionString));
 // Always pin on globalThis so Next.js module duplication (or HMR) cannot open
 // extra postgres pools — each pool holds real connections/file descriptors
 // that Hostinger counts toward process limits.

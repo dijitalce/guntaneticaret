@@ -11,6 +11,7 @@ import {
   shipments,
   tenantBankAccounts,
   tenantCatalogIndex,
+  tenantSeesAllCatalog,
 } from "@guntan/db";
 import { getPaymentProvider } from "@guntan/payments";
 import { getShippingProvider } from "@guntan/shipping";
@@ -53,14 +54,17 @@ export async function getOrCreateCart(tenantId: string, customerId?: string | nu
 }
 
 export async function addToCart(cartId: string, tenantId: string, productId: string, qty = 1) {
-  const [visible] = await db
-    .select()
-    .from(tenantCatalogIndex)
-    .where(and(eq(tenantCatalogIndex.tenantId, tenantId), eq(tenantCatalogIndex.productId, productId)))
-    .limit(1);
-  if (!visible) throw new Error("Ürün bu sitede satılmıyor.");
   const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
   if (!product || product.status !== "active") throw new Error("Ürün bulunamadı.");
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  if (!seesAll) {
+    const [visible] = await db
+      .select({ productId: tenantCatalogIndex.productId })
+      .from(tenantCatalogIndex)
+      .where(and(eq(tenantCatalogIndex.tenantId, tenantId), eq(tenantCatalogIndex.productId, productId)))
+      .limit(1);
+    if (!visible) throw new Error("Ürün bu sitede satılmıyor.");
+  }
   if (availableStock(product.stockQty, product.reservedQty) < qty) throw new Error("Yetersiz stok.");
 
   const [existing] = await db

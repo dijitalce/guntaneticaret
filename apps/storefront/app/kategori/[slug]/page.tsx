@@ -6,10 +6,10 @@ import {
   getCategoryById,
   getCategoryBySlug,
   listProducts,
-  listingFacetsForCategory,
 } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
+import { cachedListingFacetsForCategory } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
 import { sentenceCaseTr } from "../../../src/format";
@@ -72,7 +72,7 @@ export default async function CategoryPage({
   const manufacturerSlug = sp.mfr?.trim() || undefined;
   const brandSlug = sp.brand?.trim() || undefined;
 
-  const facets = await listingFacetsForCategory(tenant.tenant.id, cat.id);
+  const facets = await cachedListingFacetsForCategory(tenant.tenant.id, cat.id);
   const manufacturer = manufacturerSlug
     ? facets.manufacturers.find((m) => m.slug === manufacturerSlug)
     : undefined;

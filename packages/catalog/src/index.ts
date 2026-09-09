@@ -9,7 +9,7 @@ import {
   productImages,
   productOems,
   products,
-  tenantCatalogIndex,
+  tenantSeesAllCatalog,
   tenantVisibleBrands,
   vehicleBrands,
   vehicleEngines,
@@ -19,6 +19,28 @@ import {
 import { LISTING_PAGE_SIZE, LISTING_SORT, type ListingSort } from "@guntan/types";
 
 export { compileVisibility };
+
+function tenantVisibleSql(tenantId: string, seesAll: boolean) {
+  if (seesAll) return sql`true`;
+  return sql`exists (
+    select 1 from tenant_catalog_index tci
+    where tci.product_id = ${products.id}
+      and tci.tenant_id = ${tenantId}
+  )`;
+}
+
+const listingSelect = {
+  id: products.id,
+  name: products.name,
+  slug: products.slug,
+  sku: products.sku,
+  price: products.price,
+  compareAtPrice: products.compareAtPrice,
+  stockStatus: products.stockStatus,
+  manufacturerName: manufacturers.name,
+  createdAt: products.createdAt,
+  stockQty: products.stockQty,
+};
 
 export function productImageUrl(
   productUrl: string | null | undefined,
@@ -116,7 +138,14 @@ async function categoryFilterIds(categoryId: string) {
 
 async function primaryImagesByProductIds(ids: string[]) {
   if (ids.length === 0) return new Map<string, string>();
-  const images = await db.select().from(productImages).where(inArray(productImages.productId, ids));
+  const images = await db
+    .select({
+      productId: productImages.productId,
+      url: productImages.url,
+      sortOrder: productImages.sortOrder,
+    })
+    .from(productImages)
+    .where(inArray(productImages.productId, ids));
   const imageBy = new Map<string, string>();
   for (const img of images.sort((a, b) => a.sortOrder - b.sortOrder)) {
     if (!imageBy.has(img.productId)) imageBy.set(img.productId, img.url);
@@ -126,7 +155,13 @@ async function primaryImagesByProductIds(ids: string[]) {
 
 async function primaryOemsByProductIds(ids: string[]) {
   if (ids.length === 0) return new Map<string, string>();
-  const oems = await db.select().from(productOems).where(inArray(productOems.productId, ids));
+  const oems = await db
+    .select({
+      productId: productOems.productId,
+      raw: productOems.raw,
+    })
+    .from(productOems)
+    .where(inArray(productOems.productId, ids));
   const oemBy = new Map<string, string>();
   for (const oem of oems) {
     if (!oemBy.has(oem.productId)) oemBy.set(oem.productId, oem.raw);
@@ -158,75 +193,144 @@ function listingOrder(sort: ListingSort) {
 export async function listProducts(query: ListingQuery) {
   const page = Math.max(1, query.page ?? 1);
   const sort = query.sort ?? LISTING_SORT.RECOMMENDED;
+  const offset = (page - 1) * LISTING_PAGE_SIZE;
+  const seesAll = await tenantSeesAllCatalog(query.tenantId);
+  const visible = tenantVisibleSql(query.tenantId, seesAll);
+  const order = listingOrder(sort);
 
-  const conditions = [
-    eq(tenantCatalogIndex.tenantId, query.tenantId),
-    eq(products.status, "active"),
-  ];
-
+  const conditions = [eq(products.status, "active"), visible];
   if (query.manufacturerId) conditions.push(eq(products.manufacturerId, query.manufacturerId));
   if (query.inStock) conditions.push(eq(products.stockStatus, "in_stock"));
   if (query.minPrice != null) conditions.push(gte(products.price, String(query.minPrice)));
   if (query.maxPrice != null) conditions.push(lte(products.price, String(query.maxPrice)));
 
-  if (query.brandId || query.modelId || query.engineId) {
-    const fitConds = [sql`pf.product_id = ${products.id}`];
-    if (query.brandId) fitConds.push(sql`pf.vehicle_brand_id = ${query.brandId}`);
-    if (query.modelId) fitConds.push(sql`pf.vehicle_model_id = ${query.modelId}`);
-    if (query.engineId) fitConds.push(sql`pf.vehicle_engine_id = ${query.engineId}`);
-    conditions.push(sql`exists (select 1 from product_fitments pf where ${sql.join(fitConds, sql` and `)})`);
-  }
-
+  let categoryIds: string[] | undefined;
   if (query.categoryId) {
-    const categoryIds = await categoryFilterIds(query.categoryId);
+    categoryIds = await categoryFilterIds(query.categoryId);
     if (categoryIds.length === 0) {
       return { items: [], total: 0, page, pageSize: LISTING_PAGE_SIZE };
     }
-    conditions.push(sql`exists (
-      select 1 from product_categories pc
-      where pc.product_id = ${products.id}
-        and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `)})
-    )`);
+  }
+
+  const useFitments = Boolean(query.brandId || query.modelId || query.engineId);
+  const useCategories = Boolean(categoryIds?.length) && !useFitments;
+
+  if (useFitments) {
+    if (query.brandId) conditions.push(eq(productFitments.vehicleBrandId, query.brandId));
+    if (query.modelId) conditions.push(eq(productFitments.vehicleModelId, query.modelId));
+    if (query.engineId) conditions.push(eq(productFitments.vehicleEngineId, query.engineId));
+    if (categoryIds?.length) {
+      conditions.push(sql`exists (
+        select 1 from product_categories pc
+        where pc.product_id = ${products.id}
+          and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `)})
+      )`);
+    }
+    const whereClause = and(...conditions);
+    const [rows, countRows] = await Promise.all([
+      db
+        .select(listingSelect)
+        .from(productFitments)
+        .innerJoin(products, eq(products.id, productFitments.productId))
+        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+        .where(whereClause)
+        .groupBy(
+          products.id,
+          products.name,
+          products.slug,
+          products.sku,
+          products.price,
+          products.compareAtPrice,
+          products.stockStatus,
+          manufacturers.name,
+          products.createdAt,
+          products.stockQty,
+        )
+        .orderBy(order)
+        .limit(LISTING_PAGE_SIZE)
+        .offset(offset),
+      db
+        .select({ value: sql<number>`count(distinct ${products.id})::int` })
+        .from(productFitments)
+        .innerJoin(products, eq(products.id, productFitments.productId))
+        .where(whereClause),
+    ]);
+    return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
+  }
+
+  if (useCategories) {
+    conditions.push(inArray(productCategories.categoryId, categoryIds!));
+    const whereClause = and(...conditions);
+    const [rows, countRows] = await Promise.all([
+      db
+        .select(listingSelect)
+        .from(productCategories)
+        .innerJoin(products, eq(products.id, productCategories.productId))
+        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+        .where(whereClause)
+        .groupBy(
+          products.id,
+          products.name,
+          products.slug,
+          products.sku,
+          products.price,
+          products.compareAtPrice,
+          products.stockStatus,
+          manufacturers.name,
+          products.createdAt,
+          products.stockQty,
+        )
+        .orderBy(order)
+        .limit(LISTING_PAGE_SIZE)
+        .offset(offset),
+      db
+        .select({ value: sql<number>`count(distinct ${products.id})::int` })
+        .from(productCategories)
+        .innerJoin(products, eq(products.id, productCategories.productId))
+        .where(whereClause),
+    ]);
+    return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
   }
 
   const whereClause = and(...conditions);
-  const order = listingOrder(sort);
-
   const [rows, countRows] = await Promise.all([
     db
-      .select({
-        id: products.id,
-        name: products.name,
-        slug: products.slug,
-        sku: products.sku,
-        price: products.price,
-        compareAtPrice: products.compareAtPrice,
-        stockStatus: products.stockStatus,
-        manufacturerName: manufacturers.name,
-        createdAt: products.createdAt,
-        stockQty: products.stockQty,
-      })
+      .select(listingSelect)
       .from(products)
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
       .where(whereClause)
       .orderBy(order)
       .limit(LISTING_PAGE_SIZE)
-      .offset((page - 1) * LISTING_PAGE_SIZE),
+      .offset(offset),
     db
       .select({ value: sql<number>`count(*)::int` })
       .from(products)
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .where(whereClause),
   ]);
+  return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
+}
 
-  const total = countRows[0]?.value ?? 0;
+async function attachListingExtras(
+  rows: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    sku: string;
+    price: string;
+    compareAtPrice: string | null;
+    stockStatus: string;
+    manufacturerName: string | null;
+    createdAt: Date;
+    stockQty: number;
+  }>,
+  total: number,
+  page: number,
+) {
   const ids = rows.map((r) => r.id);
   const [imageBy, oemBy] = await Promise.all([
     primaryImagesByProductIds(ids),
     primaryOemsByProductIds(ids),
   ]);
-
   return {
     items: rows.map((r) => ({
       ...r,
@@ -240,8 +344,10 @@ export async function listProducts(query: ListingQuery) {
 }
 
 export async function listingFacets(tenantId: string, brandId: string, modelId?: string) {
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const visible = tenantVisibleSql(tenantId, seesAll);
   const scope = [
-    eq(tenantCatalogIndex.tenantId, tenantId),
+    visible,
     eq(productFitments.vehicleBrandId, brandId),
     eq(products.status, "active"),
     ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
@@ -259,7 +365,6 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
       .from(productCategories)
       .innerJoin(categories, eq(productCategories.categoryId, categories.id))
       .innerJoin(products, eq(products.id, productCategories.productId))
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .innerJoin(productFitments, eq(productFitments.productId, products.id))
       .where(and(...scope))
       .groupBy(categories.id, categories.name, categories.slug, categories.parentId),
@@ -270,7 +375,6 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
         slug: manufacturers.slug,
       })
       .from(products)
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .innerJoin(productFitments, eq(productFitments.productId, products.id))
       .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
       .where(and(...scope))
@@ -283,11 +387,12 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
       })
       .from(productFitments)
       .innerJoin(vehicleEngines, eq(productFitments.vehicleEngineId, vehicleEngines.id))
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, productFitments.productId))
+      .innerJoin(products, eq(products.id, productFitments.productId))
       .where(
         and(
-          eq(tenantCatalogIndex.tenantId, tenantId),
+          visible,
           eq(productFitments.vehicleBrandId, brandId),
+          eq(products.status, "active"),
           ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
         ),
       )
@@ -327,6 +432,8 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
     return { manufacturers: [] as { id: string; name: string; slug: string; count: number }[], brands: [] as { id: string; name: string; slug: string; count: number }[], children: [] as { id: string; name: string; slug: string; count: number }[] };
   }
 
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const visible = tenantVisibleSql(tenantId, seesAll);
   const catIn = sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `);
   const inCategory = sql`exists (
     select 1 from product_categories pc
@@ -335,7 +442,7 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
   )`;
 
   const scope = [
-    eq(tenantCatalogIndex.tenantId, tenantId),
+    visible,
     eq(products.status, "active"),
     inCategory,
   ];
@@ -349,7 +456,6 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
         count: count(products.id),
       })
       .from(products)
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
       .where(and(...scope))
       .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug)
@@ -363,7 +469,6 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
         count: count(sql`distinct ${products.id}`),
       })
       .from(products)
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .innerJoin(productFitments, eq(productFitments.productId, products.id))
       .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
       .where(and(...scope))
@@ -380,11 +485,10 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
       .from(categories)
       .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
       .innerJoin(products, eq(products.id, productCategories.productId))
-      .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
       .where(
         and(
           eq(categories.parentId, categoryId),
-          eq(tenantCatalogIndex.tenantId, tenantId),
+          visible,
           eq(products.status, "active"),
         ),
       )
@@ -400,15 +504,19 @@ export async function listingFacetsForCategory(tenantId: string, categoryId: str
 }
 
 export async function getProductBySlug(tenantId: string, slug: string) {
+  const seesAll = await tenantSeesAllCatalog(tenantId);
   const [row] = await db
     .select({
       product: products,
       manufacturerName: manufacturers.name,
     })
     .from(products)
-    .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-    .where(and(eq(tenantCatalogIndex.tenantId, tenantId), eq(products.slug, slug)))
+    .where(and(
+      eq(products.slug, slug),
+      eq(products.status, "active"),
+      tenantVisibleSql(tenantId, seesAll),
+    ))
     .limit(1);
   if (!row) return null;
 
@@ -445,6 +553,7 @@ export async function getProductBySlug(tenantId: string, slug: string) {
 
 export async function relatedProducts(tenantId: string, productId: string, modelId: string | undefined, limit = 8) {
   if (!modelId) return [];
+  const seesAll = await tenantSeesAllCatalog(tenantId);
   const rows = await db
     .selectDistinct({
       id: products.id,
@@ -453,12 +562,11 @@ export async function relatedProducts(tenantId: string, productId: string, model
       price: products.price,
       compareAtPrice: products.compareAtPrice,
     })
-    .from(products)
-    .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
-    .innerJoin(productFitments, eq(productFitments.productId, products.id))
+    .from(productFitments)
+    .innerJoin(products, eq(products.id, productFitments.productId))
     .where(
       and(
-        eq(tenantCatalogIndex.tenantId, tenantId),
+        tenantVisibleSql(tenantId, seesAll),
         eq(productFitments.vehicleModelId, modelId),
         eq(products.status, "active"),
         sql`${products.id} <> ${productId}`,
@@ -470,6 +578,7 @@ export async function relatedProducts(tenantId: string, productId: string, model
 }
 
 export async function featuredProducts(tenantId: string, limit = 8) {
+  const seesAll = await tenantSeesAllCatalog(tenantId);
   const rows = await db
     .select({
       id: products.id,
@@ -482,11 +591,10 @@ export async function featuredProducts(tenantId: string, limit = 8) {
       stockStatus: products.stockStatus,
     })
     .from(products)
-    .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(and(
-      eq(tenantCatalogIndex.tenantId, tenantId),
       eq(products.status, "active"),
+      tenantVisibleSql(tenantId, seesAll),
     ))
     .orderBy(desc(products.stockQty), desc(products.updatedAt))
     .limit(limit);
@@ -498,32 +606,18 @@ export async function listPopularCategories(limit = 8) {
   return db.select().from(categories).where(and(eq(categories.isActive, true), isNull(categories.parentId))).orderBy(asc(categories.sortOrder)).limit(limit);
 }
 
-function foldTr(value: string) {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .replaceAll("ı", "i")
-    .replaceAll("ğ", "g")
-    .replaceAll("ü", "u")
-    .replaceAll("ş", "s")
-    .replaceAll("ö", "o")
-    .replaceAll("ç", "c");
-}
-
-function foldCol(col: typeof products.name | typeof products.sku) {
-  return sql`translate(lower(${col}::text), 'ıİğĞüÜşŞöÖçÇ', 'iigguussoocc')`;
-}
-
 export async function searchCatalog(tenantId: string, q: string, limit = 8) {
   const query = q.trim();
   if (query.length < 2) return [];
-  const folded = `%${foldTr(query)}%`;
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const prefix = `${query}%`;
   const oemNorm = query.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   const matchOem =
-    oemNorm.length >= 2
+    oemNorm.length >= 5
       ? sql`exists (
           select 1 from product_oems po
           where po.product_id = ${products.id}
-            and (po.raw ilike ${`%${query}%`} or po.normalized = ${oemNorm})
+            and po.normalized = ${oemNorm}
         )`
       : sql`false`;
   return db
@@ -536,13 +630,17 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       manufacturer: manufacturers.name,
     })
     .from(products)
-    .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(
       and(
-        eq(tenantCatalogIndex.tenantId, tenantId),
         eq(products.status, "active"),
-        or(sql`${foldCol(products.name)} like ${folded}`, sql`${foldCol(products.sku)} like ${folded}`, matchOem),
+        tenantVisibleSql(tenantId, seesAll),
+        or(
+          eq(products.sku, query),
+          sql`${products.sku} ilike ${prefix}`,
+          sql`${products.name} ilike ${prefix}`,
+          matchOem,
+        ),
       ),
     )
     .limit(limit);

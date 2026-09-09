@@ -10,6 +10,24 @@ import {
 } from "@guntan/types";
 
 let redis: IORedis | null = null;
+const memCache = new Map<string, { value: TenantPublicConfig | null; exp: number }>();
+const MEM_TTL_MS = 60_000;
+
+function memGet(hostname: string): TenantPublicConfig | null | undefined {
+  const hit = memCache.get(hostname);
+  if (!hit) return undefined;
+  if (hit.exp < Date.now()) {
+    memCache.delete(hostname);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function memSet(hostname: string, value: TenantPublicConfig | null) {
+  if (memCache.size > 80) memCache.clear();
+  memCache.set(hostname, { value, exp: Date.now() + MEM_TTL_MS });
+}
+
 function getRedis() {
   if (!process.env.REDIS_URL) return null;
   const g = globalThis as unknown as { __guntanRedis?: IORedis | null };
@@ -35,12 +53,21 @@ function getRedis() {
   return redis;
 }
 
+function liveRedis() {
+  const cache = getRedis();
+  if (!cache) return null;
+  if (cache.status === "wait") {
+    cache.connect().catch(() => {});
+  }
+  return cache.status === "ready" ? cache : null;
+}
+
 export function normalizeHost(host: string): string {
   return host.replace(/:\d+$/, "").replace(/^www\./i, "").toLowerCase();
 }
 
 async function safeCacheSet(cache: IORedis | null, key: string, value: string, ttlSeconds: number) {
-  if (!cache) return;
+  if (!cache || cache.status !== "ready") return;
   try {
     await cache.set(key, value, "EX", ttlSeconds);
   } catch {
@@ -51,13 +78,22 @@ async function safeCacheSet(cache: IORedis | null, key: string, value: string, t
 export async function resolveTenantByHost(rawHost: string): Promise<TenantPublicConfig | null> {
   const hostname = normalizeHost(rawHost);
   if (!hostname) return null;
-  const cache = getRedis();
+  const cached = memGet(hostname);
+  if (cached !== undefined) return cached;
+  const cache = liveRedis();
   const cacheKey = CACHE_KEYS.tenantHost(hostname);
   if (cache) {
     try {
       const hit = await cache.get(cacheKey);
-      if (hit === "null") return null;
-      if (hit) return JSON.parse(hit) as TenantPublicConfig;
+      if (hit === "null") {
+        memSet(hostname, null);
+        return null;
+      }
+      if (hit) {
+        const parsed = JSON.parse(hit) as TenantPublicConfig;
+        memSet(hostname, parsed);
+        return parsed;
+      }
     } catch {
       /* cache optional */
     }
@@ -70,12 +106,14 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     .limit(1);
 
   if (!domain) {
+    memSet(hostname, null);
     await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
     return null;
   }
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, domain.tenantId)).limit(1);
   if (!tenant || tenant.status === TENANT_STATUS.DRAFT) {
+    memSet(hostname, null);
     await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
     return null;
   }
@@ -115,6 +153,7 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     seoContent: settings?.seoContent ?? null,
   };
 
+  memSet(hostname, config);
   await safeCacheSet(cache, cacheKey, JSON.stringify(config), TENANT_HOST_CACHE_TTL_SECONDS);
   await safeCacheSet(cache, CACHE_KEYS.tenantConfig(tenant.id), JSON.stringify(config), TENANT_CONFIG_CACHE_TTL_SECONDS);
   return config;
@@ -138,7 +177,8 @@ export function themeToCssVars(theme: ThemeTokens): string {
 }
 
 export async function invalidateTenantCache(tenantId: string, hostnames: string[]) {
-  const cache = getRedis();
+  memCache.clear();
+  const cache = liveRedis();
   if (!cache) return;
   try {
     await cache.del(CACHE_KEYS.tenantConfig(tenantId), ...hostnames.map((h) => CACHE_KEYS.tenantHost(normalizeHost(h))));

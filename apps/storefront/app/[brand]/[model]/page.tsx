@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { featuredProducts, getBrandBySlug, getModelBySlug, listProducts } from "@guntan/catalog";
+import { getBrandBySlug, getModelBySlug, listProducts } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
-import { cachedListingFacets, cachedModelsForBrand } from "../../../src/cached-catalog";
+import { cachedFeaturedProducts, cachedListingFacets, cachedModelsForBrand } from "../../../src/cached-catalog";
 import { CatalogListing } from "../../../src/catalog-listing";
 import {
   JsonLd,
@@ -61,7 +61,7 @@ export default async function ModelListingPage({
       page,
       inStock: sp.stock === "1",
     }),
-    featuredProducts(tenant.tenant.id, 4),
+    cachedFeaturedProducts(tenant.tenant.id, 4),
   ]);
 
   const host = tenant.tenant.canonicalHost;

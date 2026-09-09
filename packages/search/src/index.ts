@@ -2,6 +2,7 @@ import { MeiliSearch } from "meilisearch";
 import { eq, inArray } from "drizzle-orm";
 import {
   db,
+  listAllVisibilityTenantIds,
   manufacturers,
   productFitments,
   productImages,
@@ -22,6 +23,7 @@ export function getMeili() {
     g.__guntanMeili = new MeiliSearch({
       host: process.env.MEILI_HOST ?? "http://localhost:7700",
       apiKey: process.env.MEILI_MASTER_KEY ?? "dev_meili_master_key_change_me",
+      timeout: 800,
     });
   }
   return g.__guntanMeili;
@@ -59,6 +61,7 @@ export async function reindexAll() {
     .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
     .innerJoin(vehicleModels, eq(productFitments.vehicleModelId, vehicleModels.id));
   const vis = await db.select().from(tenantCatalogIndex);
+  const allTenantIds = await listAllVisibilityTenantIds();
   const cats = await db
     .select({ productId: productCategories.productId, name: categories.name })
     .from(productCategories)
@@ -113,7 +116,7 @@ export async function reindexAll() {
     in_stock: p.stockStatus === "in_stock",
     slug: p.slug,
     thumbnail: thumbBy.get(p.id) ?? "",
-    tenant_ids: tenantBy.get(p.id) ?? [],
+    tenant_ids: [...new Set([...(tenantBy.get(p.id) ?? []), ...allTenantIds])],
   }));
 
   await getMeili().index(INDEX).addDocuments(docs, { primaryKey: "id" });

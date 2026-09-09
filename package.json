@@ -16,6 +16,8 @@
     "db:ensure-admin": "pnpm --filter @guntan/db ensure-admin",
     "db:sync-catalog": "pnpm --filter @guntan/db sync-catalog",
     "db:sync-tenants": "pnpm --filter @guntan/db sync-tenants",
+    "db:compile-visibility": "pnpm --filter @guntan/db compile-visibility",
+    "db:prune": "pnpm --filter @guntan/db prune",
     "import:xml": "pnpm --filter @guntan/import guntan-xml",
     "import:basbug": "pnpm --filter @guntan/import basbug-json",
     "import:dedupe": "pnpm --filter @guntan/import dedupe-cheapest",

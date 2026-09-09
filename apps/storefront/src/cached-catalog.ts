@@ -1,9 +1,11 @@
 import { unstable_cache } from "next/cache";
 import {
+  featuredProducts,
   listModelsForBrand,
   listPopularCategories,
   listVisibleBrands,
   listingFacets,
+  listingFacetsForCategory,
 } from "@guntan/catalog";
 import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
 
@@ -35,6 +37,22 @@ export function cachedListingFacets(tenantId: string, brandId: string, modelId?:
   return unstable_cache(
     () => listingFacets(tenantId, brandId, modelId),
     ["listing-facets", tenantId, brandId, modelId ?? "all"],
+    { revalidate: NAV_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedListingFacetsForCategory(tenantId: string, categoryId: string) {
+  return unstable_cache(
+    () => listingFacetsForCategory(tenantId, categoryId),
+    ["listing-facets-cat", tenantId, categoryId],
+    { revalidate: NAV_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedFeaturedProducts(tenantId: string, limit = 8) {
+  return unstable_cache(
+    () => featuredProducts(tenantId, limit),
+    ["featured", tenantId, String(limit)],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }

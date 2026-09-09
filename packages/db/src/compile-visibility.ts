@@ -12,8 +12,10 @@ import {
   vehicleBrands,
 } from "./schema";
 import { CATALOG_RULE_KIND, PRODUCT_STATUS, VISIBILITY_MODE } from "@guntan/types";
+import { invalidateVisibilityModeCache } from "./visibility";
 
 export async function compileVisibility(db: Database, tenantId?: string) {
+  invalidateVisibilityModeCache(tenantId);
   const tenantRows = tenantId
     ? await db.select().from(tenants).where(eq(tenants.id, tenantId))
     : await db.select().from(tenants);
@@ -56,6 +58,12 @@ export async function compileVisibility(db: Database, tenantId?: string) {
       await db.insert(tenantVisibleBrands).values(
         allowedBrandIds.map((brandId) => ({ tenantId: tenant.id, brandId })),
       );
+    }
+
+    // ALL-mode tenants already see every active product. Materializing that
+    // as tenant_catalog_index duplicates the whole catalog (hundreds of MB).
+    if (tenant.visibilityMode === VISIBILITY_MODE.ALL) {
+      continue;
     }
 
     const activeProducts = await db

@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { featuredProducts, getBrandBySlug, listProducts } from "@guntan/catalog";
+import { getBrandBySlug, listProducts } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../src/tenant";
-import { cachedModelsForBrand } from "../../src/cached-catalog";
+import { cachedFeaturedProducts, cachedModelsForBrand } from "../../src/cached-catalog";
 import { CatalogListing } from "../../src/catalog-listing";
 import {
   JsonLd,
@@ -55,7 +55,7 @@ export default async function BrandPage({
   const [models, result, featured] = await Promise.all([
     cachedModelsForBrand(tenant.tenant.id, row.id),
     listProducts({ tenantId: tenant.tenant.id, brandId: row.id, sort, page }),
-    featuredProducts(tenant.tenant.id, 4),
+    cachedFeaturedProducts(tenant.tenant.id, 4),
   ]);
 
   const host = tenant.tenant.canonicalHost;

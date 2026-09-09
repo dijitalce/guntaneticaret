@@ -15,6 +15,8 @@
     "ensure-admin": "tsx src/ensure-admin.ts",
     "sync-catalog": "tsx src/sync-vehicle-catalog.ts",
     "sync-tenants": "tsx src/sync-tenants.ts",
+    "compile-visibility": "tsx src/compile-cli.ts",
+    "prune": "tsx src/prune-cli.ts",
     "studio": "drizzle-kit studio",
     "lint": "echo ok"
   },

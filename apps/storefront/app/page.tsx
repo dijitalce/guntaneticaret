@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { featuredProducts } from "@guntan/catalog";
+import { cachedFeaturedProducts, cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { getTenant } from "../src/tenant";
-import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { ProductCard } from "../src/product-card";
 import { VehicleFinder } from "../src/vehicle-finder";
 import { VehicleNav } from "../src/vehicle-nav";
@@ -41,7 +40,7 @@ export default async function HomePage() {
   const tenant = await getTenant();
   const [brands, featured, cats] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
-    featuredProducts(tenant.tenant.id, 8),
+    cachedFeaturedProducts(tenant.tenant.id, 8),
     cachedPopularCategories(8),
   ]);
   const rootCats = cats.filter((c) => !c.parentId);
