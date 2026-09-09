@@ -10,5 +10,9 @@ export function pgConnectOptions(url: string, overrides: { max?: number } = {}) 
     prepare: isLocal || !isPooler,
     idle_timeout: isPooler ? 20 : isLocal ? undefined : 180,
     max_lifetime: isPooler ? 60 * 30 : isLocal ? undefined : 60 * 60,
+    // Without this, a stuck TCP handshake (SG/network issue) blocks every
+    // request waiting on that pool slot for the OS default (~30s+) instead
+    // of failing fast so the caller can fall back or the page can error.
+    connect_timeout: isLocal ? undefined : 8,
   };
 }
