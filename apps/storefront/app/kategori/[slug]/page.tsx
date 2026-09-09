@@ -9,6 +9,7 @@ import {
   cachedCategoryBySlug,
   cachedListProducts,
   cachedListingFacetsForCategory,
+  cachedManufacturerBySlug,
 } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
@@ -63,30 +64,31 @@ export default async function CategoryPage({
   const { slug } = await params;
   const sp = await searchParams;
   const tenant = await getTenant();
-  const cat = await cachedCategoryBySlug(slug);
+  const manufacturerSlug = sp.mfr?.trim() || undefined;
+  const brandSlug = sp.brand?.trim() || undefined;
+  const [cat, manufacturer, brand] = await Promise.all([
+    cachedCategoryBySlug(slug),
+    manufacturerSlug ? cachedManufacturerBySlug(manufacturerSlug) : Promise.resolve(null),
+    brandSlug ? cachedBrandBySlug(tenant.tenant.id, brandSlug) : Promise.resolve(null),
+  ]);
   if (!cat) notFound();
-  const parent = cat.parentId ? await cachedCategoryById(cat.parentId) : null;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
   const inStock = sp.stock === "1";
-  const manufacturerSlug = sp.mfr?.trim() || undefined;
-  const brandSlug = sp.brand?.trim() || undefined;
 
-  const facets = await cachedListingFacetsForCategory(tenant.tenant.id, cat.id);
-  const manufacturer = manufacturerSlug
-    ? facets.manufacturers.find((m) => m.slug === manufacturerSlug)
-    : undefined;
-  const brand = brandSlug ? await cachedBrandBySlug(tenant.tenant.id, brandSlug) : null;
-
-  const result = await cachedListProducts({
-    tenantId: tenant.tenant.id,
-    categoryId: cat.id,
-    manufacturerId: manufacturer?.id,
-    brandId: brand?.id,
-    sort,
-    page,
-    inStock,
-  });
+  const [parent, facets, result] = await Promise.all([
+    cat.parentId ? cachedCategoryById(cat.parentId) : Promise.resolve(null),
+    cachedListingFacetsForCategory(tenant.tenant.id, cat.id),
+    cachedListProducts({
+      tenantId: tenant.tenant.id,
+      categoryId: cat.id,
+      manufacturerId: manufacturer?.id,
+      brandId: brand?.id,
+      sort,
+      page,
+      inStock,
+    }),
+  ]);
 
   const host = tenant.tenant.canonicalHost;
   const catSlug = cat.slug;

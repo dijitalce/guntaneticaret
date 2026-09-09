@@ -4,6 +4,7 @@ import {
   getBrandBySlug,
   getCategoryById,
   getCategoryBySlug,
+  getManufacturerBySlug,
   getModelBySlug,
   listModelsForBrand,
   listPopularCategories,
@@ -69,6 +70,14 @@ export function cachedCategoryById(id: string) {
   return unstable_cache(
     () => getCategoryById(id),
     ["category-id", id],
+    { revalidate: NAV_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedManufacturerBySlug(slug: string) {
+  return unstable_cache(
+    () => getManufacturerBySlug(slug),
+    ["manufacturer-slug", slug],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }

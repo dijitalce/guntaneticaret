@@ -121,19 +121,41 @@ export async function getCategoryById(id: string) {
   return row ?? null;
 }
 
+export async function getManufacturerBySlug(slug: string) {
+  const [row] = await db
+    .select({
+      id: manufacturers.id,
+      name: manufacturers.name,
+      slug: manufacturers.slug,
+    })
+    .from(manufacturers)
+    .where(eq(manufacturers.slug, slug))
+    .limit(1);
+  return row ?? null;
+}
+
+const CAT_ID_TTL_MS = 10 * 60_000;
+const catIdMem = new Map<string, { exp: number; value: string[] }>();
+
 /** Category + all descendants via path prefix (supports nested trees). */
 async function categoryFilterIds(categoryId: string) {
+  const hit = catIdMem.get(categoryId);
+  if (hit && hit.exp > Date.now()) return hit.value;
   const [cat] = await db
     .select({ id: categories.id, path: categories.path })
     .from(categories)
     .where(eq(categories.id, categoryId))
     .limit(1);
-  if (!cat) return [categoryId];
-  const rows = await db
-    .select({ id: categories.id })
-    .from(categories)
-    .where(or(eq(categories.id, categoryId), sql`${categories.path} like ${`${cat.path}/%`}`));
-  return rows.map((r) => r.id);
+  const ids = !cat
+    ? [categoryId]
+    : (await db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(or(eq(categories.id, categoryId), sql`${categories.path} like ${`${cat.path}/%`}`))
+      ).map((r) => r.id);
+  if (catIdMem.size > 400) catIdMem.clear();
+  catIdMem.set(categoryId, { value: ids, exp: Date.now() + CAT_ID_TTL_MS });
+  return ids;
 }
 
 async function primaryImagesByProductIds(ids: string[]) {
@@ -304,27 +326,43 @@ async function listProductsUncached(query: ListingQuery) {
   }
 
   if (useCategories) {
-    const catIds = db
-      .selectDistinct({ productId: productCategories.productId })
-      .from(productCategories)
-      .where(inArray(productCategories.categoryId, categoryIds!))
-      .as("cat_ids");
-    const whereClause = and(...conditions);
-    const [rows, countRows] = await Promise.all([
+    const whereClause = and(...conditions, inArray(productCategories.categoryId, categoryIds!));
+    const fromCategory = () =>
       db
         .select(listingSelect)
-        .from(catIds)
-        .innerJoin(products, eq(products.id, catIds.productId))
+        .from(productCategories)
+        .innerJoin(products, eq(products.id, productCategories.productId))
         .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-        .where(whereClause)
-        .orderBy(order)
-        .limit(LISTING_PAGE_SIZE)
-        .offset(offset),
+        .where(whereClause);
+    const countFromCategory = () =>
       db
-        .select({ value: sql<number>`count(*)::int` })
-        .from(catIds)
-        .innerJoin(products, eq(products.id, catIds.productId))
-        .where(whereClause),
+        .select({
+          value: sql<number>`count(distinct ${productCategories.productId})::int`,
+        })
+        .from(productCategories)
+        .innerJoin(products, eq(products.id, productCategories.productId))
+        .where(whereClause);
+
+    const [rows, countRows] = await Promise.all([
+      categoryIds!.length === 1
+        ? fromCategory().orderBy(order).limit(LISTING_PAGE_SIZE).offset(offset)
+        : fromCategory()
+            .groupBy(
+              products.id,
+              products.name,
+              products.slug,
+              products.sku,
+              products.price,
+              products.compareAtPrice,
+              products.stockStatus,
+              manufacturers.name,
+              products.createdAt,
+              products.stockQty,
+            )
+            .orderBy(order)
+            .limit(LISTING_PAGE_SIZE)
+            .offset(offset),
+      countFromCategory(),
     ]);
     return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
   }
@@ -462,76 +500,88 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
   return { categories: cats, manufacturers: mfrs, engines };
 }
 
-/** Kategori sayfası için üretici + araç markası facet’leri. */
+type CategoryFacets = {
+  manufacturers: { id: string; name: string; slug: string; count: number }[];
+  brands: { id: string; name: string; slug: string; count: number }[];
+  children: { id: string; name: string; slug: string; count: number }[];
+};
+
+const CATEGORY_FACET_TTL_MS = 10 * 60_000;
+const categoryFacetMem = new Map<string, { exp: number; value: CategoryFacets }>();
+
+/** Kategori sayfası için üretici + alt kategori facet’leri. */
 export async function listingFacetsForCategory(tenantId: string, categoryId: string) {
+  const key = `${tenantId}:${categoryId}`;
+  const hit = categoryFacetMem.get(key);
+  if (hit && hit.exp > Date.now()) return hit.value;
+  const value = await listingFacetsForCategoryUncached(tenantId, categoryId);
+  if (categoryFacetMem.size > 200) categoryFacetMem.clear();
+  categoryFacetMem.set(key, { value, exp: Date.now() + CATEGORY_FACET_TTL_MS });
+  return value;
+}
+
+async function listingFacetsForCategoryUncached(tenantId: string, categoryId: string): Promise<CategoryFacets> {
   const categoryIds = await categoryFilterIds(categoryId);
   if (categoryIds.length === 0) {
-    return { manufacturers: [] as { id: string; name: string; slug: string; count: number }[], brands: [] as { id: string; name: string; slug: string; count: number }[], children: [] as { id: string; name: string; slug: string; count: number }[] };
+    return { manufacturers: [], brands: [], children: [] };
   }
 
   const seesAll = await tenantSeesAllCatalog(tenantId);
   const visible = tenantVisibleSql(tenantId, seesAll);
-  const catIn = sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `);
-  const inCategory = sql`exists (
-    select 1 from product_categories pc
-    where pc.product_id = ${products.id}
-      and pc.category_id in (${catIn})
-  )`;
+  const inTheseCategories = inArray(productCategories.categoryId, categoryIds);
+  const productCount = sql<number>`count(distinct ${productCategories.productId})::int`;
 
-  const scope = [
-    visible,
-    eq(products.status, "active"),
-    inCategory,
-  ];
+  const mfrsQuery = db
+    .select({
+      id: manufacturers.id,
+      name: manufacturers.name,
+      slug: manufacturers.slug,
+      count: productCount,
+    })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+    .where(and(inTheseCategories, eq(products.status, "active"), visible))
+    .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug)
+    .orderBy(desc(productCount))
+    .limit(40);
 
-  const [mfrs, brands, children] = await Promise.all([
-    db
-      .select({
-        id: manufacturers.id,
-        name: manufacturers.name,
-        slug: manufacturers.slug,
-        count: count(products.id),
-      })
-      .from(products)
-      .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-      .where(and(...scope))
-      .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug)
-      .orderBy(desc(count(products.id)))
-      .limit(40),
-    db
-      .select({
-        id: vehicleBrands.id,
-        name: vehicleBrands.name,
-        slug: vehicleBrands.slug,
-        count: count(sql`distinct ${products.id}`),
-      })
-      .from(products)
-      .innerJoin(productFitments, eq(productFitments.productId, products.id))
-      .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
-      .where(and(...scope))
-      .groupBy(vehicleBrands.id, vehicleBrands.name, vehicleBrands.slug)
-      .orderBy(desc(count(sql`distinct ${products.id}`)))
-      .limit(40),
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        count: count(sql`distinct ${products.id}`),
-      })
-      .from(categories)
-      .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
-      .innerJoin(products, eq(products.id, productCategories.productId))
-      .where(
-        and(
-          eq(categories.parentId, categoryId),
-          visible,
-          eq(products.status, "active"),
-        ),
-      )
-      .groupBy(categories.id, categories.name, categories.slug)
-      .orderBy(desc(count(sql`distinct ${products.id}`))),
-  ]);
+  const childrenQuery = db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      slug: categories.slug,
+      count: productCount,
+    })
+    .from(categories)
+    .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(and(eq(categories.parentId, categoryId), eq(products.status, "active"), visible))
+    .groupBy(categories.id, categories.name, categories.slug)
+    .orderBy(desc(productCount));
+
+  // Ana kategoride tüm fitment’lerle COUNT DISTINCT marka = saniye mertebesi.
+  // Yaprak kategoride ürün azdır; orada hesapla. Üst kategoride alt kategori yeterli.
+  const isLeaf = categoryIds.length === 1;
+  const brandsQuery = isLeaf
+    ? db
+        .select({
+          id: vehicleBrands.id,
+          name: vehicleBrands.name,
+          slug: vehicleBrands.slug,
+          count: productCount,
+        })
+        .from(productCategories)
+        .innerJoin(products, eq(products.id, productCategories.productId))
+        .innerJoin(productFitments, eq(productFitments.productId, productCategories.productId))
+        .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
+        .where(and(inTheseCategories, eq(products.status, "active"), visible))
+        .groupBy(vehicleBrands.id, vehicleBrands.name, vehicleBrands.slug)
+        .orderBy(desc(productCount))
+        .limit(40)
+    : Promise.resolve([] as { id: string; name: string; slug: string; count: number }[]);
+
+  const [mfrs, brands, children] = await Promise.all([mfrsQuery, brandsQuery, childrenQuery]);
 
   return {
     manufacturers: mfrs.map((m) => ({ ...m, count: Number(m.count) })),
