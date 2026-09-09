@@ -36,6 +36,12 @@ const nextConfig: NextConfig = {
     remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }],
   },
   serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch", "saxes"],
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   webpack: (config) => {
     config.resolve.modules = [
       path.join(repoRoot, "node_modules"),

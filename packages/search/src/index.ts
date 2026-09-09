@@ -17,6 +17,13 @@ import {
 
 const INDEX = "products";
 
+function meiliConfigured() {
+  const host = process.env.MEILI_HOST ?? "";
+  if (!host) return false;
+  if (process.env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(host)) return false;
+  return true;
+}
+
 export function getMeili() {
   const g = globalThis as unknown as { __guntanMeili?: MeiliSearch };
   if (!g.__guntanMeili) {
@@ -123,6 +130,7 @@ export async function reindexAll() {
 }
 
 export async function searchProducts(tenantId: string, q: string, limit = 8) {
+  if (!meiliConfigured()) return [];
   const res = await getMeili().index(INDEX).search(q, {
     filter: `tenant_ids = "${tenantId}"`,
     limit,

@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getBrandBySlug, listProducts } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../src/tenant";
-import { cachedFeaturedProducts, cachedModelsForBrand } from "../../src/cached-catalog";
+import { cachedBrandBySlug, cachedFeaturedProducts, cachedListProducts, cachedModelsForBrand } from "../../src/cached-catalog";
 import { CatalogListing } from "../../src/catalog-listing";
 import {
   JsonLd,
@@ -18,7 +17,7 @@ export const revalidate = 120;
 export async function generateMetadata({ params }: { params: Promise<{ brand: string }> }): Promise<Metadata> {
   const { brand } = await params;
   const tenant = await getTenant();
-  const row = await getBrandBySlug(tenant.tenant.id, brand);
+  const row = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!row) return {};
   const title = `${row.name} Yedek Parça | ${tenant.siteName}`;
   const description =
@@ -47,14 +46,14 @@ export default async function BrandPage({
   const { brand } = await params;
   const sp = await searchParams;
   const tenant = await getTenant();
-  const row = await getBrandBySlug(tenant.tenant.id, brand);
+  const row = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!row) notFound();
 
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
   const [models, result, featured] = await Promise.all([
     cachedModelsForBrand(tenant.tenant.id, row.id),
-    listProducts({ tenantId: tenant.tenant.id, brandId: row.id, sort, page }),
+    cachedListProducts({ tenantId: tenant.tenant.id, brandId: row.id, sort, page }),
     cachedFeaturedProducts(tenant.tenant.id, 4),
   ]);
 

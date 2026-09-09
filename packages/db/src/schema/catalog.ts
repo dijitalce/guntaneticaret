@@ -200,6 +200,8 @@ export const productFitments = pgTable("product_fitments", {
     t.vehicleEngineId,
   ),
   index("product_fitments_brand_model_idx").on(t.vehicleBrandId, t.vehicleModelId),
+  index("product_fitments_brand_product_idx").on(t.vehicleBrandId, t.productId),
+  index("product_fitments_model_product_idx").on(t.vehicleModelId, t.productId),
 ]);
 
 export const tenantCatalogIndex = pgTable("tenant_catalog_index", {

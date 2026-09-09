@@ -3,9 +3,20 @@ import { cookies, headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
-import { addToCart, getOrCreateCart } from "@guntan/ecommerce";
+import { addToCart, cartQty, getOrCreateCart } from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { db, products } from "@guntan/db";
+
+export async function GET() {
+  const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";
+  const tenant = await resolveTenantByHost(host);
+  if (!tenant) {
+    return NextResponse.json({ qty: 0 }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+  const sessionId = (await cookies()).get(COOKIE_CART)?.value;
+  const qty = await cartQty(tenant.tenant.id, sessionId);
+  return NextResponse.json({ qty }, { headers: { "Cache-Control": "private, no-store" } });
+}
 
 export async function POST(request: Request) {
   const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";

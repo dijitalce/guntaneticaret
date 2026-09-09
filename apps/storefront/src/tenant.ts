@@ -1,15 +1,24 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getProductBySlug as getProductBySlugRaw } from "@guntan/catalog";
 import { resolveTenantByHost, themeToCssVars } from "@guntan/tenant";
-import { TENANT_STATUS } from "@guntan/types";
+import { TENANT_HOST_CACHE_TTL_SECONDS, TENANT_STATUS } from "@guntan/types";
 import type { TenantPublicConfig } from "@guntan/types";
+
+function cachedTenantByHost(host: string) {
+  return unstable_cache(
+    () => resolveTenantByHost(host),
+    ["tenant-host", host],
+    { revalidate: TENANT_HOST_CACHE_TTL_SECONDS },
+  )();
+}
 
 export const getTenant = cache(async (): Promise<TenantPublicConfig> => {
   const h = await headers();
   const host = h.get("x-request-host") ?? h.get("host") ?? "guntan.localhost";
-  const tenant = await resolveTenantByHost(host);
+  const tenant = await cachedTenantByHost(host);
   if (!tenant) notFound();
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");

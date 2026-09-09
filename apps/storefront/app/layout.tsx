@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
@@ -9,7 +8,7 @@ import { getTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
-import { CartBadge, CartBadgeFallback } from "../src/cart-badge";
+import { CartBadge } from "../src/cart-badge";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
 
@@ -85,9 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <IconHeart />
                 <span>Favoriler</span>
               </Link>
-              <Suspense fallback={<CartBadgeFallback />}>
-                <CartBadge tenantId={tenant.tenant.id} />
-              </Suspense>
+              <CartBadge />
             </nav>
           </div>
           <nav className="site-nav" aria-label="Ana menü">

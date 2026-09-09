@@ -49,6 +49,71 @@ function isAdminPath(urlPath) {
   return path === adminBasePath || path.startsWith(`${adminBasePath}/`);
 }
 
+function isPrivatePath(urlPath) {
+  const path = String(urlPath ?? "/").split("?")[0];
+  if (path.startsWith("/api") || path.startsWith("/yonetim") || isAdminPath(path)) return true;
+  return (
+    path.startsWith("/sepet") ||
+    path.startsWith("/odeme") ||
+    path.startsWith("/hesabim") ||
+    path.startsWith("/favoriler") ||
+    path.startsWith("/giris") ||
+    path.startsWith("/kayit") ||
+    path.startsWith("/cikis")
+  );
+}
+
+/** Next.js dynamic pages send no-store; Hostinger CDN then never caches HTML. */
+function enableSharedHtmlCache(req, res) {
+  const method = req.method ?? "GET";
+  if (method !== "GET" && method !== "HEAD") return;
+  if (isPrivatePath(req.url ?? "/")) return;
+
+  const cacheValue = "public, s-maxage=60, stale-while-revalidate=300";
+  const origSetHeader = res.setHeader.bind(res);
+  const origWriteHead = res.writeHead.bind(res);
+
+  const patchHeaders = (hdrs) => {
+    if (!hdrs || typeof hdrs !== "object" || Array.isArray(hdrs)) return hdrs;
+    const next = { ...hdrs };
+    for (const key of Object.keys(next)) {
+      if (key.toLowerCase() === "cache-control") delete next[key];
+    }
+    next["Cache-Control"] = cacheValue;
+    next["CDN-Cache-Control"] = cacheValue;
+    next["Vary"] = "Host, Accept-Encoding";
+    return next;
+  };
+
+  const apply = () => {
+    if (res.headersSent || res.statusCode >= 400) return;
+    origSetHeader("Cache-Control", cacheValue);
+    origSetHeader("CDN-Cache-Control", cacheValue);
+    origSetHeader("Vary", "Host, Accept-Encoding");
+  };
+
+  res.setHeader = (name, value) => {
+    if (String(name).toLowerCase() === "cache-control") {
+      apply();
+      return res;
+    }
+    return origSetHeader(name, value);
+  };
+  res.writeHead = (status, reason, headers) => {
+    if (status >= 400) {
+      return origWriteHead(status, reason, headers);
+    }
+    if (typeof reason === "object" && reason != null) {
+      return origWriteHead(status, patchHeaders(reason));
+    }
+    if (headers && typeof headers === "object") {
+      return origWriteHead(status, reason, patchHeaders(headers));
+    }
+    apply();
+    return origWriteHead(status, reason, headers);
+  };
+}
+
 function sendHtml(res, status, html) {
   res.statusCode = status;
   res.setHeader("content-type", "text/html; charset=utf-8");
@@ -127,6 +192,7 @@ createServer((req, res) => {
   }
 
   res.setHeader("x-guntan-app", "storefront");
+  enableSharedHtmlCache(req, res);
   return sfHandler(req, res, parsedUrl);
 }).listen(port, hostname, () => {
   console.log(

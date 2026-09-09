@@ -11,7 +11,7 @@ import {
 
 let redis: IORedis | null = null;
 const memCache = new Map<string, { value: TenantPublicConfig | null; exp: number }>();
-const MEM_TTL_MS = 60_000;
+const MEM_TTL_MS = 5 * 60_000;
 
 function memGet(hostname: string): TenantPublicConfig | null | undefined {
   const hit = memCache.get(hostname);
@@ -29,11 +29,17 @@ function memSet(hostname: string, value: TenantPublicConfig | null) {
 }
 
 function getRedis() {
-  if (!process.env.REDIS_URL) return null;
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  // Hostinger Cloud'da REDIS_URL çoğu zaman localhost kalıyor; bağlanmayı
+  // denemek her istekte 1–2 sn kaybettirir.
+  if (process.env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(url)) {
+    return null;
+  }
   const g = globalThis as unknown as { __guntanRedis?: IORedis | null };
   if (g.__guntanRedis !== undefined) return g.__guntanRedis;
   if (!redis) {
-    redis = new IORedis(process.env.REDIS_URL, {
+    redis = new IORedis(url, {
       maxRetriesPerRequest: 2,
       lazyConnect: true,
       // If REDIS_URL points at something unreachable (e.g. a leftover

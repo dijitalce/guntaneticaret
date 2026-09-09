@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import {
-  getBrandBySlug,
-  getCategoryById,
-  getCategoryBySlug,
-  listProducts,
-} from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
-import { cachedListingFacetsForCategory } from "../../../src/cached-catalog";
+import {
+  cachedBrandBySlug,
+  cachedCategoryById,
+  cachedCategoryBySlug,
+  cachedListProducts,
+  cachedListingFacetsForCategory,
+} from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
 import { sentenceCaseTr } from "../../../src/format";
@@ -30,7 +30,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const tenant = await getTenant();
-  const cat = await getCategoryBySlug(slug);
+  const cat = await cachedCategoryBySlug(slug);
   if (!cat) return {};
   const title = cat.seoContent
     ? undefined
@@ -63,9 +63,9 @@ export default async function CategoryPage({
   const { slug } = await params;
   const sp = await searchParams;
   const tenant = await getTenant();
-  const cat = await getCategoryBySlug(slug);
+  const cat = await cachedCategoryBySlug(slug);
   if (!cat) notFound();
-  const parent = cat.parentId ? await getCategoryById(cat.parentId) : null;
+  const parent = cat.parentId ? await cachedCategoryById(cat.parentId) : null;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
   const inStock = sp.stock === "1";
@@ -76,9 +76,9 @@ export default async function CategoryPage({
   const manufacturer = manufacturerSlug
     ? facets.manufacturers.find((m) => m.slug === manufacturerSlug)
     : undefined;
-  const brand = brandSlug ? await getBrandBySlug(tenant.tenant.id, brandSlug) : null;
+  const brand = brandSlug ? await cachedBrandBySlug(tenant.tenant.id, brandSlug) : null;
 
-  const result = await listProducts({
+  const result = await cachedListProducts({
     tenantId: tenant.tenant.id,
     categoryId: cat.id,
     manufacturerId: manufacturer?.id,

@@ -8,7 +8,7 @@ export function pgConnectOptions(url: string, overrides: { max?: number } = {}) 
     // Pooler can't keep prepared statements across multiplexed connections.
     // RDS and Supabase direct Postgres can.
     prepare: isLocal || !isPooler,
-    idle_timeout: isPooler ? 20 : isLocal ? undefined : 30,
+    idle_timeout: isPooler ? 20 : isLocal ? undefined : 180,
     max_lifetime: isPooler ? 60 * 30 : isLocal ? undefined : 60 * 60,
   };
 }

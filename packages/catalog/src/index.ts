@@ -190,7 +190,58 @@ function listingOrder(sort: ListingSort) {
   return desc(products.stockQty);
 }
 
+type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
+
+const LISTING_MEM_TTL_MS = 90_000;
+const listingMem = new Map<string, { exp: number; value: ListingResult }>();
+
+function listingCacheKey(query: ListingQuery) {
+  return [
+    query.tenantId,
+    query.brandId ?? "",
+    query.modelId ?? "",
+    query.categoryId ?? "",
+    query.manufacturerId ?? "",
+    query.engineId ?? "",
+    query.inStock ? "1" : "0",
+    query.minPrice ?? "",
+    query.maxPrice ?? "",
+    query.sort ?? "",
+    query.page ?? 1,
+  ].join("|");
+}
+
+function listingMemGet(key: string): ListingResult | undefined {
+  const hit = listingMem.get(key);
+  if (!hit) return undefined;
+  if (hit.exp < Date.now()) {
+    listingMem.delete(key);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function listingMemSet(key: string, value: ListingResult) {
+  if (listingMem.size > 250) {
+    const now = Date.now();
+    for (const [k, v] of listingMem) {
+      if (v.exp < now) listingMem.delete(k);
+    }
+    if (listingMem.size > 250) listingMem.clear();
+  }
+  listingMem.set(key, { value, exp: Date.now() + LISTING_MEM_TTL_MS });
+}
+
 export async function listProducts(query: ListingQuery) {
+  const key = listingCacheKey(query);
+  const cached = listingMemGet(key);
+  if (cached) return cached;
+  const value = await listProductsUncached(query);
+  listingMemSet(key, value);
+  return value;
+}
+
+async function listProductsUncached(query: ListingQuery) {
   const page = Math.max(1, query.page ?? 1);
   const sort = query.sort ?? LISTING_SORT.RECOMMENDED;
   const offset = (page - 1) * LISTING_PAGE_SIZE;
@@ -216,9 +267,10 @@ export async function listProducts(query: ListingQuery) {
   const useCategories = Boolean(categoryIds?.length) && !useFitments;
 
   if (useFitments) {
-    if (query.brandId) conditions.push(eq(productFitments.vehicleBrandId, query.brandId));
-    if (query.modelId) conditions.push(eq(productFitments.vehicleModelId, query.modelId));
-    if (query.engineId) conditions.push(eq(productFitments.vehicleEngineId, query.engineId));
+    const fitmentConds = [];
+    if (query.brandId) fitmentConds.push(eq(productFitments.vehicleBrandId, query.brandId));
+    if (query.modelId) fitmentConds.push(eq(productFitments.vehicleModelId, query.modelId));
+    if (query.engineId) fitmentConds.push(eq(productFitments.vehicleEngineId, query.engineId));
     if (categoryIds?.length) {
       conditions.push(sql`exists (
         select 1 from product_categories pc
@@ -226,67 +278,52 @@ export async function listProducts(query: ListingQuery) {
           and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `)})
       )`);
     }
+    const fitIds = db
+      .selectDistinct({ productId: productFitments.productId })
+      .from(productFitments)
+      .where(and(...fitmentConds))
+      .as("fit_ids");
     const whereClause = and(...conditions);
     const [rows, countRows] = await Promise.all([
       db
         .select(listingSelect)
-        .from(productFitments)
-        .innerJoin(products, eq(products.id, productFitments.productId))
+        .from(fitIds)
+        .innerJoin(products, eq(products.id, fitIds.productId))
         .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
         .where(whereClause)
-        .groupBy(
-          products.id,
-          products.name,
-          products.slug,
-          products.sku,
-          products.price,
-          products.compareAtPrice,
-          products.stockStatus,
-          manufacturers.name,
-          products.createdAt,
-          products.stockQty,
-        )
         .orderBy(order)
         .limit(LISTING_PAGE_SIZE)
         .offset(offset),
       db
-        .select({ value: sql<number>`count(distinct ${products.id})::int` })
-        .from(productFitments)
-        .innerJoin(products, eq(products.id, productFitments.productId))
+        .select({ value: sql<number>`count(*)::int` })
+        .from(fitIds)
+        .innerJoin(products, eq(products.id, fitIds.productId))
         .where(whereClause),
     ]);
     return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
   }
 
   if (useCategories) {
-    conditions.push(inArray(productCategories.categoryId, categoryIds!));
+    const catIds = db
+      .selectDistinct({ productId: productCategories.productId })
+      .from(productCategories)
+      .where(inArray(productCategories.categoryId, categoryIds!))
+      .as("cat_ids");
     const whereClause = and(...conditions);
     const [rows, countRows] = await Promise.all([
       db
         .select(listingSelect)
-        .from(productCategories)
-        .innerJoin(products, eq(products.id, productCategories.productId))
+        .from(catIds)
+        .innerJoin(products, eq(products.id, catIds.productId))
         .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
         .where(whereClause)
-        .groupBy(
-          products.id,
-          products.name,
-          products.slug,
-          products.sku,
-          products.price,
-          products.compareAtPrice,
-          products.stockStatus,
-          manufacturers.name,
-          products.createdAt,
-          products.stockQty,
-        )
         .orderBy(order)
         .limit(LISTING_PAGE_SIZE)
         .offset(offset),
       db
-        .select({ value: sql<number>`count(distinct ${products.id})::int` })
-        .from(productCategories)
-        .innerJoin(products, eq(products.id, productCategories.productId))
+        .select({ value: sql<number>`count(*)::int` })
+        .from(catIds)
+        .innerJoin(products, eq(products.id, catIds.productId))
         .where(whereClause),
     ]);
     return attachListingExtras(rows, countRows[0]?.value ?? 0, page);

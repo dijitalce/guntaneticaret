@@ -86,6 +86,8 @@ Uygulamayı restart et. Kontrol: anasayfa, bir kategori, admin sipariş listesi.
 - `t3.micro` = 1 GB RAM. Büyük listing yavaşsa `t3.small`.
 - Hostinger ↔ Frankfurt gecikmesi kalır; kota/throttling biter. En hızlısı ileride app+DB aynı VPS.
 - RDS’de prepared statement açık (pooler yok). Import/prune **direct** endpoint ile çalışır.
+- Bu kod canlıya çıktıktan sonra bir kez: `pnpm db:compile-visibility` (ALL tenant’ın `tenant_catalog_index` kopyasını siler). Eski storefront hâlâ o tabloya join atıyorsa katalog boş görünür — önce deploy, sonra compile.
+- Hostinger’da `REDIS_URL` / `MEILI_HOST` localhost ise bağlanmayı deneme; boş bırak veya sil. HTML 60 sn CDN cache (sepet/hesap hariç).
 
 ---
 

@@ -1,9 +1,17 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getBrandBySlug, getCategoryById, getCategoryBySlug, getModelBySlug, listProducts } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../../src/tenant";
-import { cachedFeaturedProducts, cachedListingFacets, cachedModelsForBrand } from "../../../../src/cached-catalog";
+import {
+  cachedBrandBySlug,
+  cachedCategoryById,
+  cachedCategoryBySlug,
+  cachedFeaturedProducts,
+  cachedListProducts,
+  cachedListingFacets,
+  cachedModelBySlug,
+  cachedModelsForBrand,
+} from "../../../../src/cached-catalog";
 import { CatalogListing } from "../../../../src/catalog-listing";
 import { sentenceCaseTr } from "../../../../src/format";
 import {
@@ -23,11 +31,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { brand, model, category } = await params;
   const tenant = await getTenant();
-  const b = await getBrandBySlug(tenant.tenant.id, brand);
+  const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) return {};
-  const m = await getModelBySlug(b.id, model);
+  const m = await cachedModelBySlug(b.id, model);
   if (!m) return {};
-  const cat = await getCategoryBySlug(category);
+  const cat = await cachedCategoryBySlug(category);
   if (!cat) return {};
   const title = `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça | ${tenant.siteName}`;
   const description =
@@ -52,19 +60,19 @@ export default async function CategoryListingPage({
   const { brand, model, category } = await params;
   const sp = await searchParams;
   const tenant = await getTenant();
-  const b = await getBrandBySlug(tenant.tenant.id, brand);
+  const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) notFound();
-  const m = await getModelBySlug(b.id, model);
+  const m = await cachedModelBySlug(b.id, model);
   if (!m) notFound();
-  const cat = await getCategoryBySlug(category);
+  const cat = await cachedCategoryBySlug(category);
   if (!cat) notFound();
-  const parent = cat.parentId ? await getCategoryById(cat.parentId) : null;
+  const parent = cat.parentId ? await cachedCategoryById(cat.parentId) : null;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
   const [models, facets, result, featured] = await Promise.all([
     cachedModelsForBrand(tenant.tenant.id, b.id),
     cachedListingFacets(tenant.tenant.id, b.id, m.id),
-    listProducts({
+    cachedListProducts({
       tenantId: tenant.tenant.id,
       brandId: b.id,
       modelId: m.id,

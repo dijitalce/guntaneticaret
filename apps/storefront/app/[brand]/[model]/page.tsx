@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getBrandBySlug, getModelBySlug, listProducts } from "@guntan/catalog";
 import { LISTING_SORT, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
-import { cachedFeaturedProducts, cachedListingFacets, cachedModelsForBrand } from "../../../src/cached-catalog";
+import {
+  cachedBrandBySlug,
+  cachedFeaturedProducts,
+  cachedListProducts,
+  cachedListingFacets,
+  cachedModelBySlug,
+  cachedModelsForBrand,
+} from "../../../src/cached-catalog";
 import { CatalogListing } from "../../../src/catalog-listing";
 import {
   JsonLd,
@@ -18,9 +24,9 @@ export const revalidate = 120;
 export async function generateMetadata({ params }: { params: Promise<{ brand: string; model: string }> }): Promise<Metadata> {
   const { brand, model } = await params;
   const tenant = await getTenant();
-  const b = await getBrandBySlug(tenant.tenant.id, brand);
+  const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) return {};
-  const m = await getModelBySlug(b.id, model);
+  const m = await cachedModelBySlug(b.id, model);
   const modelLabel = m?.name ?? model.toUpperCase();
   const title = `${b.name} ${modelLabel} Yedek Parça | ${tenant.siteName}`;
   const description = `${b.name} ${modelLabel} uyumlu yedek parçalar. Fren, motor, filtre ve bakım ürünleri — ${tenant.siteName}.`;
@@ -43,9 +49,9 @@ export default async function ModelListingPage({
   const { brand, model } = await params;
   const sp = await searchParams;
   const tenant = await getTenant();
-  const b = await getBrandBySlug(tenant.tenant.id, brand);
+  const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) notFound();
-  const m = await getModelBySlug(b.id, model);
+  const m = await cachedModelBySlug(b.id, model);
   if (!m) notFound();
 
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
@@ -53,7 +59,7 @@ export default async function ModelListingPage({
   const [models, facets, result, featured] = await Promise.all([
     cachedModelsForBrand(tenant.tenant.id, b.id),
     cachedListingFacets(tenant.tenant.id, b.id, m.id),
-    listProducts({
+    cachedListProducts({
       tenantId: tenant.tenant.id,
       brandId: b.id,
       modelId: m.id,
