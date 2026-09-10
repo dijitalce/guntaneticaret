@@ -45,8 +45,8 @@ export default async function CheckoutPage({
         <div className="empty-state">
           <h1>Sepet boş</h1>
           <p>Ödemeye geçmek için önce sepete ürün ekle.</p>
-          <Link className="btn btn-primary" href="/">
-            Alışverişe başla
+          <Link className="btn btn-primary" href="/sepet">
+            Sepete git
           </Link>
         </div>
       </div>
@@ -54,21 +54,25 @@ export default async function CheckoutPage({
   }
 
   return (
-    <div className="container page-surface">
+    <div className="container page-surface checkout-page">
       <nav className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › <Link href="/sepet">Sepet</Link> › Ödeme
       </nav>
       <div className="cart-head">
-        <h1>Ödeme</h1>
-        <p className="muted">Havale / EFT · KDV dahil</p>
+        <div>
+          <h1>Ödeme</h1>
+          <p className="muted" style={{ margin: "0.25rem 0 0" }}>
+            Havale / EFT · KDV dahil · {view.items.reduce((s, i) => s + i.qty, 0)} ürün
+          </p>
+        </div>
       </div>
 
       <ol className="checkout-steps" aria-label="Sipariş adımları">
         <li>
-          <Link href="/sepet">Sepet</Link>
+          <Link href="/sepet">1. Sepet</Link>
         </li>
-        <li className="is-current">Ödeme</li>
-        <li>Onay</li>
+        <li className="is-current">2. Ödeme</li>
+        <li>3. Onay</li>
       </ol>
 
       {sp.hata === "1" && (

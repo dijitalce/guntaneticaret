@@ -27,39 +27,55 @@ export function CheckoutForm({
 
   return (
     <div className="checkout-layout">
-      <section className="checkout-form-card">
-        <h2>Teslimat bilgileri</h2>
-        <form className="checkout-form-grid" action="/api/checkout" method="post" id="checkout-form">
-          <label>
-            Ad soyad
-            <input className="input" name="fullName" autoComplete="name" required />
-          </label>
-          <div className="checkout-form-row">
+      <div className="checkout-main">
+        <section className="checkout-form-card">
+          <h2>Teslimat bilgileri</h2>
+          <p className="checkout-lead muted">
+            Sipariş ve kargo için iletişim bilgilerini gir. Ödeme Havale / EFT ile tamamlanır.
+          </p>
+          <form className="checkout-form-grid" action="/api/checkout" method="post" id="checkout-form">
             <label>
-              E-posta
-              <input className="input" type="email" name="email" autoComplete="email" required />
+              Ad soyad
+              <input className="input" name="fullName" autoComplete="name" required />
             </label>
+            <div className="checkout-form-row">
+              <label>
+                E-posta
+                <input className="input" type="email" name="email" autoComplete="email" required />
+              </label>
+              <label>
+                Telefon
+                <input className="input" name="phone" autoComplete="tel" inputMode="tel" required />
+              </label>
+            </div>
+            <div className="checkout-form-row">
+              <label>
+                İl
+                <input className="input" name="city" autoComplete="address-level1" required />
+              </label>
+              <label>
+                İlçe
+                <input className="input" name="district" autoComplete="address-level2" required />
+              </label>
+            </div>
             <label>
-              Telefon
-              <input className="input" name="phone" autoComplete="tel" required />
+              Açık adres
+              <textarea className="input" name="line1" autoComplete="street-address" required />
             </label>
+            <button className="btn btn-primary checkout-submit-inline" type="submit">
+              Siparişi oluştur · {money(subtotal)}
+            </button>
+          </form>
+        </section>
+
+        <section className="checkout-pay-card">
+          <h2>Ödeme yöntemi</h2>
+          <div className="checkout-pay-method is-selected" aria-current="true">
+            <strong>Havale / EFT</strong>
+            <span>Sipariş sonrası IBAN gösterilir. Kart tahsilatı yoktur.</span>
           </div>
-          <div className="checkout-form-row">
-            <label>
-              İl
-              <input className="input" name="city" autoComplete="address-level1" required />
-            </label>
-            <label>
-              İlçe
-              <input className="input" name="district" autoComplete="address-level2" required />
-            </label>
-          </div>
-          <label>
-            Adres
-            <textarea className="input" name="line1" autoComplete="street-address" required />
-          </label>
-        </form>
-      </section>
+        </section>
+      </div>
 
       <aside className="checkout-summary-card">
         <h2>Sipariş özeti</h2>
@@ -93,13 +109,18 @@ export function CheckoutForm({
             <dd>{money(subtotal)}</dd>
           </div>
         </dl>
-        <p className="cart-summary-note muted">Ödeme Havale / EFT ile yapılır. Kart tahsilatı yoktur.</p>
+        <p className="cart-summary-note muted">KDV dahil fiyat. Stok siparişte rezerve edilir.</p>
         <button className="btn btn-primary" type="submit" form="checkout-form">
           Siparişi oluştur
         </button>
         <Link className="cart-continue" href="/sepet">
           Sepete dön
         </Link>
+        <ul className="cart-trust">
+          <li>Havale / EFT ile güvenli ödeme</li>
+          <li>KDV dahil fiyat</li>
+          <li>Sipariş no ile takip</li>
+        </ul>
       </aside>
     </div>
   );
