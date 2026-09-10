@@ -15,7 +15,12 @@ import {
   tenantSeesAllCatalog,
 } from "@guntan/db";
 import { getPaymentProvider } from "@guntan/payments";
-import { getShippingProvider } from "@guntan/shipping";
+import {
+  FREE_SHIPPING_MIN,
+  getShippingProvider,
+  remainingForFreeShipping,
+  shippingAmountForSubtotal,
+} from "@guntan/shipping";
 import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, type OrderStatus } from "@guntan/types";
 
 export function availableStock(stockQty: number, reservedQty: number): number {
@@ -127,6 +132,57 @@ export async function cartQty(tenantId: string, sessionId?: string | null) {
     .from(cartItems)
     .where(eq(cartItems.cartId, cart.id));
   return Number(row?.n ?? 0);
+}
+
+export async function getCartSummary(tenantId: string, sessionId?: string | null) {
+  const empty = {
+    qty: 0,
+    subtotal: 0,
+    shippingAmount: shippingAmountForSubtotal(0),
+    freeShippingMin: FREE_SHIPPING_MIN,
+    remainingForFreeShipping: remainingForFreeShipping(0),
+    freeShippingUnlocked: false,
+    items: [] as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      sku: string;
+      qty: number;
+      price: string;
+      imageUrl: string | null;
+    }>,
+  };
+
+  if (!sessionId) return empty;
+
+  const [cart] = await db
+    .select({ id: carts.id })
+    .from(carts)
+    .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
+    .limit(1);
+  if (!cart) return empty;
+
+  const view = await getCartView(cart.id);
+  const qty = view.items.reduce((sum, i) => sum + i.qty, 0);
+  const shippingAmount = shippingAmountForSubtotal(view.subtotal);
+  const remaining = remainingForFreeShipping(view.subtotal);
+  return {
+    qty,
+    subtotal: view.subtotal,
+    shippingAmount,
+    freeShippingMin: FREE_SHIPPING_MIN,
+    remainingForFreeShipping: remaining,
+    freeShippingUnlocked: remaining <= 0 && view.subtotal > 0,
+    items: view.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      slug: i.slug,
+      sku: i.sku,
+      qty: i.qty,
+      price: i.price,
+      imageUrl: i.imageUrl,
+    })),
+  };
 }
 
 export async function getCartView(cartId: string) {

@@ -3,7 +3,13 @@ import { cookies, headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { COOKIE_CART, publicRedirect } from "@guntan/config";
-import { addToCart, cartQty, getOrCreateCart, removeCartItem, updateCartItemQty } from "@guntan/ecommerce";
+import {
+  addToCart,
+  getCartSummary,
+  getOrCreateCart,
+  removeCartItem,
+  updateCartItemQty,
+} from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { db, products } from "@guntan/db";
 
@@ -66,15 +72,23 @@ function wantsJson(request: Request, form: FormData) {
   return accept.includes("application/json");
 }
 
+async function jsonCart(tenantId: string, sessionId: string, extra?: Record<string, unknown>) {
+  const summary = await getCartSummary(tenantId, sessionId);
+  return NextResponse.json({ ok: true, ...summary, ...extra }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
 export async function GET() {
   const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";
   const tenant = await resolveTenantByHost(host);
   if (!tenant) {
-    return NextResponse.json({ qty: 0 }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(
+      { qty: 0, items: [], subtotal: 0, shippingAmount: 0, freeShippingMin: 2500, remainingForFreeShipping: 2500, freeShippingUnlocked: false },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   }
   const sessionId = (await cookies()).get(COOKIE_CART)?.value;
-  const qty = await cartQty(tenant.tenant.id, sessionId);
-  return NextResponse.json({ qty }, { headers: { "Cache-Control": "private, no-store" } });
+  const summary = await getCartSummary(tenant.tenant.id, sessionId);
+  return NextResponse.json(summary, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -87,6 +101,7 @@ export async function POST(request: Request) {
   const jar = await cookies();
   let sessionId = jar.get(COOKIE_CART)?.value;
   if (!sessionId) sessionId = randomUUID();
+  const json = wantsJson(request, form);
 
   const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
   const backToCart = () => withCartCookie(NextResponse.redirect(publicRedirect("/sepet", request), 303), sessionId);
@@ -94,28 +109,38 @@ export async function POST(request: Request) {
   if (action === "remove") {
     const itemId = String(form.get("itemId") ?? "");
     if (itemId) await removeCartItem(cart.id, itemId);
+    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
     return backToCart();
   }
 
   if (action === "update") {
     const itemId = String(form.get("itemId") ?? "");
     const qty = Number(form.get("qty") ?? 0);
-    if (!itemId) return backToCart();
+    if (!itemId) {
+      if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
+      return backToCart();
+    }
     try {
       await updateCartItemQty(cart.id, itemId, qty);
     } catch {
+      if (json) {
+        return withCartCookie(
+          NextResponse.json({ ok: false, error: "stock" }, { status: 409 }),
+          sessionId,
+        );
+      }
       return withCartCookie(
         NextResponse.redirect(publicRedirect("/sepet?hata=stok", request), 303),
         sessionId,
       );
     }
+    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
     return backToCart();
   }
 
   // default: add — stay on current page
   const slug = String(form.get("slug") ?? "");
   const qty = Number(form.get("qty") ?? 1);
-  const json = wantsJson(request, form);
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
   if (!product) {
     if (json) return NextResponse.json({ ok: false, error: "product" }, { status: 404 });
@@ -131,10 +156,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const totalQty = await cartQty(tenant.tenant.id, sessionId);
-  if (json) {
-    return withCartCookie(NextResponse.json({ ok: true, qty: totalQty }), sessionId);
-  }
+  if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
   return withCartCookie(
     NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "ok"), request), 303),
     sessionId,

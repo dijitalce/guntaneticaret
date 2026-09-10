@@ -9,7 +9,7 @@ import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
-import { CartBadge } from "../src/cart-badge";
+import { CartShell } from "../src/cart-drawer";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
 import { TENANT_STATUS } from "@guntan/types";
@@ -99,7 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <IconHeart />
                 <span>Favoriler</span>
               </Link>
-              <CartBadge />
+              <CartShell placeholder={tenant.placeholderImageUrl ?? "/placeholder-product.jpg"} />
             </nav>
           </div>
           <nav className="site-nav" aria-label="Ana menü">

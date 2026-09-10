@@ -2,8 +2,9 @@ import { cookies } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
 import { COOKIE_CART } from "@guntan/config";
-import { getCartView, getOrCreateCart } from "@guntan/ecommerce";
+import { getCartSummary, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
+import { FreeShippingBar } from "../../src/cart-drawer";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -37,12 +38,13 @@ export default async function CartPage({
   const sessionId = jar.get(COOKIE_CART)?.value;
   if (!sessionId) return <EmptyCart />;
 
-  const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
-  const view = await getCartView(cart.id);
+  await getOrCreateCart(tenant.tenant.id, null, sessionId);
+  const view = await getCartSummary(tenant.tenant.id, sessionId);
   if (view.items.length === 0) return <EmptyCart />;
 
-  const itemCount = view.items.reduce((sum, i) => sum + i.qty, 0);
+  const itemCount = view.qty;
   const placeholder = tenant.placeholderImageUrl ?? "/placeholder-product.jpg";
+  const grand = view.subtotal + view.shippingAmount;
 
   return (
     <div className="container page-surface cart-page">
@@ -54,6 +56,15 @@ export default async function CartPage({
         <p className="muted">
           {itemCount} ürün · KDV dahil fiyat
         </p>
+      </div>
+
+      <div className="cart-ship-banner">
+        <FreeShippingBar
+          subtotal={view.subtotal}
+          freeShippingMin={view.freeShippingMin}
+          remainingForFreeShipping={view.remainingForFreeShipping}
+          freeShippingUnlocked={view.freeShippingUnlocked}
+        />
       </div>
 
       {sp.hata === "stok" && (
@@ -128,11 +139,11 @@ export default async function CartPage({
             </div>
             <div>
               <dt>Kargo</dt>
-              <dd>Sipariş sonrası</dd>
+              <dd>{view.shippingAmount <= 0 ? "Ücretsiz" : money(view.shippingAmount)}</dd>
             </div>
             <div className="is-total">
               <dt>Ödenecek</dt>
-              <dd>{money(view.subtotal)}</dd>
+              <dd>{money(grand)}</dd>
             </div>
           </dl>
           <p className="cart-summary-note muted">KDV dahil · Havale / EFT ile ödeme</p>
@@ -145,7 +156,7 @@ export default async function CartPage({
           <ul className="cart-trust">
             <li>KDV dahil fiyat</li>
             <li>Havale / EFT güvenli ödeme</li>
-            <li>Stok siparişte rezerve edilir</li>
+            <li>{view.freeShippingMin.toLocaleString("tr-TR")} TL üzeri ücretsiz kargo</li>
           </ul>
         </aside>
       </div>

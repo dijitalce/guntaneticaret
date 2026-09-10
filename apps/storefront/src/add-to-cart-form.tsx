@@ -2,10 +2,6 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 
-function dispatchCartUpdated(qty?: number) {
-  window.dispatchEvent(new CustomEvent("cart:updated", { detail: { qty } }));
-}
-
 export function AddToCartForm({
   slug,
   className,
@@ -34,9 +30,11 @@ export function AddToCartForm({
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; qty?: number; error?: string } | null;
-      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "sepet");
-      dispatchCartUpdated(json.qty);
+      const json = (await res.json().catch(() => null)) as
+        | ({ ok?: boolean; error?: string } & Record<string, unknown>)
+        | null;
+      if (!res.ok || !json || json.ok === false) throw new Error(String(json?.error ?? "sepet"));
+      window.dispatchEvent(new CustomEvent("cart:updated", { detail: { ...json, openDrawer: true } }));
       setDone(true);
       window.setTimeout(() => setDone(false), 1800);
     } catch {
