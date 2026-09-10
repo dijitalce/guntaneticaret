@@ -47,6 +47,7 @@ export const VEHICLE_BRANDS: VehicleBrandDef[] = [
   { name: "Ssangyong", slug: "ssangyong", group: "korea", models: ["Actyon", "Korando", "Rexton", "Tivoli"] },
   { name: "Subaru", slug: "subaru", group: "japan", models: ["Forester", "Impreza", "Legacy", "Outback", "XV"] },
   { name: "Suzuki", slug: "suzuki", group: "japan", models: ["Alto", "Grand Vitara", "Swift", "SX4", "Vitara", "Jimny"] },
+  { name: "Tesla", slug: "tesla", group: "usa", models: ["Model 3", "Model S", "Model X", "Model Y", "Cybertruck"] },
   { name: "Toyota", slug: "toyota", group: "japan", models: ["Auris", "Avensis", "Corolla", "Yaris", "RAV4", "C-HR", "Hilux"] },
   { name: "Volkswagen", slug: "volkswagen", group: "germany", models: ["Golf", "Passat", "Polo", "Jetta", "Tiguan", "Caddy", "Transporter"] },
   { name: "Volvo", slug: "volvo", group: "sweden", models: ["S40", "S60", "S80", "V40", "XC60", "XC90"] },

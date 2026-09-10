@@ -317,7 +317,7 @@ async function listProductsUncached(query: ListingQuery) {
         .limit(LISTING_PAGE_SIZE)
         .offset(offset),
       db
-        .select({ value: sql<number>`count(*)::int` })
+        .select({ value: sql<number>`cast(count(*) as unsigned)` })
         .from(fitIds)
         .innerJoin(products, eq(products.id, fitIds.productId))
         .where(whereClause),
@@ -337,7 +337,7 @@ async function listProductsUncached(query: ListingQuery) {
     const countFromCategory = () =>
       db
         .select({
-          value: sql<number>`count(distinct ${productCategories.productId})::int`,
+          value: sql<number>`cast(count(distinct ${productCategories.productId}) as unsigned)`,
         })
         .from(productCategories)
         .innerJoin(products, eq(products.id, productCategories.productId))
@@ -378,7 +378,7 @@ async function listProductsUncached(query: ListingQuery) {
       .limit(LISTING_PAGE_SIZE)
       .offset(offset),
     db
-      .select({ value: sql<number>`count(*)::int` })
+      .select({ value: sql<number>`cast(count(*) as unsigned)` })
       .from(products)
       .where(whereClause),
   ]);
@@ -529,7 +529,7 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
   const seesAll = await tenantSeesAllCatalog(tenantId);
   const visible = tenantVisibleSql(tenantId, seesAll);
   const inTheseCategories = inArray(productCategories.categoryId, categoryIds);
-  const productCount = sql<number>`count(distinct ${productCategories.productId})::int`;
+  const productCount = sql<number>`cast(count(distinct ${productCategories.productId}) as unsigned)`;
 
   const mfrsQuery = db
     .select({
@@ -554,7 +554,7 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
       id: categories.id,
       name: categories.name,
       slug: categories.slug,
-      count: sql<number>`count(distinct ${productCategories.productId})::int`,
+      count: sql<number>`cast(count(distinct ${productCategories.productId}) as unsigned)`,
     })
     .from(categories)
     .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))

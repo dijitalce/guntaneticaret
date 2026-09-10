@@ -1,7 +1,11 @@
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
+import dns from "node:dns";
 import * as schema from "./schema";
 import { isProductionBuild, mysqlConnectOptions, resolveMysqlUrl } from "./mysql-options";
+
+// Hostinger Remote MySQL often allowlists IPv4 only; Node otherwise prefers IPv6.
+dns.setDefaultResultOrder("ipv4first");
 
 const connectionString =
   process.env.DATABASE_URL ?? "mysql://guntan:guntan@localhost:3306/guntan";

@@ -82,6 +82,10 @@ const logos = {
     <g fill="#fff"><circle cx="32" cy="18" r="3"/><circle cx="22" cy="24" r="2.4"/><circle cx="42" cy="24" r="2.4"/><circle cx="24" cy="36" r="2.4"/><circle cx="40" cy="36" r="2.4"/></g>
   `),
   suzuki: svg(`<path d="M44 16 H24 C16 16 16 28 24 28 H40 C48 28 48 40 40 40 H20" fill="none" stroke="#e10600" stroke-width="6" stroke-linecap="round"/>`),
+  tesla: svg(`
+    <rect x="8" y="20" width="48" height="24" rx="4" fill="#111"/>
+    <text x="32" y="37" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" letter-spacing="1" font-family="Arial">TESLA</text>
+  `),
   toyota: svg(`
     <ellipse cx="32" cy="36" rx="22" ry="14" fill="none" stroke="#eb0a1e" stroke-width="3"/>
     <ellipse cx="32" cy="32" rx="10" ry="18" fill="none" stroke="#eb0a1e" stroke-width="3"/>
