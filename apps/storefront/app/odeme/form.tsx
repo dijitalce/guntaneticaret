@@ -17,18 +17,44 @@ export type CheckoutLine = {
   imageUrl: string | null;
 };
 
+export type CheckoutDefaults = {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  invoiceType?: "individual" | "corporate";
+  companyName?: string;
+  taxOffice?: string;
+  taxNumber?: string;
+  nationalId?: string;
+  billingCity?: string;
+  billingDistrict?: string;
+  billingLine1?: string;
+  billingPostalCode?: string;
+  shipDifferent?: boolean;
+  shipFullName?: string;
+  shipPhone?: string;
+  shipCity?: string;
+  shipDistrict?: string;
+  shipLine1?: string;
+  shipPostalCode?: string;
+};
+
 export function CheckoutForm({
   items,
   subtotal,
   placeholder,
+  defaults,
 }: {
   items: CheckoutLine[];
   subtotal: number;
   placeholder: string;
+  defaults?: CheckoutDefaults;
 }) {
   const itemCount = items.reduce((sum, i) => sum + i.qty, 0);
-  const [invoiceType, setInvoiceType] = useState<"individual" | "corporate">("individual");
-  const [shipDifferent, setShipDifferent] = useState(false);
+  const [invoiceType, setInvoiceType] = useState<"individual" | "corporate">(
+    defaults?.invoiceType === "corporate" ? "corporate" : "individual",
+  );
+  const [shipDifferent, setShipDifferent] = useState(Boolean(defaults?.shipDifferent));
 
   return (
     <div className="checkout-layout">
@@ -40,16 +66,16 @@ export function CheckoutForm({
             <div className="checkout-form-grid">
               <label>
                 Ad soyad
-                <input className="input" name="fullName" autoComplete="name" required />
+                <input className="input" name="fullName" autoComplete="name" required defaultValue={defaults?.fullName ?? ""} />
               </label>
               <div className="checkout-form-row">
                 <label>
                   E-posta
-                  <input className="input" type="email" name="email" autoComplete="email" required />
+                  <input className="input" type="email" name="email" autoComplete="email" required defaultValue={defaults?.email ?? ""} />
                 </label>
                 <label>
                   Telefon
-                  <input className="input" name="phone" autoComplete="tel" inputMode="tel" required />
+                  <input className="input" name="phone" autoComplete="tel" inputMode="tel" required defaultValue={defaults?.phone ?? ""} />
                 </label>
               </div>
             </div>
@@ -86,43 +112,43 @@ export function CheckoutForm({
                 <>
                   <label>
                     Firma ünvanı
-                    <input className="input" name="companyName" autoComplete="organization" required />
+                    <input className="input" name="companyName" autoComplete="organization" required defaultValue={defaults?.companyName ?? ""} />
                   </label>
                   <div className="checkout-form-row">
                     <label>
                       Vergi dairesi
-                      <input className="input" name="taxOffice" required />
+                      <input className="input" name="taxOffice" required defaultValue={defaults?.taxOffice ?? ""} />
                     </label>
                     <label>
                       Vergi numarası
-                      <input className="input" name="taxNumber" inputMode="numeric" required />
+                      <input className="input" name="taxNumber" inputMode="numeric" required defaultValue={defaults?.taxNumber ?? ""} />
                     </label>
                   </div>
                 </>
               ) : (
                 <label>
                   T.C. kimlik no <span className="checkout-optional">(isteğe bağlı)</span>
-                  <input className="input" name="nationalId" inputMode="numeric" autoComplete="off" maxLength={11} />
+                  <input className="input" name="nationalId" inputMode="numeric" autoComplete="off" maxLength={11} defaultValue={defaults?.nationalId ?? ""} />
                 </label>
               )}
 
               <div className="checkout-form-row">
                 <label>
                   İl
-                  <input className="input" name="billingCity" autoComplete="address-level1" required />
+                  <input className="input" name="billingCity" autoComplete="address-level1" required defaultValue={defaults?.billingCity ?? ""} />
                 </label>
                 <label>
                   İlçe
-                  <input className="input" name="billingDistrict" autoComplete="address-level2" required />
+                  <input className="input" name="billingDistrict" autoComplete="address-level2" required defaultValue={defaults?.billingDistrict ?? ""} />
                 </label>
               </div>
               <label>
                 Posta kodu <span className="checkout-optional">(isteğe bağlı)</span>
-                <input className="input" name="billingPostalCode" autoComplete="postal-code" inputMode="numeric" />
+                <input className="input" name="billingPostalCode" autoComplete="postal-code" inputMode="numeric" defaultValue={defaults?.billingPostalCode ?? ""} />
               </label>
               <label>
                 Fatura adresi
-                <textarea className="input" name="billingLine1" autoComplete="street-address" required />
+                <textarea className="input" name="billingLine1" autoComplete="street-address" required defaultValue={defaults?.billingLine1 ?? ""} />
               </label>
             </div>
           </section>
@@ -146,29 +172,29 @@ export function CheckoutForm({
               <div className="checkout-form-grid" style={{ marginTop: "0.85rem" }}>
                 <label>
                   Teslim alacak kişi
-                  <input className="input" name="shipFullName" autoComplete="shipping name" required />
+                  <input className="input" name="shipFullName" autoComplete="shipping name" required defaultValue={defaults?.shipFullName ?? ""} />
                 </label>
                 <label>
                   Teslimat telefonu
-                  <input className="input" name="shipPhone" autoComplete="shipping tel" inputMode="tel" required />
+                  <input className="input" name="shipPhone" autoComplete="shipping tel" inputMode="tel" required defaultValue={defaults?.shipPhone ?? ""} />
                 </label>
                 <div className="checkout-form-row">
                   <label>
                     İl
-                    <input className="input" name="shipCity" autoComplete="shipping address-level1" required />
+                    <input className="input" name="shipCity" autoComplete="shipping address-level1" required defaultValue={defaults?.shipCity ?? ""} />
                   </label>
                   <label>
                     İlçe
-                    <input className="input" name="shipDistrict" autoComplete="shipping address-level2" required />
+                    <input className="input" name="shipDistrict" autoComplete="shipping address-level2" required defaultValue={defaults?.shipDistrict ?? ""} />
                   </label>
                 </div>
                 <label>
                   Posta kodu <span className="checkout-optional">(isteğe bağlı)</span>
-                  <input className="input" name="shipPostalCode" autoComplete="shipping postal-code" inputMode="numeric" />
+                  <input className="input" name="shipPostalCode" autoComplete="shipping postal-code" inputMode="numeric" defaultValue={defaults?.shipPostalCode ?? ""} />
                 </label>
                 <label>
                   Teslimat adresi
-                  <textarea className="input" name="shipLine1" autoComplete="shipping street-address" required />
+                  <textarea className="input" name="shipLine1" autoComplete="shipping street-address" required defaultValue={defaults?.shipLine1 ?? ""} />
                 </label>
               </div>
             )}

@@ -13,6 +13,7 @@
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
     "ensure-admin": "tsx src/ensure-admin.ts",
+    "ensure-customer-billing": "tsx src/ensure-customer-billing.ts",
     "sync-catalog": "tsx src/sync-vehicle-catalog.ts",
     "sync-tenants": "tsx src/sync-tenants.ts",
     "compile-visibility": "tsx src/compile-cli.ts",

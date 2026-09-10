@@ -4,6 +4,7 @@ import Link from "next/link";
 import { COOKIE_CART } from "@guntan/config";
 import { getCartSummary, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
+import { getCurrentCustomer } from "../../src/customer";
 import { FreeShippingBar } from "../../src/cart-drawer";
 
 function money(n: number) {
@@ -30,16 +31,17 @@ function EmptyCart() {
 export default async function CartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hata?: string }>;
+  searchParams: Promise<{ hata?: string; giris?: string; uyelik?: string }>;
 }) {
   const sp = await searchParams;
   const tenant = await getTenant();
+  const user = await getCurrentCustomer();
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
-  if (!sessionId) return <EmptyCart />;
+  if (!sessionId && !user) return <EmptyCart />;
 
-  await getOrCreateCart(tenant.tenant.id, null, sessionId);
-  const view = await getCartSummary(tenant.tenant.id, sessionId);
+  await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
+  const view = await getCartSummary(tenant.tenant.id, sessionId, user?.id);
   if (view.items.length === 0) return <EmptyCart />;
 
   const itemCount = view.qty;
@@ -55,8 +57,17 @@ export default async function CartPage({
         <h1>Sepet</h1>
         <p className="muted">
           {itemCount} ürün · KDV dahil fiyat
+          {user ? ` · ${user.firstName}` : null}
         </p>
       </div>
+
+      {(sp.giris === "1" || sp.uyelik === "1") && (
+        <p className="account-alert is-ok" role="status">
+          {sp.uyelik === "1"
+            ? "Hesabın oluşturuldu. Sepetin hesabına bağlandı."
+            : "Giriş yaptın. Sepetin hesabına bağlandı."}
+        </p>
+      )}
 
       <div className="cart-ship-banner">
         <FreeShippingBar

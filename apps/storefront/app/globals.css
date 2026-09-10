@@ -1755,6 +1755,22 @@ body {
   font-weight: 500;
   color: var(--muted-foreground);
 }
+.account-auth-block {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--muted) 40%, #fff);
+}
+.account-auth-block h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.account-auth-form textarea.input {
+  min-height: 4.5rem;
+  resize: vertical;
+}
 .account-consents {
   display: grid;
   gap: 0.65rem;

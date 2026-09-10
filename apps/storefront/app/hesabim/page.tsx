@@ -16,7 +16,6 @@ export default async function AccountPage({
   const user = await getCurrentCustomer();
 
   if (!user) {
-    const initialTab = sp.kayit === "email" || sp.kayit === "onay" || sp.kayit === "eksik" ? "register" : "login";
     return (
       <div className="account-auth-page">
         <nav className="breadcrumb">
@@ -42,12 +41,33 @@ export default async function AccountPage({
             Lütfen ad, soyad, e-posta ve en az 6 karakterlik şifre gir.
           </p>
         )}
+        {sp.kayit === "fatura" && (
+          <p className="account-alert is-bad" role="alert">
+            Kurumsal fatura için firma ünvanı, vergi dairesi ve vergi numarası zorunlu.
+          </p>
+        )}
+        {sp.kayit === "adres" && (
+          <p className="account-alert is-bad" role="alert">
+            Fatura adresi (il, ilçe, açık adres) zorunlu.
+          </p>
+        )}
         {sp.kayit === "1" && (
           <p className="account-alert is-ok" role="status">
             Hesabın oluşturuldu.
           </p>
         )}
-        <AccountAuthForms siteName={tenant.siteName} initialTab={initialTab} />
+        <AccountAuthForms
+          siteName={tenant.siteName}
+          initialTab={
+            sp.kayit === "email" ||
+            sp.kayit === "onay" ||
+            sp.kayit === "eksik" ||
+            sp.kayit === "fatura" ||
+            sp.kayit === "adres"
+              ? "register"
+              : "login"
+          }
+        />
       </div>
     );
   }

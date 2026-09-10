@@ -38,7 +38,11 @@ export default async function AddressesPage({
           {rows.map((a) => (
             <li key={a.id} className="account-panel">
               <div className="account-address-head">
-                <strong>{a.title}{a.isDefault ? " · Varsayılan" : ""}</strong>
+                <strong>
+                  {a.title}
+                  {a.kind === "billing" ? " · Fatura" : " · Teslimat"}
+                  {a.isDefault ? " · Varsayılan" : ""}
+                </strong>
                 <form action="/api/account/addresses/delete" method="post">
                   <input type="hidden" name="id" value={a.id} />
                   <button className="btn btn-ghost" type="submit">Sil</button>
@@ -64,7 +68,14 @@ export default async function AddressesPage({
         <h3>Yeni adres ekle</h3>
         <label>
           Başlık
-          <input className="input" name="title" placeholder="Ev, İş…" defaultValue="Adres" required />
+          <input className="input" name="title" placeholder="Ev, İş, Fatura…" defaultValue="Adres" required />
+        </label>
+        <label>
+          Adres tipi
+          <select className="input" name="kind" defaultValue="shipping">
+            <option value="shipping">Teslimat</option>
+            <option value="billing">Fatura</option>
+          </select>
         </label>
         <div className="account-field-row">
           <label>
@@ -96,11 +107,11 @@ export default async function AddressesPage({
         </label>
         <label className="account-check">
           <input type="checkbox" name="isDefault" value="1" defaultChecked={rows.length === 0} />
-          Varsayılan teslimat adresi
+          Varsayılan adres
         </label>
         <button className="btn btn-primary" type="submit">Adresi kaydet</button>
         <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-          Ödeme sırasında da yeni adres girebilirsin. <Link href="/odeme">Ödemeye git</Link>
+          Fatura tipi için <Link href="/hesabim/profil">profil</Link> sayfasını kullan. Ödeme sırasında da adres girebilirsin.
         </p>
       </form>
     </section>

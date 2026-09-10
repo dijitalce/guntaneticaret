@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { asc, eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
 import { getCartView, getOrCreateCart } from "@guntan/ecommerce";
+import { customerAddresses, db } from "@guntan/db";
 import { getTenant } from "../../src/tenant";
+import { getCurrentCustomer } from "../../src/customer";
 import { CheckoutForm } from "./form";
 
 export default async function CheckoutPage({
@@ -14,9 +17,10 @@ export default async function CheckoutPage({
   const tenant = await getTenant();
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
+  const user = await getCurrentCustomer();
   const placeholder = tenant.placeholderImageUrl ?? "/placeholder-product.jpg";
 
-  if (!sessionId) {
+  if (!sessionId && !user) {
     return (
       <div className="container page-surface">
         <nav className="breadcrumb">
@@ -33,7 +37,7 @@ export default async function CheckoutPage({
     );
   }
 
-  const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
+  const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   const view = await getCartView(cart.id);
 
   if (view.items.length === 0) {
@@ -53,6 +57,51 @@ export default async function CheckoutPage({
     );
   }
 
+  let defaults: Parameters<typeof CheckoutForm>[0]["defaults"];
+  if (user) {
+    const addresses = await db
+      .select()
+      .from(customerAddresses)
+      .where(eq(customerAddresses.customerId, user.id))
+      .orderBy(asc(customerAddresses.title));
+    const billing =
+      addresses.find((a) => a.kind === "billing" && a.isDefault) ||
+      addresses.find((a) => a.kind === "billing") ||
+      addresses.find((a) => a.isDefault) ||
+      addresses[0];
+    const shipping =
+      addresses.find((a) => a.kind === "shipping" && a.isDefault) ||
+      addresses.find((a) => a.kind === "shipping");
+    const shipDifferent = Boolean(
+      shipping &&
+        billing &&
+        (shipping.line1 !== billing.line1 ||
+          shipping.city !== billing.city ||
+          shipping.district !== billing.district),
+    );
+    defaults = {
+      fullName: `${user.firstName} ${user.lastName}`.trim(),
+      email: user.email,
+      phone: user.phone ?? "",
+      invoiceType: user.invoiceType === "corporate" ? "corporate" : "individual",
+      companyName: user.companyName ?? "",
+      taxOffice: user.taxOffice ?? "",
+      taxNumber: user.taxNumber ?? "",
+      nationalId: user.nationalId ?? "",
+      billingCity: billing?.city ?? "",
+      billingDistrict: billing?.district ?? "",
+      billingLine1: billing?.line1 ?? "",
+      billingPostalCode: billing?.postalCode ?? "",
+      shipDifferent,
+      shipFullName: shipping?.fullName ?? "",
+      shipPhone: shipping?.phone ?? "",
+      shipCity: shipping?.city ?? "",
+      shipDistrict: shipping?.district ?? "",
+      shipLine1: shipping?.line1 ?? "",
+      shipPostalCode: shipping?.postalCode ?? "",
+    };
+  }
+
   return (
     <div className="container page-surface checkout-page">
       <nav className="breadcrumb">
@@ -63,6 +112,7 @@ export default async function CheckoutPage({
           <h1>Ödeme</h1>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
             Havale / EFT · KDV dahil · {view.items.reduce((s, i) => s + i.qty, 0)} ürün
+            {user ? " · Üye hesabı" : null}
           </p>
         </div>
       </div>
@@ -92,6 +142,7 @@ export default async function CheckoutPage({
         }))}
         subtotal={view.subtotal}
         placeholder={placeholder}
+        defaults={defaults}
       />
     </div>
   );

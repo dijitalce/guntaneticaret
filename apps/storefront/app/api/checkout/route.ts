@@ -15,8 +15,12 @@ export async function POST(request: Request) {
   const tenant = await resolveTenantByHost(host);
   if (!tenant) return NextResponse.json({ error: "tenant" }, { status: 404 });
   const form = await request.formData();
-  const sessionId = (await cookies()).get(COOKIE_CART)?.value;
-  if (!sessionId) return NextResponse.redirect(publicRedirect("/sepet", request), 303);
+  const jar = await cookies();
+  let sessionId = jar.get(COOKIE_CART)?.value;
+  const token = jar.get(COOKIE_CUSTOMER_SESSION)?.value;
+  const user = token ? await getCustomerBySession(token) : null;
+  if (!sessionId && !user) return NextResponse.redirect(publicRedirect("/sepet", request), 303);
+  if (!sessionId) sessionId = crypto.randomUUID();
 
   if (field(form, "acceptDistanceSales") !== "1" || field(form, "acceptPrivacy") !== "1") {
     return NextResponse.redirect(publicRedirect("/odeme?hata=1", request), 303);
@@ -46,8 +50,6 @@ export async function POST(request: Request) {
         postalCode: billing.postalCode,
       };
 
-  const token = (await cookies()).get(COOKIE_CUSTOMER_SESSION)?.value;
-  const user = token ? await getCustomerBySession(token) : null;
   const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   let result;
   try {

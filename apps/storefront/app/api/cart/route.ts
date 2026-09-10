@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { COOKIE_CART, publicRedirect } from "@guntan/config";
+import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
+import { getCustomerBySession } from "@guntan/auth";
 import {
   addToCart,
   getCartSummary,
@@ -72,8 +73,13 @@ function wantsJson(request: Request, form: FormData) {
   return accept.includes("application/json");
 }
 
-async function jsonCart(tenantId: string, sessionId: string, extra?: Record<string, unknown>) {
-  const summary = await getCartSummary(tenantId, sessionId);
+async function currentCustomer() {
+  const token = (await cookies()).get(COOKIE_CUSTOMER_SESSION)?.value;
+  return token ? getCustomerBySession(token) : null;
+}
+
+async function jsonCart(tenantId: string, sessionId: string, customerId?: string | null, extra?: Record<string, unknown>) {
+  const summary = await getCartSummary(tenantId, sessionId, customerId);
   return NextResponse.json({ ok: true, ...summary, ...extra }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -87,7 +93,8 @@ export async function GET() {
     );
   }
   const sessionId = (await cookies()).get(COOKIE_CART)?.value;
-  const summary = await getCartSummary(tenant.tenant.id, sessionId);
+  const user = await currentCustomer();
+  const summary = await getCartSummary(tenant.tenant.id, sessionId, user?.id);
   return NextResponse.json(summary, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -102,14 +109,15 @@ export async function POST(request: Request) {
   let sessionId = jar.get(COOKIE_CART)?.value;
   if (!sessionId) sessionId = randomUUID();
   const json = wantsJson(request, form);
+  const user = await currentCustomer();
 
-  const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
+  const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   const backToCart = () => withCartCookie(NextResponse.redirect(publicRedirect("/sepet", request), 303), sessionId);
 
   if (action === "remove") {
     const itemId = String(form.get("itemId") ?? "");
     if (itemId) await removeCartItem(cart.id, itemId);
-    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
+    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
     return backToCart();
   }
 
@@ -117,7 +125,7 @@ export async function POST(request: Request) {
     const itemId = String(form.get("itemId") ?? "");
     const qty = Number(form.get("qty") ?? 0);
     if (!itemId) {
-      if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
+      if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
       return backToCart();
     }
     try {
@@ -134,11 +142,10 @@ export async function POST(request: Request) {
         sessionId,
       );
     }
-    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
+    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
     return backToCart();
   }
 
-  // default: add — stay on current page
   const slug = String(form.get("slug") ?? "");
   const qty = Number(form.get("qty") ?? 1);
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
@@ -156,7 +163,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId), sessionId);
+  if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
   return withCartCookie(
     NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "ok"), request), 303),
     sessionId,

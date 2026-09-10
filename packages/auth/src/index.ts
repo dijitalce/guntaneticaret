@@ -45,14 +45,25 @@ export async function createCustomer({
   firstName,
   lastName,
   phone,
+  invoiceType = "individual",
+  companyName,
+  taxOffice,
+  taxNumber,
+  nationalId,
 }: {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
   phone?: string;
+  invoiceType?: "individual" | "corporate";
+  companyName?: string;
+  taxOffice?: string;
+  taxNumber?: string;
+  nationalId?: string;
 }) {
   const id = newId();
+  const type = invoiceType === "corporate" ? "corporate" : "individual";
   await db.insert(customers).values({
     id,
     email: email.toLowerCase().trim(),
@@ -60,6 +71,11 @@ export async function createCustomer({
     firstName,
     lastName,
     phone,
+    invoiceType: type,
+    companyName: type === "corporate" ? companyName?.trim() || null : null,
+    taxOffice: type === "corporate" ? taxOffice?.trim() || null : null,
+    taxNumber: type === "corporate" ? taxNumber?.trim() || null : null,
+    nationalId: type === "individual" ? nationalId?.trim() || null : null,
   });
   const [row] = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   return row!;
@@ -94,14 +110,33 @@ export async function logoutCustomer(token: string) {
 
 export async function updateCustomerProfile(
   customerId: string,
-  data: { firstName: string; lastName: string; phone?: string | null },
+  data: {
+    firstName: string;
+    lastName: string;
+    phone?: string | null;
+    invoiceType?: "individual" | "corporate";
+    companyName?: string | null;
+    taxOffice?: string | null;
+    taxNumber?: string | null;
+    nationalId?: string | null;
+  },
 ) {
+  const type = data.invoiceType === "corporate" ? "corporate" : data.invoiceType === "individual" ? "individual" : undefined;
   await db
     .update(customers)
     .set({
       firstName: data.firstName.trim(),
       lastName: data.lastName.trim(),
       phone: data.phone?.trim() || null,
+      ...(type
+        ? {
+            invoiceType: type,
+            companyName: type === "corporate" ? data.companyName?.trim() || null : null,
+            taxOffice: type === "corporate" ? data.taxOffice?.trim() || null : null,
+            taxNumber: type === "corporate" ? data.taxNumber?.trim() || null : null,
+            nationalId: type === "individual" ? data.nationalId?.trim() || null : null,
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(customers.id, customerId));

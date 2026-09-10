@@ -16,6 +16,7 @@ export async function POST(request: Request) {
 
   const form = await request.formData();
   const title = String(form.get("title") ?? "Adres").trim() || "Adres";
+  const kind = String(form.get("kind") ?? "shipping") === "billing" ? "billing" : "shipping";
   const fullName = String(form.get("fullName") ?? "").trim();
   const phone = String(form.get("phone") ?? "").trim();
   const city = String(form.get("city") ?? "").trim();
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
   await db.insert(customerAddresses).values({
     customerId: user.id,
     title,
+    kind,
     fullName,
     phone,
     city,

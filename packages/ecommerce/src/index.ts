@@ -50,7 +50,13 @@ export async function getOrCreateCart(tenantId: string, customerId?: string | nu
       .from(carts)
       .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
       .limit(1);
-    if (existing) return existing;
+    if (existing) {
+      if (customerId && !existing.customerId) {
+        await db.update(carts).set({ customerId, updatedAt: new Date() }).where(eq(carts.id, existing.id));
+        return { ...existing, customerId };
+      }
+      return existing;
+    }
   }
   const id = newId();
   await db.insert(carts).values({
@@ -61,6 +67,51 @@ export async function getOrCreateCart(tenantId: string, customerId?: string | nu
   });
   const [created] = await db.select().from(carts).where(eq(carts.id, id)).limit(1);
   return created!;
+}
+
+/** Misafir sepetini üye sepetine bağlar / birleştirir. */
+export async function attachCartToCustomer(tenantId: string, customerId: string, sessionId?: string | null) {
+  if (!sessionId) return getOrCreateCart(tenantId, customerId, null);
+
+  const [sessionCart] = await db
+    .select()
+    .from(carts)
+    .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
+    .limit(1);
+
+  const [customerCart] = await db
+    .select()
+    .from(carts)
+    .where(and(eq(carts.tenantId, tenantId), eq(carts.customerId, customerId)))
+    .limit(1);
+
+  if (!sessionCart) {
+    return customerCart ?? getOrCreateCart(tenantId, customerId, sessionId);
+  }
+
+  if (!customerCart || customerCart.id === sessionCart.id) {
+    if (!sessionCart.customerId) {
+      await db.update(carts).set({ customerId, updatedAt: new Date() }).where(eq(carts.id, sessionCart.id));
+    }
+    return { ...sessionCart, customerId };
+  }
+
+  const sessionItems = await db.select().from(cartItems).where(eq(cartItems.cartId, sessionCart.id));
+  for (const item of sessionItems) {
+    const [existing] = await db
+      .select()
+      .from(cartItems)
+      .where(and(eq(cartItems.cartId, customerCart.id), eq(cartItems.productId, item.productId)))
+      .limit(1);
+    if (existing) {
+      await db.update(cartItems).set({ qty: existing.qty + item.qty }).where(eq(cartItems.id, existing.id));
+    } else {
+      await db.insert(cartItems).values({ cartId: customerCart.id, productId: item.productId, qty: item.qty });
+    }
+  }
+  await db.delete(cartItems).where(eq(cartItems.cartId, sessionCart.id));
+  await db.delete(carts).where(eq(carts.id, sessionCart.id));
+  return customerCart;
 }
 
 export async function addToCart(cartId: string, tenantId: string, productId: string, qty = 1) {
@@ -119,22 +170,37 @@ export async function updateCartItemQty(cartId: string, itemId: string, qty: num
   await db.update(cartItems).set({ qty: nextQty }).where(eq(cartItems.id, item.id));
 }
 
-export async function cartQty(tenantId: string, sessionId?: string | null) {
-  if (!sessionId) return 0;
-  const [cart] = await db
-    .select({ id: carts.id })
-    .from(carts)
-    .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
-    .limit(1);
-  if (!cart) return 0;
+async function findCartId(tenantId: string, customerId?: string | null, sessionId?: string | null) {
+  if (customerId) {
+    const [byCustomer] = await db
+      .select({ id: carts.id })
+      .from(carts)
+      .where(and(eq(carts.tenantId, tenantId), eq(carts.customerId, customerId)))
+      .limit(1);
+    if (byCustomer) return byCustomer.id;
+  }
+  if (sessionId) {
+    const [bySession] = await db
+      .select({ id: carts.id })
+      .from(carts)
+      .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
+      .limit(1);
+    if (bySession) return bySession.id;
+  }
+  return null;
+}
+
+export async function cartQty(tenantId: string, sessionId?: string | null, customerId?: string | null) {
+  const cartId = await findCartId(tenantId, customerId, sessionId);
+  if (!cartId) return 0;
   const [row] = await db
     .select({ n: sql<number>`coalesce(sum(${cartItems.qty}), 0)` })
     .from(cartItems)
-    .where(eq(cartItems.cartId, cart.id));
+    .where(eq(cartItems.cartId, cartId));
   return Number(row?.n ?? 0);
 }
 
-export async function getCartSummary(tenantId: string, sessionId?: string | null) {
+export async function getCartSummary(tenantId: string, sessionId?: string | null, customerId?: string | null) {
   const empty = {
     qty: 0,
     subtotal: 0,
@@ -153,16 +219,10 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
     }>,
   };
 
-  if (!sessionId) return empty;
+  const cartId = await findCartId(tenantId, customerId, sessionId);
+  if (!cartId) return empty;
 
-  const [cart] = await db
-    .select({ id: carts.id })
-    .from(carts)
-    .where(and(eq(carts.tenantId, tenantId), eq(carts.sessionId, sessionId)))
-    .limit(1);
-  if (!cart) return empty;
-
-  const view = await getCartView(cart.id);
+  const view = await getCartView(cartId);
   const qty = view.items.reduce((sum, i) => sum + i.qty, 0);
   const shippingAmount = shippingAmountForSubtotal(view.subtotal);
   const remaining = remainingForFreeShipping(view.subtotal);
