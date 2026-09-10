@@ -5,7 +5,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const user = await getCurrentCustomer();
 
   if (!user) {
-    return <div className="container page-surface account-page">{children}</div>;
+    return <div className="container page-surface account-page account-page-guest">{children}</div>;
   }
 
   return (
@@ -17,7 +17,9 @@ export default async function AccountLayout({ children }: { children: React.Reac
           <p className="muted">{user.email}</p>
         </div>
         <form action="/api/auth/logout" method="post">
-          <button className="btn btn-ghost" type="submit">Çıkış yap</button>
+          <button className="btn btn-ghost" type="submit">
+            Çıkış yap
+          </button>
         </form>
       </header>
       <div className="account-layout">

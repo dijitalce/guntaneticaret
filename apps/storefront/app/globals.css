@@ -1619,6 +1619,173 @@ body {
 .label-short { display: none; }
 
 .account-page { max-width: 1100px; }
+.account-auth-page { max-width: 1040px; margin: 0 auto; }
+.account-auth {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 0;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 10px 36px rgba(16, 24, 40, 0.06);
+}
+.account-auth-aside {
+  padding: 1.75rem 1.5rem 1.5rem;
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--primary) 10%, #fff) 0%, #fff 48%),
+    var(--muted);
+  border-right: 1px solid var(--border);
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.account-auth-eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.account-auth-aside h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+.account-auth-aside > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.account-auth-benefits {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.account-auth-benefits li {
+  position: relative;
+  padding-left: 1.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.account-auth-benefits li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+  font-weight: 800;
+}
+.account-auth-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+.account-auth-legal-links a {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+.account-auth-legal-links a:hover { color: var(--primary); }
+.account-auth-card {
+  padding: 1.35rem 1.4rem 1.5rem;
+  background: #fff;
+  min-width: 0;
+}
+.account-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  margin-bottom: 1.15rem;
+  border-radius: 12px;
+  background: var(--muted);
+}
+.account-auth-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.account-auth-tabs button.is-active {
+  background: #fff;
+  color: var(--foreground);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+.account-auth-form {
+  display: grid;
+  gap: 0.8rem;
+}
+.account-auth-form h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.account-auth-hint {
+  margin: -0.35rem 0 0.15rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.account-auth-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+.account-auth-form .input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.account-field-note {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.account-consents {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--muted) 55%, #fff);
+}
+.account-auth-form .btn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 0.2rem;
+}
+.account-auth-switch {
+  margin: 0.15rem 0 0;
+  text-align: center;
+  font-size: 0.88rem;
+}
+.account-auth-text-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 750;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .account-hero {
   display: flex;
   justify-content: space-between;
@@ -1716,9 +1883,21 @@ body {
 }
 .account-check {
   display: flex !important;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 500;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.account-check input {
+  margin-top: 0.2rem;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+.account-check a {
+  color: var(--primary);
+  font-weight: 700;
 }
 .account-alert {
   padding: 0.7rem 0.9rem;
@@ -2017,11 +2196,19 @@ body {
 
   .account-layout,
   .account-auth-grid,
+  .account-auth,
   .account-detail-grid,
   .account-stats,
   .account-field-row {
     grid-template-columns: 1fr;
   }
+  .account-auth-aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 1.15rem 1.1rem;
+  }
+  .account-auth-card { padding: 1.15rem; }
+  .account-auth-benefits { display: none; }
   .account-hero {
     flex-wrap: wrap;
     gap: 0.75rem;

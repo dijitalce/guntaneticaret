@@ -2,16 +2,24 @@ import { NextResponse } from "next/server";
 import { COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { createCustomer, loginCustomer } from "@guntan/auth";
 
+function field(form: FormData, key: string) {
+  return String(form.get(key) ?? "").trim();
+}
+
 export async function POST(request: Request) {
   const form = await request.formData();
-  const email = String(form.get("email") ?? "");
-  const password = String(form.get("password") ?? "");
-  const firstName = String(form.get("firstName") ?? "");
-  const lastName = String(form.get("lastName") ?? "");
-  const phone = String(form.get("phone") ?? "").trim() || undefined;
+  const email = field(form, "email");
+  const password = field(form, "password");
+  const firstName = field(form, "firstName");
+  const lastName = field(form, "lastName");
+  const phone = field(form, "phone") || undefined;
+
+  if (field(form, "acceptTerms") !== "1" || field(form, "acceptPrivacy") !== "1") {
+    return NextResponse.redirect(publicRedirect("/hesabim?kayit=onay", request), 303);
+  }
 
   if (!email || !password || password.length < 6 || !firstName || !lastName) {
-    return NextResponse.redirect(publicRedirect("/hesabim?kayit=1", request), 303);
+    return NextResponse.redirect(publicRedirect("/hesabim?kayit=eksik", request), 303);
   }
 
   try {

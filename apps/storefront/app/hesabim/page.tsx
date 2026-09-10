@@ -4,6 +4,7 @@ import { db, orders } from "@guntan/db";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
 import { formatDateTr, formatMoney, orderStatusLabel, orderStatusTone } from "../../src/order-labels";
+import { AccountAuthForms } from "../../src/account-auth";
 
 export default async function AccountPage({
   searchParams,
@@ -15,63 +16,39 @@ export default async function AccountPage({
   const user = await getCurrentCustomer();
 
   if (!user) {
+    const initialTab = sp.kayit === "email" || sp.kayit === "onay" || sp.kayit === "eksik" ? "register" : "login";
     return (
-      <>
-        <nav className="breadcrumb"><Link href="/">Ana Sayfa</Link> › Hesabım</nav>
-        <h1>Hesabım</h1>
-        <p className="account-lead muted">
-          Siparişlerini takip et, adreslerini kaydet ve {tenant.siteName} alışverişine kaldığın yerden devam et.
-        </p>
+      <div className="account-auth-page">
+        <nav className="breadcrumb">
+          <Link href="/">Ana Sayfa</Link> › Hesabım
+        </nav>
         {sp.hata === "1" && (
-          <p className="account-alert is-bad" role="alert">E-posta veya şifre hatalı.</p>
+          <p className="account-alert is-bad" role="alert">
+            E-posta veya şifre hatalı. Tekrar dene.
+          </p>
         )}
         {sp.kayit === "email" && (
-          <p className="account-alert is-bad" role="alert">Bu e-posta ile zaten bir hesap var. Giriş yapmayı dene.</p>
+          <p className="account-alert is-bad" role="alert">
+            Bu e-posta ile zaten bir hesap var. Giriş yapmayı dene.
+          </p>
+        )}
+        {sp.kayit === "onay" && (
+          <p className="account-alert is-bad" role="alert">
+            Üyelik için kullanım koşulları ve KVKK onaylarını işaretlemen gerekir.
+          </p>
+        )}
+        {sp.kayit === "eksik" && (
+          <p className="account-alert is-bad" role="alert">
+            Lütfen ad, soyad, e-posta ve en az 6 karakterlik şifre gir.
+          </p>
         )}
         {sp.kayit === "1" && (
-          <p className="account-alert is-ok" role="status">Hesabın oluşturuldu.</p>
+          <p className="account-alert is-ok" role="status">
+            Hesabın oluşturuldu.
+          </p>
         )}
-        <div className="account-auth-grid">
-          <form action="/api/auth/login" method="post" className="account-panel">
-            <h2>Giriş yap</h2>
-            <label>
-              E-posta
-              <input className="input" name="email" type="email" autoComplete="email" required />
-            </label>
-            <label>
-              Şifre
-              <input className="input" name="password" type="password" autoComplete="current-password" required minLength={6} />
-            </label>
-            <button className="btn btn-primary" type="submit">Giriş yap</button>
-          </form>
-          <form action="/api/auth/register" method="post" className="account-panel">
-            <h2>Üye ol</h2>
-            <div className="account-field-row">
-              <label>
-                Ad
-                <input className="input" name="firstName" autoComplete="given-name" required />
-              </label>
-              <label>
-                Soyad
-                <input className="input" name="lastName" autoComplete="family-name" required />
-              </label>
-            </div>
-            <label>
-              E-posta
-              <input className="input" name="email" type="email" autoComplete="email" required />
-            </label>
-            <label>
-              Telefon
-              <input className="input" name="phone" type="tel" autoComplete="tel" placeholder="05xx xxx xx xx" />
-            </label>
-            <label>
-              Şifre
-              <input className="input" name="password" type="password" autoComplete="new-password" required minLength={6} />
-            </label>
-            <button className="btn btn-secondary" type="submit">Hesap oluştur</button>
-          </form>
-        </div>
-      </>
+        <AccountAuthForms siteName={tenant.siteName} initialTab={initialTab} />
+      </div>
     );
   }
 
@@ -86,9 +63,21 @@ export default async function AccountPage({
 
   return (
     <>
-      {sp.ok === "profil" && <p className="account-alert is-ok" role="status">Profil bilgilerin güncellendi.</p>}
-      {sp.ok === "sifre" && <p className="account-alert is-ok" role="status">Şifren güncellendi.</p>}
-      {sp.kayit === "1" && <p className="account-alert is-ok" role="status">Hoş geldin! Hesabın hazır.</p>}
+      {sp.ok === "profil" && (
+        <p className="account-alert is-ok" role="status">
+          Profil bilgilerin güncellendi.
+        </p>
+      )}
+      {sp.ok === "sifre" && (
+        <p className="account-alert is-ok" role="status">
+          Şifren güncellendi.
+        </p>
+      )}
+      {sp.kayit === "1" && (
+        <p className="account-alert is-ok" role="status">
+          Hoş geldin! Hesabın hazır.
+        </p>
+      )}
       <div className="account-stats">
         <div className="account-stat">
           <strong>{recent.length > 0 ? recent.length : "0"}</strong>
@@ -113,7 +102,9 @@ export default async function AccountPage({
           <div className="empty-state account-empty">
             <h3>Henüz sipariş yok</h3>
             <p>Marka ve model seçerek uygun parçaları hemen bulabilirsin.</p>
-            <Link className="btn btn-primary" href="/">Alışverişe başla</Link>
+            <Link className="btn btn-primary" href="/">
+              Alışverişe başla
+            </Link>
           </div>
         ) : (
           <ul className="account-order-list">
