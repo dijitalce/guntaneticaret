@@ -1,6 +1,14 @@
 import type { PoolOptions } from "mysql2/promise";
 
-export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: number } = {}): PoolOptions {
+function isProductionBuild(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build"
+  );
+}
+
+/** Normalize / validate DATABASE_URL. During `next build`, a non-mysql URL becomes a placeholder so page-data collection does not crash. */
+export function resolveMysqlUrl(url: string): string {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -8,12 +16,23 @@ export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: 
     throw new Error("DATABASE_URL geçersiz. Örnek: mysql://user:pass@localhost:3306/dbname");
   }
 
-  if (!/^mysql(s)?:$/i.test(parsed.protocol)) {
-    throw new Error(
-      `DATABASE_URL MySQL olmalı (mysql://...), alınan protokol: ${parsed.protocol}. Eski postgres/supabase URL'ini kaldır.`,
+  if (/^mysql(s)?:$/i.test(parsed.protocol)) return url;
+
+  if (isProductionBuild()) {
+    console.warn(
+      `[db] DATABASE_URL protokolü ${parsed.protocol} — build için placeholder kullanılıyor. Canlıda mysql://... olmalı.`,
     );
+    return "mysql://build:build@127.0.0.1:3306/build";
   }
 
+  throw new Error(
+    `DATABASE_URL MySQL olmalı (mysql://...), alınan protokol: ${parsed.protocol}. Eski postgres/supabase URL'ini kaldır.`,
+  );
+}
+
+export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: number } = {}): PoolOptions {
+  const normalized = resolveMysqlUrl(url);
+  const parsed = new URL(normalized);
   const isLocal = /localhost|127\.0\.0\.1/.test(parsed.hostname);
   // Hostinger shared MySQL usually has no client SSL. Opt in with DATABASE_SSL=1.
   const wantSsl = process.env.DATABASE_SSL === "1" || parsed.searchParams.get("ssl") === "true";
