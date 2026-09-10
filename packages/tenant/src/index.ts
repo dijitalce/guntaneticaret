@@ -105,64 +105,70 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     }
   }
 
-  const [domain] = await db
-    .select()
-    .from(tenantDomains)
-    .where(eq(tenantDomains.hostname, hostname))
-    .limit(1);
+  try {
+    const [domain] = await db
+      .select()
+      .from(tenantDomains)
+      .where(eq(tenantDomains.hostname, hostname))
+      .limit(1);
 
-  if (!domain) {
-    memSet(hostname, null);
-    await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
+    if (!domain) {
+      memSet(hostname, null);
+      await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
+      return null;
+    }
+
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, domain.tenantId)).limit(1);
+    if (!tenant || tenant.status === TENANT_STATUS.DRAFT) {
+      memSet(hostname, null);
+      await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
+      return null;
+    }
+
+    const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    const domains = await db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, tenant.id));
+    const canonical = domains.find((d) => d.isPrimary)?.hostname ?? hostname;
+    const theme = { ...DEFAULT_THEME_TOKENS, ...(settings?.themeTokens ?? {}) } as ThemeTokens;
+
+    const config: TenantPublicConfig = {
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        status: tenant.status as TenantPublicConfig["tenant"]["status"],
+        visibilityMode: tenant.visibilityMode as TenantPublicConfig["tenant"]["visibilityMode"],
+        hostname,
+        canonicalHost: canonical,
+      },
+      siteName: settings?.siteName ?? tenant.name,
+      logoUrl: settings?.logoUrl ?? null,
+      logoDarkUrl: settings?.logoDarkUrl ?? null,
+      faviconUrl: settings?.faviconUrl ?? null,
+      placeholderImageUrl: settings?.placeholderImageUrl ?? null,
+      phone: settings?.phone ?? null,
+      whatsapp: settings?.whatsapp ?? null,
+      email: settings?.email ?? null,
+      address: settings?.address ?? null,
+      theme,
+      defaultMetaTitle: settings?.defaultMetaTitle ?? null,
+      defaultMetaDescription: settings?.defaultMetaDescription ?? null,
+      ogImageUrl: settings?.ogImageUrl ?? null,
+      gaId: settings?.gaId ?? null,
+      gtmId: settings?.gtmId ?? null,
+      customScripts: settings?.customScripts ?? null,
+      allCatalogUrl: settings?.socialJson?.allCatalogUrl ?? null,
+      seoContent: settings?.seoContent ?? null,
+    };
+
+    memSet(hostname, config);
+    await safeCacheSet(cache, cacheKey, JSON.stringify(config), TENANT_HOST_CACHE_TTL_SECONDS);
+    await safeCacheSet(cache, CACHE_KEYS.tenantConfig(tenant.id), JSON.stringify(config), TENANT_CONFIG_CACHE_TTL_SECONDS);
+    return config;
+  } catch (err) {
+    // Empty MySQL / wrong DATABASE_URL / connection errors must not take down every tenant domain.
+    console.error("[tenant] resolveTenantByHost failed:", hostname, err instanceof Error ? err.message : err);
     return null;
   }
-
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, domain.tenantId)).limit(1);
-  if (!tenant || tenant.status === TENANT_STATUS.DRAFT) {
-    memSet(hostname, null);
-    await safeCacheSet(cache, cacheKey, "null", TENANT_HOST_CACHE_TTL_SECONDS);
-    return null;
-  }
-
-  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
-  const domains = await db.select().from(tenantDomains).where(eq(tenantDomains.tenantId, tenant.id));
-  const canonical = domains.find((d) => d.isPrimary)?.hostname ?? hostname;
-  const theme = { ...DEFAULT_THEME_TOKENS, ...(settings?.themeTokens ?? {}) } as ThemeTokens;
-
-  const config: TenantPublicConfig = {
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug,
-      status: tenant.status as TenantPublicConfig["tenant"]["status"],
-      visibilityMode: tenant.visibilityMode as TenantPublicConfig["tenant"]["visibilityMode"],
-      hostname,
-      canonicalHost: canonical,
-    },
-    siteName: settings?.siteName ?? tenant.name,
-    logoUrl: settings?.logoUrl ?? null,
-    logoDarkUrl: settings?.logoDarkUrl ?? null,
-    faviconUrl: settings?.faviconUrl ?? null,
-    placeholderImageUrl: settings?.placeholderImageUrl ?? null,
-    phone: settings?.phone ?? null,
-    whatsapp: settings?.whatsapp ?? null,
-    email: settings?.email ?? null,
-    address: settings?.address ?? null,
-    theme,
-    defaultMetaTitle: settings?.defaultMetaTitle ?? null,
-    defaultMetaDescription: settings?.defaultMetaDescription ?? null,
-    ogImageUrl: settings?.ogImageUrl ?? null,
-    gaId: settings?.gaId ?? null,
-    gtmId: settings?.gtmId ?? null,
-    customScripts: settings?.customScripts ?? null,
-    allCatalogUrl: settings?.socialJson?.allCatalogUrl ?? null,
-    seoContent: settings?.seoContent ?? null,
-  };
-
-  memSet(hostname, config);
-  await safeCacheSet(cache, cacheKey, JSON.stringify(config), TENANT_HOST_CACHE_TTL_SECONDS);
-  await safeCacheSet(cache, CACHE_KEYS.tenantConfig(tenant.id), JSON.stringify(config), TENANT_CONFIG_CACHE_TTL_SECONDS);
-  return config;
 }
 
 export function themeToCssVars(theme: ThemeTokens): string {

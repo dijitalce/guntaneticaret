@@ -7,3 +7,9 @@ strictDepBuilds: false
 allowBuilds:
   esbuild: false
   msgpackr-extract: true
+
+# pnpm 11: overrides live here (package.json#pnpm is ignored)
+overrides:
+  postcss: ">=8.5.23"
+  esbuild: ">=0.25.0"
+  "@esbuild-kit/core-utils>esbuild": ">=0.25.0"
