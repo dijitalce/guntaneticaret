@@ -695,11 +695,27 @@ export async function listPopularCategories(limit = 8) {
   return db.select().from(categories).where(and(eq(categories.isActive, true), isNull(categories.parentId))).orderBy(asc(categories.sortOrder)).limit(limit);
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, "");
+}
+
+/** Kelimeleri sıradan bağımsız AND ile aramak için tokenize et. */
+export function searchTokens(q: string): string[] {
+  return q
+    .trim()
+    .split(/[\s,;/|]+/)
+    .map((t) => escapeLike(t.trim()))
+    .filter((t) => t.length >= 2)
+    .slice(0, 6);
+}
+
 export async function searchCatalog(tenantId: string, q: string, limit = 8) {
   const query = q.trim();
   if (query.length < 2) return [];
+  const tokens = searchTokens(query);
+  if (tokens.length === 0) return [];
+
   const seesAll = await tenantSeesAllCatalog(tenantId);
-  const prefix = `${query}%`;
   const oemNorm = query.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   const matchOem =
     oemNorm.length >= 5
@@ -709,6 +725,18 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
             and po.normalized = ${oemNorm}
         )`
       : sql`false`;
+
+  // Her kelime ad veya SKU içinde geçmeli (sıra önemli değil).
+  // Eski `name LIKE 'sorgu%'` yalnızca önek eşleştirdiği için
+  // "linea fren balata" kaçırılıp "fren balata linea" bulunuyordu.
+  const tokenConds = tokens.map((token) => {
+    const pattern = `%${token}%`;
+    return sql`(
+      ${products.name} like ${pattern}
+      or ${products.sku} like ${pattern}
+    )`;
+  });
+
   return db
     .select({
       id: products.id,
@@ -724,13 +752,13 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       and(
         eq(products.status, "active"),
         tenantVisibleSql(tenantId, seesAll),
-        or(
-          eq(products.sku, query),
-          sql`${products.sku} like ${prefix}`,
-          sql`${products.name} like ${prefix}`,
-          matchOem,
-        ),
+        or(and(...tokenConds), eq(products.sku, query), matchOem),
       ),
+    )
+    .orderBy(
+      sql`case when ${products.name} like ${`${tokens[0]}%`} then 0 else 1 end`,
+      desc(products.stockQty),
+      asc(products.name),
     )
     .limit(limit);
 }
