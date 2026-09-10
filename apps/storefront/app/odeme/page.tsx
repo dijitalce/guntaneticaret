@@ -4,7 +4,12 @@ import { getCartView, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
 import { CheckoutForm } from "./form";
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ hata?: string }>;
+}) {
+  const sp = await searchParams;
   const tenant = await getTenant();
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
@@ -17,6 +22,11 @@ export default async function CheckoutPage() {
     <div className="container page-surface">
       <h1>Ödeme — Havale / EFT</h1>
       <p>Kart ödemesi yok. Sipariş sonrası IBAN bilgisi gösterilir.</p>
+      {sp.hata === "1" && (
+        <p className="account-alert is-bad" role="alert">
+          Sipariş oluşturulamadı. Stok veya form alanlarını kontrol edip tekrar dene.
+        </p>
+      )}
       <p>Ara toplam: {view.subtotal.toLocaleString("tr-TR")} TL</p>
       <CheckoutForm />
     </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { COOKIE_CART } from "@guntan/config";
+import { COOKIE_CART, publicRedirect } from "@guntan/config";
 import { addToCart, cartQty, getOrCreateCart } from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { db, products } from "@guntan/db";
@@ -29,10 +29,20 @@ export async function POST(request: Request) {
   let sessionId = jar.get(COOKIE_CART)?.value;
   if (!sessionId) sessionId = randomUUID();
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
-  if (!product) return NextResponse.json({ error: "product" }, { status: 404 });
-  const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
-  await addToCart(cart.id, tenant.tenant.id, product.id, qty);
-  const res = NextResponse.redirect(new URL("/sepet", request.url), 303);
-  res.cookies.set(COOKIE_CART, sessionId, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  if (!product) return NextResponse.redirect(publicRedirect("/", request), 303);
+  try {
+    const cart = await getOrCreateCart(tenant.tenant.id, null, sessionId);
+    await addToCart(cart.id, tenant.tenant.id, product.id, qty);
+  } catch {
+    return NextResponse.redirect(publicRedirect(`/urun/${encodeURIComponent(slug)}?sepet=hata`, request), 303);
+  }
+  const res = NextResponse.redirect(publicRedirect("/sepet", request), 303);
+  res.cookies.set(COOKIE_CART, sessionId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
   return res;
 }

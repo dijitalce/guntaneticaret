@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { COOKIE_CUSTOMER_SESSION } from "@guntan/config";
+import { COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { createCustomer, loginCustomer } from "@guntan/auth";
 
 export async function POST(request: Request) {
@@ -11,17 +11,17 @@ export async function POST(request: Request) {
   const phone = String(form.get("phone") ?? "").trim() || undefined;
 
   if (!email || !password || password.length < 6 || !firstName || !lastName) {
-    return NextResponse.redirect(new URL("/hesabim?kayit=1", request.url), 303);
+    return NextResponse.redirect(publicRedirect("/hesabim?kayit=1", request), 303);
   }
 
   try {
     await createCustomer({ email, password, firstName, lastName, phone });
   } catch {
-    return NextResponse.redirect(new URL("/hesabim?kayit=email", request.url), 303);
+    return NextResponse.redirect(publicRedirect("/hesabim?kayit=email", request), 303);
   }
 
   const result = await loginCustomer(email, password);
-  const res = NextResponse.redirect(new URL("/hesabim?kayit=1", request.url), 303);
+  const res = NextResponse.redirect(publicRedirect("/hesabim?kayit=1", request), 303);
   if (result) {
     res.cookies.set(COOKIE_CUSTOMER_SESSION, result.token, {
       httpOnly: true,

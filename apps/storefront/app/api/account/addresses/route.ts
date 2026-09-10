@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
-import { COOKIE_CUSTOMER_SESSION } from "@guntan/config";
+import { COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { getCustomerBySession } from "@guntan/auth";
 import { customerAddresses, db } from "@guntan/db";
 
@@ -12,7 +12,7 @@ async function requireUser() {
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) return NextResponse.redirect(new URL("/hesabim", request.url), 303);
+  if (!user) return NextResponse.redirect(publicRedirect("/hesabim", request), 303);
 
   const form = await request.formData();
   const title = String(form.get("title") ?? "Adres").trim() || "Adres";
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const isDefault = form.get("isDefault") === "1" ? 1 : 0;
 
   if (!fullName || !phone || !city || !district || !line1) {
-    return NextResponse.redirect(new URL("/hesabim/adresler?hata=1", request.url), 303);
+    return NextResponse.redirect(publicRedirect("/hesabim/adresler?hata=1", request), 303);
   }
 
   if (isDefault) {
@@ -47,5 +47,5 @@ export async function POST(request: Request) {
     isDefault: isDefault || 0,
   });
 
-  return NextResponse.redirect(new URL("/hesabim/adresler?ok=1", request.url), 303);
+  return NextResponse.redirect(publicRedirect("/hesabim/adresler?ok=1", request), 303);
 }
