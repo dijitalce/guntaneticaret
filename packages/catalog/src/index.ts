@@ -546,19 +546,21 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
     .orderBy(desc(productCount))
     .limit(40);
 
+  // Alt kategori say\u0131lar\u0131 kozmetik bir rakam; products tablosuna hi\u00e7 dokunmadan
+  // (status kontrol\u00fc olmadan) hesaplamak, planlayıcının products'ı tam taramasını
+  // \u00f6nler (t4g.micro'da bu tarama disk I/O'ya d\u00fc\u015f\u00fcp saniyeler s\u00fcrebiliyordu).
   const childrenQuery = db
     .select({
       id: categories.id,
       name: categories.name,
       slug: categories.slug,
-      count: productCount,
+      count: sql<number>`count(distinct ${productCategories.productId})::int`,
     })
     .from(categories)
     .innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
-    .innerJoin(products, eq(products.id, productCategories.productId))
-    .where(and(eq(categories.parentId, categoryId), eq(products.status, "active"), visible))
+    .where(eq(categories.parentId, categoryId))
     .groupBy(categories.id, categories.name, categories.slug)
-    .orderBy(desc(productCount));
+    .orderBy(desc(sql`count(distinct ${productCategories.productId})`));
 
   // Ana kategoride tüm fitment’lerle COUNT DISTINCT marka = saniye mertebesi.
   // Yaprak kategoride ürün azdır; orada hesapla. Üst kategoride alt kategori yeterli.
