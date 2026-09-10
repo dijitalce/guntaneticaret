@@ -84,6 +84,36 @@ export async function addToCart(cartId: string, tenantId: string, productId: str
   }
 }
 
+export async function removeCartItem(cartId: string, itemId: string) {
+  await db.delete(cartItems).where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cartId)));
+}
+
+export async function updateCartItemQty(cartId: string, itemId: string, qty: number) {
+  const nextQty = Math.floor(Number(qty));
+  if (!Number.isFinite(nextQty) || nextQty <= 0) {
+    await removeCartItem(cartId, itemId);
+    return;
+  }
+
+  const [item] = await db
+    .select({
+      id: cartItems.id,
+      productId: cartItems.productId,
+      stockQty: products.stockQty,
+      reservedQty: products.reservedQty,
+      status: products.status,
+    })
+    .from(cartItems)
+    .innerJoin(products, eq(cartItems.productId, products.id))
+    .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cartId)))
+    .limit(1);
+  if (!item) throw new Error("Sepet kalemi bulunamadı.");
+  if (item.status !== "active") throw new Error("Ürün satışta değil.");
+  if (availableStock(item.stockQty, item.reservedQty) < nextQty) throw new Error("Yetersiz stok.");
+
+  await db.update(cartItems).set({ qty: nextQty }).where(eq(cartItems.id, item.id));
+}
+
 export async function cartQty(tenantId: string, sessionId?: string | null) {
   if (!sessionId) return 0;
   const [cart] = await db
