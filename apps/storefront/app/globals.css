@@ -1466,23 +1466,57 @@ body {
   margin-bottom: 0.95rem;
 }
 .checkout-segment-option {
-  display: flex;
+  display: flex !important;
+  flex-direction: row;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.75rem 0.9rem;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
   font-size: 0.9rem;
   font-weight: 650;
+  line-height: 1.2;
   cursor: pointer;
+  margin: 0;
 }
 .checkout-segment-option.is-active {
   border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
   background: color-mix(in srgb, var(--primary) 7%, #fff);
 }
 .checkout-segment-option input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  flex-shrink: 0;
+  border: 2px solid #c5c9d0;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-content: center;
   accent-color: var(--primary);
+}
+.checkout-segment-option input::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  transform: scale(0);
+  background: var(--primary);
+}
+.checkout-segment-option input:checked {
+  border-color: var(--primary);
+}
+.checkout-segment-option input:checked::before {
+  transform: scale(1);
+}
+.checkout-segment-option span {
+  display: block;
+  flex: 1;
+  min-width: 0;
 }
 .checkout-check {
   display: flex;
@@ -1740,7 +1774,7 @@ body {
   font-size: 0.88rem;
   line-height: 1.4;
 }
-.account-auth-form label {
+.account-auth-form label:not(.checkout-segment-option):not(.account-check) {
   display: grid;
   gap: 0.3rem;
   font-size: 0.86rem;
@@ -1874,7 +1908,7 @@ body {
   margin: 0 0 0.2rem;
   font-size: 1.05rem;
 }
-.account-panel label {
+.account-panel label:not(.checkout-segment-option):not(.account-check) {
   display: grid;
   gap: 0.3rem;
   font-size: 0.86rem;
