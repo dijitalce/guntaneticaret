@@ -74,15 +74,46 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
         <div className="account-side-stack">
           <div className="account-panel">
-            <h3>Teslimat</h3>
+            <h3>İletişim</h3>
             <p>
               <strong>{order.fullName}</strong><br />
               {order.phone}<br />
               {order.email}
             </p>
+          </div>
+
+          <div className="account-panel">
+            <h3>Fatura</h3>
+            <p>
+              <strong>{addr.invoiceType === "corporate" ? "Kurumsal" : "Bireysel"}</strong>
+              {addr.companyName ? <><br />{addr.companyName}</> : null}
+              {addr.taxOffice || addr.taxNumber ? (
+                <><br />{[addr.taxOffice, addr.taxNumber].filter(Boolean).join(" · ")}</>
+              ) : null}
+              {addr.nationalId ? <><br />TCKN: {addr.nationalId}</> : null}
+            </p>
+            <p className="muted">
+              {[
+                addr.billingLine1 || addr.line1,
+                addr.billingDistrict || addr.district,
+                addr.billingCity || addr.city,
+                addr.billingPostalCode || addr.postalCode,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          </div>
+
+          <div className="account-panel">
+            <h3>Teslimat</h3>
+            <p>
+              <strong>{addr.shipFullName || order.fullName}</strong><br />
+              {addr.shipPhone || order.phone}
+            </p>
             <p className="muted">
               {[addr.line1, addr.district, addr.city, addr.postalCode].filter(Boolean).join(", ")}
             </p>
+            {order.notes ? <p className="muted">Not: {order.notes}</p> : null}
           </div>
 
           {ship && (ship.trackingNo || ship.carrier) && (

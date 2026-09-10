@@ -163,6 +163,15 @@ function nextOrderNo(): string {
   return `GNT-${Date.now().toString(36).toUpperCase()}`;
 }
 
+export type CheckoutInvoiceType = "individual" | "corporate";
+
+export type CheckoutAddressInput = {
+  city: string;
+  district: string;
+  line1: string;
+  postalCode?: string;
+};
+
 export async function checkout(input: {
   tenantId: string;
   cartId: string;
@@ -170,13 +179,30 @@ export async function checkout(input: {
   email: string;
   phone: string;
   fullName: string;
-  city: string;
-  district: string;
-  line1: string;
-  postalCode?: string;
+  invoiceType: CheckoutInvoiceType;
+  companyName?: string;
+  taxOffice?: string;
+  taxNumber?: string;
+  nationalId?: string;
+  billing: CheckoutAddressInput;
+  shipping: CheckoutAddressInput & { fullName?: string; phone?: string };
+  shipDifferent: boolean;
+  notes?: string;
+  acceptMarketing?: boolean;
 }) {
   const view = await getCartView(input.cartId);
   if (view.items.length === 0) throw new Error("Sepet boş.");
+  if (!input.billing.city || !input.billing.district || !input.billing.line1) {
+    throw new Error("Fatura adresi eksik.");
+  }
+  if (!input.shipping.city || !input.shipping.district || !input.shipping.line1) {
+    throw new Error("Teslimat adresi eksik.");
+  }
+  if (input.invoiceType === "corporate") {
+    if (!input.companyName?.trim() || !input.taxOffice?.trim() || !input.taxNumber?.trim()) {
+      throw new Error("Kurumsal fatura bilgileri eksik.");
+    }
+  }
 
   for (const item of view.items) {
     if (availableStock(item.stockQty, item.reservedQty) < item.qty) {
@@ -184,7 +210,7 @@ export async function checkout(input: {
     }
   }
 
-  const quotes = await getShippingProvider().quote({ subtotal: view.subtotal, city: input.city });
+  const quotes = await getShippingProvider().quote({ subtotal: view.subtotal, city: input.shipping.city });
   const shipping = Number(quotes[0]?.amount ?? 0);
   const grand = view.subtotal + shipping;
   const orderNo = nextOrderNo();
@@ -199,15 +225,29 @@ export async function checkout(input: {
     phone: input.phone,
     fullName: input.fullName,
     shippingAddress: {
-      city: input.city,
-      district: input.district,
-      line1: input.line1,
-      postalCode: input.postalCode ?? "",
+      city: input.shipping.city,
+      district: input.shipping.district,
+      line1: input.shipping.line1,
+      postalCode: input.shipping.postalCode ?? "",
+      shipFullName: input.shipping.fullName ?? input.fullName,
+      shipPhone: input.shipping.phone ?? input.phone,
+      shipDifferent: input.shipDifferent ? "1" : "0",
+      invoiceType: input.invoiceType,
+      companyName: input.companyName ?? "",
+      taxOffice: input.taxOffice ?? "",
+      taxNumber: input.taxNumber ?? "",
+      nationalId: input.nationalId ?? "",
+      billingCity: input.billing.city,
+      billingDistrict: input.billing.district,
+      billingLine1: input.billing.line1,
+      billingPostalCode: input.billing.postalCode ?? "",
+      acceptMarketing: input.acceptMarketing ? "1" : "0",
     },
     subtotal: view.subtotal.toFixed(2),
     shippingTotal: shipping.toFixed(2),
     discountTotal: "0.00",
     grandTotal: grand.toFixed(2),
+    notes: input.notes?.trim() || null,
   };
   await db.insert(orders).values(order);
 

@@ -163,11 +163,54 @@ export default async function OrderDetailPage({
           </p>
         </div>
         <div className="panel panel-pad">
+          <strong>Fatura</strong>
+          <p style={{ margin: "0.4rem 0 0", color: "#6b7280", fontSize: "0.9rem" }}>
+            {address.invoiceType === "corporate" ? "Kurumsal" : "Bireysel"}
+            {address.companyName ? (
+              <>
+                <br />
+                {address.companyName}
+              </>
+            ) : null}
+            {address.taxOffice || address.taxNumber ? (
+              <>
+                <br />
+                {[address.taxOffice, address.taxNumber].filter(Boolean).join(" · ")}
+              </>
+            ) : null}
+            {address.nationalId ? (
+              <>
+                <br />
+                TCKN: {address.nationalId}
+              </>
+            ) : null}
+            <br />
+            {[
+              address.billingLine1 || address.line1,
+              address.billingDistrict || address.district,
+              address.billingCity || address.city,
+              address.billingPostalCode || address.postalCode,
+            ]
+              .filter(Boolean)
+              .join(", ") || "Adres yok"}
+          </p>
+        </div>
+        <div className="panel panel-pad">
           <strong>Teslimat</strong>
           <p style={{ margin: "0.4rem 0 0", color: "#6b7280", fontSize: "0.9rem" }}>
+            {address.shipFullName || order.fullName}
+            <br />
+            {address.shipPhone || order.phone}
+            <br />
             {[address.line1, address.line2, address.district, address.city, address.postalCode]
               .filter(Boolean)
               .join(", ") || "Adres yok"}
+            {address.shipDifferent === "1" ? (
+              <>
+                <br />
+                <em>Fatura adresinden farklı</em>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="panel panel-pad">
@@ -181,6 +224,11 @@ export default async function OrderDetailPage({
             Ara: {formatTry(order.subtotal)} · Kargo: {formatTry(order.shippingTotal)} · İndirim:{" "}
             {formatTry(order.discountTotal)}
           </p>
+          {order.notes ? (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem", color: "#6b7280" }}>
+              Not: {order.notes}
+            </p>
+          ) : null}
         </div>
         <div className="panel panel-pad">
           <strong>Kargo</strong>
