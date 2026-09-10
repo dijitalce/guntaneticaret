@@ -469,21 +469,13 @@ async function main() {
       { title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
       { title: "İade Şartları", slug: "iade", body: "İade koşulları." },
     ]) {
-      const [have] = await db
+      const haveTenantPage = await db
         .select()
         .from(pages)
-        .where(eq(pages.slug, page.slug))
-        .limit(1);
-      // slug is per-tenant unique; check tenant+slug properly
-      const [haveTenantPage] = await db
-        .select()
-        .from(pages)
-        .where(eq(pages.tenantId, tenant.id))
-        .limit(100);
+        .where(eq(pages.tenantId, tenant.id));
       if (!haveTenantPage.some((p) => p.slug === page.slug)) {
         await db.insert(pages).values({ tenantId: tenant.id, ...page });
       }
-      void have;
     }
     const [haveMenu] = await db.select().from(menus).where(eq(menus.tenantId, tenant.id)).limit(1);
     if (!haveMenu) {
