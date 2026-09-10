@@ -18,6 +18,54 @@ function withCartCookie(res: NextResponse, sessionId: string) {
   return res;
 }
 
+function isSafeReturnPath(path: string) {
+  return path.startsWith("/") && !path.startsWith("//") && !path.includes("://");
+}
+
+function stripSepetParam(path: string) {
+  try {
+    const u = new URL(path, "https://local.invalid");
+    u.searchParams.delete("sepet");
+    const q = u.searchParams.toString();
+    return q ? `${u.pathname}?${q}` : u.pathname;
+  } catch {
+    return path;
+  }
+}
+
+function withSepetFlag(path: string, flag: "ok" | "hata") {
+  const u = new URL(stripSepetParam(path), "https://local.invalid");
+  u.searchParams.set("sepet", flag);
+  const q = u.searchParams.toString();
+  return `${u.pathname}?${q}`;
+}
+
+function resolveStayPath(request: Request, form: FormData, slug: string) {
+  const fromForm = String(form.get("returnTo") ?? "").trim();
+  if (isSafeReturnPath(fromForm)) return stripSepetParam(fromForm);
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      const ref = new URL(referer);
+      const host = request.headers.get("x-request-host") ?? request.headers.get("host") ?? "";
+      const hostName = host.split(":")[0]?.toLowerCase();
+      if (hostName && ref.hostname.toLowerCase() === hostName) {
+        return stripSepetParam(`${ref.pathname}${ref.search}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return `/urun/${encodeURIComponent(slug)}`;
+}
+
+function wantsJson(request: Request, form: FormData) {
+  if (String(form.get("ajax") ?? "") === "1") return true;
+  const accept = request.headers.get("accept") ?? "";
+  return accept.includes("application/json");
+}
+
 export async function GET() {
   const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";
   const tenant = await resolveTenantByHost(host);
@@ -64,15 +112,31 @@ export async function POST(request: Request) {
     return backToCart();
   }
 
-  // default: add
+  // default: add — stay on current page
   const slug = String(form.get("slug") ?? "");
   const qty = Number(form.get("qty") ?? 1);
+  const json = wantsJson(request, form);
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
-  if (!product) return NextResponse.redirect(publicRedirect("/", request), 303);
+  if (!product) {
+    if (json) return NextResponse.json({ ok: false, error: "product" }, { status: 404 });
+    return NextResponse.redirect(publicRedirect("/", request), 303);
+  }
   try {
     await addToCart(cart.id, tenant.tenant.id, product.id, qty);
   } catch {
-    return NextResponse.redirect(publicRedirect(`/urun/${encodeURIComponent(slug)}?sepet=hata`, request), 303);
+    if (json) return withCartCookie(NextResponse.json({ ok: false, error: "stock" }, { status: 409 }), sessionId);
+    return withCartCookie(
+      NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "hata"), request), 303),
+      sessionId,
+    );
   }
-  return backToCart();
+
+  const totalQty = await cartQty(tenant.tenant.id, sessionId);
+  if (json) {
+    return withCartCookie(NextResponse.json({ ok: true, qty: totalQty }), sessionId);
+  }
+  return withCartCookie(
+    NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "ok"), request), 303),
+    sessionId,
+  );
 }

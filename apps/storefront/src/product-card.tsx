@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
+import { AddToCartForm } from "./add-to-cart-form";
 
 function formatPrice(value: string) {
   return `${Number(value).toLocaleString("tr-TR")} TL`;
@@ -57,13 +58,12 @@ export function ProductCard({
             {inStock ? "Stokta" : "Tükendi"}
           </span>
           {inStock && product.slug && (
-            <form action="/api/cart" method="post">
-              <input type="hidden" name="slug" value={product.slug} />
+            <AddToCartForm slug={product.slug}>
               <button className="btn btn-primary" type="submit">
                 <span className="label-full">Sepete ekle</span>
                 <span className="label-short">Sepete</span>
               </button>
-            </form>
+            </AddToCartForm>
           )}
         </div>
       </div>

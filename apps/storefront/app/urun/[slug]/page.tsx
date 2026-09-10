@@ -7,6 +7,7 @@ import { discountPercent } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
 import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
+import { AddToCartForm } from "../../../src/add-to-cart-form";
 
 export const revalidate = 300;
 
@@ -22,8 +23,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ sepet?: string }>;
+}) {
   const { slug } = await params;
+  const sp = await searchParams;
   const tenant = await getTenant();
   const data = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!data) notFound();
@@ -89,17 +97,37 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <p className={product.stockStatus === "in_stock" ? "badge badge-stock" : "badge badge-out"}>
             {product.stockStatus === "in_stock" ? "Stokta" : "Stokta yok"}
           </p>
-          <form className="pdp-cart" action="/api/cart" method="post">
-            <input type="hidden" name="slug" value={product.slug} />
-            <label>Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} /></label>
+          {sp.sepet === "ok" && (
+            <p className="account-alert" role="status">
+              Ürün sepete eklendi. <Link href="/sepet">Sepete git</Link>
+            </p>
+          )}
+          {sp.sepet === "hata" && (
+            <p className="account-alert is-bad" role="alert">
+              Sepete eklenemedi. Stok durumunu kontrol edin.
+            </p>
+          )}
+          <AddToCartForm className="pdp-cart" slug={product.slug}>
+            <label>
+              Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} />
+            </label>
             <div className="pdp-actions">
-              <button className="btn btn-primary" type="submit">Sepete ekle</button>
-              <Link className="btn btn-secondary" href="/odeme">Hemen al</Link>
+              <button className="btn btn-primary" type="submit">
+                Sepete ekle
+              </button>
+              <Link className="btn btn-secondary" href="/odeme">
+                Hemen al
+              </Link>
               {tenant.whatsapp && (
-                <a className="btn btn-ghost" href={`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`}>WhatsApp ile sor</a>
+                <a
+                  className="btn btn-ghost"
+                  href={`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`}
+                >
+                  WhatsApp ile sor
+                </a>
               )}
             </div>
-          </form>
+          </AddToCartForm>
           <p className="pdp-ship">Teslimat bilgisi sipariş sonrası SMS veya e-posta ile iletilir.</p>
         </div>
       </div>

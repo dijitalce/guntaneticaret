@@ -4,18 +4,39 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IconCart } from "./icons";
 
+async function fetchQty(): Promise<number> {
+  const r = await fetch("/api/cart", { credentials: "same-origin" });
+  if (!r.ok) return 0;
+  const data = (await r.json()) as { qty?: number };
+  return Number(data.qty ?? 0);
+}
+
 export function CartBadge() {
   const [qty, setQty] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/cart", { credentials: "same-origin" })
-      .then((r) => (r.ok ? r.json() : { qty: 0 }))
-      .then((data: { qty?: number }) => {
-        if (!cancelled) setQty(Number(data.qty ?? 0));
+    fetchQty()
+      .then((n) => {
+        if (!cancelled) setQty(n);
       })
       .catch(() => {});
+
+    function onUpdated(e: Event) {
+      const detail = (e as CustomEvent<{ qty?: number }>).detail;
+      if (typeof detail?.qty === "number") {
+        setQty(detail.qty);
+        return;
+      }
+      fetchQty()
+        .then((n) => {
+          if (!cancelled) setQty(n);
+        })
+        .catch(() => {});
+    }
+    window.addEventListener("cart:updated", onUpdated);
     return () => {
       cancelled = true;
+      window.removeEventListener("cart:updated", onUpdated);
     };
   }, []);
   return (

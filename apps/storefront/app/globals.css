@@ -566,6 +566,20 @@ body {
 }
 .product-card-foot .badge { align-self: flex-start; }
 .product-card-foot form, .product-card-foot .btn { width: 100%; }
+.product-card-foot .add-to-cart-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+  width: 100%;
+}
+.add-to-cart-feedback {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #0f7a45;
+}
 
 .product-mini {
   display: grid;
@@ -913,6 +927,14 @@ body {
 .pdp-section { margin: 1.6rem 0 0.7rem; letter-spacing: -0.03em; font-size: 1.15rem; }
 .pdp-desc { color: var(--muted-foreground); max-width: 70ch; }
 .pdp-cart { margin-top: 1rem; display: grid; gap: 0.7rem; max-width: 220px; }
+.pdp-cart .add-to-cart-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+  display: grid;
+  gap: 0.7rem;
+}
 .pdp-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; max-width: none; }
 .pdp-ship { color: var(--muted-foreground); font-size: 0.9rem; }
 .fitment-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: #fff; border-radius: 14px; overflow: hidden; }
