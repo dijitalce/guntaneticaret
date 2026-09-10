@@ -1,8 +1,9 @@
 import type { PoolOptions } from "mysql2/promise";
 
-function isProductionBuild(): boolean {
+export function isProductionBuild(): boolean {
   return (
     process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.GUNTAN_NEXT_BUILD === "1" ||
     process.env.npm_lifecycle_event === "build"
   );
 }
@@ -50,5 +51,6 @@ export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: 
     ssl: wantSsl ? { rejectUnauthorized: false } : undefined,
     timezone: "Z",
     dateStrings: false,
+    connectTimeout: isLocal ? 5_000 : 8_000,
   };
 }

@@ -9,13 +9,26 @@ const require = createRequire(join(root, "apps/storefront/package.json"));
 const nextBin = require.resolve("next/dist/bin/next");
 const cmd = process.argv[2] ?? "build";
 
+function buildEnv() {
+  return {
+    ...process.env,
+    // Force stub DB pool during next build page-data collection (see packages/db client).
+    GUNTAN_NEXT_BUILD: "1",
+  };
+}
+
 function runNext(appRel, args) {
+  console.log(`[hostinger-next] Building ${appRel}...`);
   const result = spawnSync(process.execPath, [nextBin, ...args], {
     cwd: join(root, appRel),
     stdio: "inherit",
-    env: process.env,
+    env: buildEnv(),
   });
-  return result.status ?? 1;
+  const code = result.status ?? 1;
+  if (code !== 0) {
+    console.error(`[hostinger-next] ${appRel} failed with exit code ${code}`);
+  }
+  return code;
 }
 
 function linkOrCopy(source, target) {
