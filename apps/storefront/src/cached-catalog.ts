@@ -6,17 +6,20 @@ import {
   getCategoryBySlug,
   getManufacturerBySlug,
   getModelBySlug,
+  getProductBySlug,
   listModelsForBrand,
   listPopularCategories,
   listProducts,
   listVisibleBrands,
   listingFacets,
   listingFacetsForCategory,
+  relatedProducts,
   type ListingQuery,
 } from "@guntan/catalog";
 import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
 
 const LISTING_CACHE_TTL_SECONDS = 90;
+const PRODUCT_CACHE_TTL_SECONDS = 300;
 
 export function cachedVisibleBrands(tenantId: string) {
   return unstable_cache(
@@ -124,5 +127,21 @@ export function cachedFeaturedProducts(tenantId: string, limit = 8) {
     () => featuredProducts(tenantId, limit),
     ["featured", tenantId, String(limit)],
     { revalidate: NAV_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedProductBySlug(tenantId: string, slug: string) {
+  return unstable_cache(
+    () => getProductBySlug(tenantId, slug),
+    ["product-slug", tenantId, slug],
+    { revalidate: PRODUCT_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedRelatedProducts(tenantId: string, productId: string, modelId: string | undefined, limit = 8) {
+  return unstable_cache(
+    () => relatedProducts(tenantId, productId, modelId, limit),
+    ["related-products", tenantId, productId, modelId ?? "", String(limit)],
+    { revalidate: PRODUCT_CACHE_TTL_SECONDS },
   )();
 }

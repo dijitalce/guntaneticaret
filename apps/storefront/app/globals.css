@@ -483,6 +483,36 @@ body {
 }
 .catalog-layout .product-grid { grid-template-columns: repeat(3, 1fr); }
 
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skeleton {
+  background: color-mix(in srgb, var(--border) 55%, #fff);
+  border-radius: 8px;
+  animation: skeleton-pulse 1.3s ease-in-out infinite;
+}
+.skeleton-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.skeleton-card .skeleton-media { aspect-ratio: 1; width: 100%; border-radius: 0; }
+.skeleton-card-body { padding: 0.8rem 0.9rem 0.95rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.skeleton-line { height: 0.7rem; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-80 { width: 80%; }
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-toolbar { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.skeleton-pdp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; }
+.skeleton-pdp .skeleton-media { aspect-ratio: 1; width: 100%; }
+@media (max-width: 860px) {
+  .skeleton-pdp { grid-template-columns: 1fr; }
+}
+
 .product-card {
   background: #fff;
   color: var(--foreground);

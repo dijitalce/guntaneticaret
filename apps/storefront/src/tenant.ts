@@ -2,7 +2,6 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { getProductBySlug as getProductBySlugRaw } from "@guntan/catalog";
 import { resolveTenantByHost, themeToCssVars } from "@guntan/tenant";
 import { TENANT_HOST_CACHE_TTL_SECONDS, TENANT_STATUS } from "@guntan/types";
 import type { TenantPublicConfig } from "@guntan/types";
@@ -25,11 +24,6 @@ export const getTenant = cache(async (): Promise<TenantPublicConfig> => {
   }
   return tenant;
 });
-
-/** Request-level dedupe for generateMetadata + page. */
-export const getCachedProductBySlug = cache((tenantId: string, slug: string) =>
-  getProductBySlugRaw(tenantId, slug),
-);
 
 export { themeToCssVars };
 

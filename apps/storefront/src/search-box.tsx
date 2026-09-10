@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconSearch } from "./icons";
 
@@ -59,10 +60,10 @@ export function SearchBox({ brands }: { brands: { slug: string; name: string }[]
         <ul className="search-suggest" role="listbox">
           {hits.map((h) => (
             <li key={h.id}>
-              <a href={`/urun/${h.slug}`} onClick={() => setOpen(false)}>
+              <Link href={`/urun/${h.slug}`} onClick={() => setOpen(false)}>
                 <span>{h.title}</span>
                 <small>{[h.manufacturer, h.sku].filter(Boolean).join(" · ")}</small>
-              </a>
+              </Link>
             </li>
           ))}
           {hits.length === 0 && (

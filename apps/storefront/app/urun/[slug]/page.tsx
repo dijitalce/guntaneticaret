@@ -2,9 +2,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { productImageUrl, relatedProducts } from "@guntan/catalog";
+import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
-import { getTenant, getCachedProductBySlug } from "../../../src/tenant";
+import { getTenant } from "../../../src/tenant";
+import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 
 export const revalidate = 300;
@@ -12,7 +13,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const tenant = await getTenant();
-  const product = await getCachedProductBySlug(tenant.tenant.id, slug);
+  const product = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!product) return {};
   return {
     title: `${product.product.name} | ${tenant.siteName}`,
@@ -24,12 +25,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const tenant = await getTenant();
-  const data = await getCachedProductBySlug(tenant.tenant.id, slug);
+  const data = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!data) notFound();
   const { product } = data;
   const img = productImageUrl(data.images[0]?.url, tenant.placeholderImageUrl);
   const disc = discountPercent(product.price, product.compareAtPrice);
-  const related = await relatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
+  const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
   const fit = data.fitments[0];
 
   const jsonLd = {
