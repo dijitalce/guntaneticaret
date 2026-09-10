@@ -10,9 +10,13 @@ import {
   cachedListProducts,
   cachedListingFacetsForCategory,
   cachedManufacturerBySlug,
+  cachedModelBySlug,
+  cachedVisibleBrands,
 } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
+import { CategoryVehicleFinder } from "../../../src/category-vehicle-finder";
+import { CategoryFilters } from "../../../src/category-filters";
 import { sentenceCaseTr } from "../../../src/format";
 import {
   JsonLd,
@@ -66,15 +70,18 @@ export default async function CategoryPage({
   const tenant = await getTenant();
   const manufacturerSlug = sp.mfr?.trim() || undefined;
   const brandSlug = sp.brand?.trim() || undefined;
-  const [cat, manufacturer, brand] = await Promise.all([
+  const modelSlug = sp.model?.trim() || undefined;
+  const [cat, manufacturer, brand, allBrands] = await Promise.all([
     cachedCategoryBySlug(slug),
     manufacturerSlug ? cachedManufacturerBySlug(manufacturerSlug) : Promise.resolve(null),
     brandSlug ? cachedBrandBySlug(tenant.tenant.id, brandSlug) : Promise.resolve(null),
+    cachedVisibleBrands(tenant.tenant.id),
   ]);
   if (!cat) notFound();
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
   const inStock = sp.stock === "1";
+  const model = brand && modelSlug ? await cachedModelBySlug(brand.id, modelSlug) : null;
 
   const [parent, facets, result] = await Promise.all([
     cat.parentId ? cachedCategoryById(cat.parentId) : Promise.resolve(null),
@@ -84,6 +91,7 @@ export default async function CategoryPage({
       categoryId: cat.id,
       manufacturerId: manufacturer?.id,
       brandId: brand?.id,
+      modelId: model?.id,
       sort,
       page,
       inStock,
@@ -105,6 +113,7 @@ export default async function CategoryPage({
       stock: inStock ? "1" : undefined,
       mfr: manufacturerSlug,
       brand: brandSlug,
+      model: modelSlug,
       page: undefined as string | undefined,
       ...overrides,
     };
@@ -112,6 +121,7 @@ export default async function CategoryPage({
     if (next.stock === "1") params.set("stock", "1");
     if (next.mfr) params.set("mfr", next.mfr);
     if (next.brand) params.set("brand", next.brand);
+    if (next.model) params.set("model", next.model);
     if (next.page && next.page !== "1") params.set("page", next.page);
     const q = params.toString();
     return q ? `/kategori/${catSlug}?${q}` : `/kategori/${catSlug}`;
@@ -152,110 +162,68 @@ export default async function CategoryPage({
       </div>
       {cat.seoContent && <p className="category-seo-lead">{cat.seoContent}</p>}
 
-      {facets.children.length > 0 && (
-        <nav className="catalog-cats" aria-label="Alt kategoriler">
-          <Link className="is-active" href={href({ mfr: undefined, brand: undefined, page: undefined })}>
-            Tümü
-          </Link>
-          {facets.children.map((c) => (
-            <Link key={c.id} href={`/kategori/${c.slug}`}>
-              {sentenceCaseTr(c.name)}
-              <em>{c.count}</em>
-            </Link>
-          ))}
-        </nav>
-      )}
-
-      <div className="catalog-filters">
-        <Link
-          className={`catalog-filter-chip${!inStock ? " is-active" : ""}`}
-          href={href({ stock: undefined, page: undefined })}
-        >
-          Tüm stok
-        </Link>
-        <Link
-          className={`catalog-filter-chip${inStock ? " is-active" : ""}`}
-          href={href({ stock: "1", page: undefined })}
-        >
-          Stokta olanlar
-        </Link>
-        {(manufacturerSlug || brandSlug) && (
-          <Link className="catalog-filter-chip" href={href({ mfr: undefined, brand: undefined, page: undefined })}>
-            Filtreleri temizle
-          </Link>
-        )}
-      </div>
-
-      {facets.manufacturers.length > 0 && (
-        <nav className="catalog-cats" aria-label="Üretici markalar">
-          <Link
-            className={!manufacturerSlug ? "is-active" : undefined}
-            href={href({ mfr: undefined, page: undefined })}
-          >
-            Tüm üreticiler
-          </Link>
-          {facets.manufacturers.map((m) => (
-            <Link
-              key={m.id}
-              className={manufacturerSlug === m.slug ? "is-active" : undefined}
-              href={href({ mfr: m.slug, page: undefined })}
-            >
-              {m.name}
-              <em>{m.count}</em>
-            </Link>
-          ))}
-        </nav>
-      )}
-
-      {facets.brands.length > 0 && (
-        <nav className="catalog-cats" aria-label="Araç markaları">
-          <Link
-            className={!brandSlug ? "is-active" : undefined}
-            href={href({ brand: undefined, page: undefined })}
-          >
-            Tüm araçlar
-          </Link>
-          {facets.brands.map((b) => (
-            <Link
-              key={b.id}
-              className={brandSlug === b.slug ? "is-active" : undefined}
-              href={href({ brand: b.slug, page: undefined })}
-            >
-              {b.name}
-              <em>{b.count}</em>
-            </Link>
-          ))}
-        </nav>
-      )}
-
-      <div className="product-grid">
-        {result.items.map((p, i) => (
-          <ProductCard
-            key={p.id}
-            product={p}
-            placeholder={tenant.placeholderImageUrl}
-            priority={i < 4}
+      <div className="catalog-layout">
+        <aside className="catalog-aside">
+          <CategoryFilters
+            manufacturers={facets.manufacturers}
+            brands={facets.brands}
+            inStock={inStock}
+            manufacturerSlug={manufacturerSlug}
+            brandSlug={brandSlug}
+            href={href}
           />
-        ))}
+        </aside>
+        <section>
+          <CategoryVehicleFinder
+            brands={allBrands}
+            initialBrandSlug={brandSlug}
+            initialModelSlug={modelSlug}
+          />
+
+          {facets.children.length > 0 && (
+            <nav className="catalog-cats" aria-label="Alt kategoriler">
+              <Link className="is-active" href={href({ mfr: undefined, brand: undefined, model: undefined, page: undefined })}>
+                Tümü
+              </Link>
+              {facets.children.map((c) => (
+                <Link key={c.id} href={`/kategori/${c.slug}`}>
+                  {sentenceCaseTr(c.name)}
+                  <em>{c.count}</em>
+                </Link>
+              ))}
+            </nav>
+          )}
+
+          <div className="product-grid">
+            {result.items.map((p, i) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                placeholder={tenant.placeholderImageUrl}
+                priority={i < 4}
+              />
+            ))}
+          </div>
+          {result.total === 0 && (
+            <div className="empty-state">
+              <h2>Bu filtrede ürün yok</h2>
+              <p>Filtreyi genişlet veya başka bir kategori dene.</p>
+              <Link className="btn btn-primary" href={`/kategori/${cat.slug}`}>
+                Filtreleri sıfırla
+              </Link>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <nav className="catalog-pagination" aria-label="Sayfalar">
+              {page > 1 && <Link href={href({ page: String(page - 1) })}>Önceki</Link>}
+              <span>
+                {page} / {totalPages}
+              </span>
+              {page < totalPages && <Link href={href({ page: String(page + 1) })}>Sonraki</Link>}
+            </nav>
+          )}
+        </section>
       </div>
-      {result.total === 0 && (
-        <div className="empty-state">
-          <h2>Bu filtrede ürün yok</h2>
-          <p>Filtreyi genişlet veya başka bir kategori dene.</p>
-          <Link className="btn btn-primary" href={`/kategori/${cat.slug}`}>
-            Filtreleri sıfırla
-          </Link>
-        </div>
-      )}
-      {totalPages > 1 && (
-        <nav className="catalog-pagination" aria-label="Sayfalar">
-          {page > 1 && <Link href={href({ page: String(page - 1) })}>Önceki</Link>}
-          <span>
-            {page} / {totalPages}
-          </span>
-          {page < totalPages && <Link href={href({ page: String(page + 1) })}>Sonraki</Link>}
-        </nav>
-      )}
       <section className="seo-block">
         <h2>{sentenceCaseTr(cat.name)} yedek parça</h2>
         <p>{description}</p>
