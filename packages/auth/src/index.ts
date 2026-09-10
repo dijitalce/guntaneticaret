@@ -7,6 +7,7 @@ import {
   customerSessions,
   customers,
   db,
+  newId,
   rolePermissions,
   roles,
   permissions as permissionTable,
@@ -51,16 +52,16 @@ export async function createCustomer({
   lastName: string;
   phone?: string;
 }) {
-  const [row] = await db
-    .insert(customers)
-    .values({
-      email: email.toLowerCase().trim(),
-      passwordHash: hashPassword(password),
-      firstName,
-      lastName,
-      phone,
-    })
-    .returning();
+  const id = newId();
+  await db.insert(customers).values({
+    id,
+    email: email.toLowerCase().trim(),
+    passwordHash: hashPassword(password),
+    firstName,
+    lastName,
+    phone,
+  });
+  const [row] = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   return row!;
 }
 
@@ -95,7 +96,7 @@ export async function updateCustomerProfile(
   customerId: string,
   data: { firstName: string; lastName: string; phone?: string | null },
 ) {
-  const [row] = await db
+  await db
     .update(customers)
     .set({
       firstName: data.firstName.trim(),
@@ -103,8 +104,8 @@ export async function updateCustomerProfile(
       phone: data.phone?.trim() || null,
       updatedAt: new Date(),
     })
-    .where(eq(customers.id, customerId))
-    .returning();
+    .where(eq(customers.id, customerId));
+  const [row] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
   return row ?? null;
 }
 

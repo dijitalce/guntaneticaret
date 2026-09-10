@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_ADMIN_SESSION } from "@guntan/config";
 import { getAdminBySession } from "@guntan/auth";
-import { compileVisibility, db, tenantBankAccounts, tenantCatalogRules, tenantDomains, tenantSettings, tenants } from "@guntan/db";
+import { compileVisibility, db, newId, tenantBankAccounts, tenantCatalogRules, tenantDomains, tenantSettings, tenants } from "@guntan/db";
 import { DEFAULT_THEME_TOKENS } from "@guntan/types";
 import { writeAudit } from "@guntan/observability";
 import { CATALOG_RULE_KIND } from "@guntan/types";
@@ -17,15 +17,17 @@ export async function POST(request: Request) {
   const slug = String(form.get("slug"));
   const hostname = String(form.get("hostname")).toLowerCase();
   const visibilityMode = String(form.get("visibilityMode") ?? "GROUPS");
-  const [tenant] = await db.insert(tenants).values({
+  const tenantId = newId();
+  await db.insert(tenants).values({
+    id: tenantId,
     name,
     slug,
     status: "active",
     visibilityMode,
-  }).returning();
-  await db.insert(tenantDomains).values({ tenantId: tenant!.id, hostname, isPrimary: true });
+  });
+  await db.insert(tenantDomains).values({ tenantId, hostname, isPrimary: true });
   await db.insert(tenantSettings).values({
-    tenantId: tenant!.id,
+    tenantId,
     siteName: name,
     phone: String(form.get("phone") ?? ""),
     whatsapp: String(form.get("whatsapp") ?? ""),
@@ -41,26 +43,26 @@ export async function POST(request: Request) {
   const groupIds = form.getAll("groupIds").map(String);
   if (groupIds.length) {
     await db.insert(tenantCatalogRules).values(
-      groupIds.map((targetId) => ({ tenantId: tenant!.id, kind: CATALOG_RULE_KIND.INCLUDE_GROUP, targetId })),
+      groupIds.map((targetId) => ({ tenantId, kind: CATALOG_RULE_KIND.INCLUDE_GROUP, targetId })),
     );
   }
   const iban = String(form.get("iban") ?? "");
   if (iban) {
     await db.insert(tenantBankAccounts).values({
-      tenantId: tenant!.id,
+      tenantId,
       bankName: String(form.get("bankName") ?? "Banka"),
       accountHolder: String(form.get("accountHolder") ?? name),
       iban,
     });
   }
-  await compileVisibility(db, tenant!.id);
+  await compileVisibility(db, tenantId);
   await writeAudit({
     actorId: session.user.id,
     actorEmail: session.user.email,
     entity: "tenant",
-    entityId: tenant!.id,
+    entityId: tenantId,
     action: "create",
     after: { name, hostname, visibilityMode },
   });
-  return NextResponse.redirect(adminRedirect(`/tenants/${tenant!.id}`, request), 303);
+  return NextResponse.redirect(adminRedirect(`/tenants/${tenantId}`, request), 303);
 }

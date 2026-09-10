@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
     "@guntan/types",
     "@guntan/ui",
   ],
-  serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch"],
+  serverExternalPackages: ["mysql2", "ioredis", "bullmq", "meilisearch"],
 };
 
 export default nextConfig;

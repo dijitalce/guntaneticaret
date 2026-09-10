@@ -8,7 +8,7 @@
  * Import (XML/Basbug) artık marjı kaynak fiyata uygular; bu script tek seferlik mevcut DB içindir.
  */
 import { eq } from "drizzle-orm";
-import { db, pg, products } from "@guntan/db";
+import { db, pool, products } from "@guntan/db";
 import { applyMarginToPrice, marginPercentForPrice } from "./price-tiers";
 
 const APPLY = process.env.APPLY_PRICE_TIERS === "1" || process.argv.includes("--apply");
@@ -69,11 +69,11 @@ async function main() {
     );
   }
   console.log(`Toplam tarama: ${scanned}${APPLY ? `, güncellenen: ${updated}` : ""}`);
-  await pg.end();
+  await pool.end();
 }
 
 main().catch(async (err) => {
   console.error(err);
-  await pg.end();
+  await pool.end();
   process.exit(1);
 });

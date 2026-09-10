@@ -1,6 +1,6 @@
 import { and, inArray, sql } from "drizzle-orm";
 import { PRODUCT_STATUS } from "@guntan/types";
-import { db, pg } from "./client";
+import { db, pool } from "./client";
 import { products } from "./schema";
 
 export type PruneStats = {
@@ -50,46 +50,41 @@ export async function pruneUnusedCatalog(options: { vacuumFull?: boolean } = {})
   await db.execute(sql`
     delete from xml_import_row_errors
     where run_id not in (
-      select id from xml_import_runs
-      order by created_at desc
-      limit 3
+      select id from (
+        select id from xml_import_runs
+        order by created_at desc
+        limit 3
+      ) recent_runs
     )
   `);
 
   await db.execute(sql`
     delete from audit_logs
-    where created_at < now() - interval '30 days'
+    where created_at < date_sub(now(), interval 30 day)
   `);
 
   let vacuumed = false;
+  const optimizeTables = [
+    "products",
+    "product_fitments",
+    "product_oems",
+    "product_images",
+    "product_categories",
+    "tenant_catalog_index",
+    "xml_import_row_errors",
+    "audit_logs",
+  ];
   try {
-    await pg.unsafe("vacuum analyze products");
-    await pg.unsafe("vacuum analyze product_fitments");
-    await pg.unsafe("vacuum analyze product_oems");
-    await pg.unsafe("vacuum analyze product_images");
-    await pg.unsafe("vacuum analyze product_categories");
-    await pg.unsafe("vacuum analyze tenant_catalog_index");
-    await pg.unsafe("vacuum analyze xml_import_row_errors");
-    await pg.unsafe("vacuum analyze audit_logs");
+    for (const table of optimizeTables) {
+      await pool.query(`optimize table \`${table}\``);
+    }
     vacuumed = true;
   } catch (err) {
-    console.warn("VACUUM skipped (direct Postgres gerekir, pooler VACUUM kabul etmez):", err instanceof Error ? err.message : err);
+    console.warn("OPTIMIZE TABLE skipped:", err instanceof Error ? err.message : err);
   }
 
-  let didFull = false;
-  if (vacuumFull) {
-    try {
-      await pg.unsafe("vacuum full analyze product_fitments");
-      await pg.unsafe("vacuum full analyze product_oems");
-      await pg.unsafe("vacuum full analyze product_images");
-      await pg.unsafe("vacuum full analyze product_categories");
-      await pg.unsafe("vacuum full analyze tenant_catalog_index");
-      await pg.unsafe("vacuum full analyze products");
-      didFull = true;
-    } catch (err) {
-      console.warn("VACUUM FULL skipped:", err instanceof Error ? err.message : err);
-    }
-  }
+  // MySQL has no VACUUM FULL; OPTIMIZE already rewrites tables when possible.
+  const didFull = vacuumFull && vacuumed;
 
   return {
     duplicateDescriptionsCleared: 0,

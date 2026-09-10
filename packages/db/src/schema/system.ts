@@ -1,77 +1,78 @@
 import {
+  char,
   index,
-  jsonb,
-  pgTable,
+  json,
+  mysqlTable,
   primaryKey,
   text,
   uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { id, timestamps } from "./common";
 
-export const adminUsers = pgTable("admin_users", {
+export const adminUsers = mysqlTable("admin_users", {
   id,
-  email: text("email").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  name: text("name").notNull(),
-  isActive: text("is_active").notNull().default("true"),
+  email: varchar("email", { length: 255 }).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: varchar("is_active", { length: 16 }).notNull().default("true"),
   ...timestamps,
 }, (t) => [
   uniqueIndex("admin_users_email_uidx").on(t.email),
 ]);
 
-export const adminSessions = pgTable("admin_sessions", {
+export const adminSessions = mysqlTable("admin_sessions", {
   id,
-  adminUserId: uuid("admin_user_id").notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
-  tokenHash: text("token_hash").notNull(),
-  expiresAt: text("expires_at").notNull(),
+  adminUserId: char("admin_user_id", { length: 36 }).notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+  expiresAt: varchar("expires_at", { length: 64 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("admin_sessions_token_uidx").on(t.tokenHash),
 ]);
 
-export const roles = pgTable("roles", {
+export const roles = mysqlTable("roles", {
   id,
-  key: text("key").notNull(),
-  name: text("name").notNull(),
+  key: varchar("key", { length: 64 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("roles_key_uidx").on(t.key),
 ]);
 
-export const permissions = pgTable("permissions", {
+export const permissions = mysqlTable("permissions", {
   id,
-  key: text("key").notNull(),
-  name: text("name").notNull(),
+  key: varchar("key", { length: 64 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("permissions_key_uidx").on(t.key),
 ]);
 
-export const rolePermissions = pgTable("role_permissions", {
-  roleId: uuid("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
-  permissionId: uuid("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
+export const rolePermissions = mysqlTable("role_permissions", {
+  roleId: char("role_id", { length: 36 }).notNull().references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: char("permission_id", { length: 36 }).notNull().references(() => permissions.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.roleId, t.permissionId] }),
 ]);
 
-export const adminUserRoles = pgTable("admin_user_roles", {
-  adminUserId: uuid("admin_user_id").notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
-  roleId: uuid("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+export const adminUserRoles = mysqlTable("admin_user_roles", {
+  adminUserId: char("admin_user_id", { length: 36 }).notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
+  roleId: char("role_id", { length: 36 }).notNull().references(() => roles.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.adminUserId, t.roleId] }),
 ]);
 
-export const auditLogs = pgTable("audit_logs", {
+export const auditLogs = mysqlTable("audit_logs", {
   id,
-  actorId: uuid("actor_id"),
-  actorEmail: text("actor_email"),
-  entity: text("entity").notNull(),
-  entityId: text("entity_id").notNull(),
-  action: text("action").notNull(),
-  before: jsonb("before"),
-  after: jsonb("after"),
-  ip: text("ip"),
+  actorId: char("actor_id", { length: 36 }),
+  actorEmail: varchar("actor_email", { length: 255 }),
+  entity: varchar("entity", { length: 128 }).notNull(),
+  entityId: varchar("entity_id", { length: 64 }).notNull(),
+  action: varchar("action", { length: 64 }).notNull(),
+  before: json("before"),
+  after: json("after"),
+  ip: varchar("ip", { length: 64 }),
   ...timestamps,
 }, (t) => [
   index("audit_logs_entity_idx").on(t.entity, t.entityId),

@@ -1,5 +1,5 @@
 import { runDedupeCheapest } from "./dedupe-cheapest";
-import { pg, pruneUnusedCatalog } from "@guntan/db";
+import { pool, pruneUnusedCatalog } from "@guntan/db";
 
 async function main() {
   console.log("Running OE+brand cheapest dedupe…");
@@ -7,7 +7,7 @@ async function main() {
   console.log(result);
   console.log("Pruning unused catalog rows…");
   console.log(await pruneUnusedCatalog());
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

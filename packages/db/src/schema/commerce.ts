@@ -1,132 +1,134 @@
 import {
+  char,
+  decimal,
   index,
-  integer,
-  jsonb,
-  numeric,
-  pgTable,
+  int,
+  json,
+  mysqlTable,
   text,
   uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { id, timestamps } from "./common";
 import { products } from "./catalog";
 import { tenants } from "./tenant";
 
-export const customers = pgTable("customers", {
+export const customers = mysqlTable("customers", {
   id,
-  email: text("email").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
-  phone: text("phone"),
+  email: varchar("email", { length: 255 }).notNull(),
+  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+  firstName: varchar("first_name", { length: 128 }).notNull(),
+  lastName: varchar("last_name", { length: 128 }).notNull(),
+  phone: varchar("phone", { length: 64 }),
   ...timestamps,
 }, (t) => [
   uniqueIndex("customers_email_uidx").on(t.email),
 ]);
 
-export const customerSessions = pgTable("customer_sessions", {
+export const customerSessions = mysqlTable("customer_sessions", {
   id,
-  customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
-  tokenHash: text("token_hash").notNull(),
-  expiresAt: text("expires_at").notNull(),
+  customerId: char("customer_id", { length: 36 }).notNull().references(() => customers.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+  expiresAt: varchar("expires_at", { length: 64 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("customer_sessions_token_uidx").on(t.tokenHash),
   index("customer_sessions_customer_idx").on(t.customerId),
 ]);
 
-export const customerAddresses = pgTable("customer_addresses", {
+export const customerAddresses = mysqlTable("customer_addresses", {
   id,
-  customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
-  title: text("title").notNull().default("Adres"),
-  fullName: text("full_name").notNull(),
-  phone: text("phone").notNull(),
-  city: text("city").notNull(),
-  district: text("district").notNull(),
+  customerId: char("customer_id", { length: 36 }).notNull().references(() => customers.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 128 }).notNull().default("Adres"),
+  fullName: varchar("full_name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 64 }).notNull(),
+  city: varchar("city", { length: 128 }).notNull(),
+  district: varchar("district", { length: 128 }).notNull(),
   line1: text("line1").notNull(),
   line2: text("line2"),
-  postalCode: text("postal_code"),
-  isDefault: integer("is_default").notNull().default(0),
+  postalCode: varchar("postal_code", { length: 32 }),
+  isDefault: int("is_default").notNull().default(0),
   ...timestamps,
 }, (t) => [
   index("customer_addresses_customer_idx").on(t.customerId),
 ]);
 
-export const customerVehicles = pgTable("customer_vehicles", {
+export const customerVehicles = mysqlTable("customer_vehicles", {
   id,
-  customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
-  brandId: uuid("brand_id").notNull(),
-  modelId: uuid("model_id").notNull(),
-  generationId: uuid("generation_id"),
-  engineId: uuid("engine_id"),
-  year: integer("year"),
-  label: text("label"),
-  isSelected: integer("is_selected").notNull().default(0),
+  customerId: char("customer_id", { length: 36 }).notNull().references(() => customers.id, { onDelete: "cascade" }),
+  brandId: char("brand_id", { length: 36 }).notNull(),
+  modelId: char("model_id", { length: 36 }).notNull(),
+  generationId: char("generation_id", { length: 36 }),
+  engineId: char("engine_id", { length: 36 }),
+  year: int("year"),
+  label: varchar("label", { length: 255 }),
+  isSelected: int("is_selected").notNull().default(0),
   ...timestamps,
 }, (t) => [
   index("customer_vehicles_customer_idx").on(t.customerId),
 ]);
 
-export const carts = pgTable("carts", {
+export const carts = mysqlTable("carts", {
   id,
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
-  sessionId: text("session_id"),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  customerId: char("customer_id", { length: 36 }).references(() => customers.id, { onDelete: "set null" }),
+  sessionId: varchar("session_id", { length: 128 }),
   ...timestamps,
 }, (t) => [
   index("carts_tenant_customer_idx").on(t.tenantId, t.customerId),
   index("carts_tenant_session_idx").on(t.tenantId, t.sessionId),
 ]);
 
-export const cartItems = pgTable("cart_items", {
+export const cartItems = mysqlTable("cart_items", {
   id,
-  cartId: uuid("cart_id").notNull().references(() => carts.id, { onDelete: "cascade" }),
-  productId: uuid("product_id").notNull().references(() => products.id),
-  qty: integer("qty").notNull().default(1),
+  cartId: char("cart_id", { length: 36 }).notNull().references(() => carts.id, { onDelete: "cascade" }),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id),
+  qty: int("qty").notNull().default(1),
   ...timestamps,
 }, (t) => [
   uniqueIndex("cart_items_cart_product_uidx").on(t.cartId, t.productId),
+  index("cart_items_product_idx").on(t.productId),
 ]);
 
-export const wishlists = pgTable("wishlists", {
+export const wishlists = mysqlTable("wishlists", {
   id,
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),
-  sessionId: text("session_id"),
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  customerId: char("customer_id", { length: 36 }).references(() => customers.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id", { length: 128 }),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
   ...timestamps,
 }, (t) => [
   index("wishlists_tenant_customer_idx").on(t.tenantId, t.customerId),
 ]);
 
-export const coupons = pgTable("coupons", {
+export const coupons = mysqlTable("coupons", {
   id,
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  code: text("code").notNull(),
-  type: text("type").notNull().default("percent"),
-  value: numeric("value", { precision: 12, scale: 2 }).notNull(),
-  minSubtotal: numeric("min_subtotal", { precision: 12, scale: 2 }),
-  isActive: integer("is_active").notNull().default(1),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  code: varchar("code", { length: 64 }).notNull(),
+  type: varchar("type", { length: 32 }).notNull().default("percent"),
+  value: decimal("value", { precision: 12, scale: 2 }).notNull(),
+  minSubtotal: decimal("min_subtotal", { precision: 12, scale: 2 }),
+  isActive: int("is_active").notNull().default(1),
   ...timestamps,
 }, (t) => [
   uniqueIndex("coupons_tenant_code_uidx").on(t.tenantId, t.code),
 ]);
 
-export const orders = pgTable("orders", {
+export const orders = mysqlTable("orders", {
   id,
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  customerId: uuid("customer_id").references(() => customers.id),
-  orderNo: text("order_no").notNull(),
-  status: text("status").notNull().default("pending_payment"),
-  email: text("email").notNull(),
-  phone: text("phone").notNull(),
-  fullName: text("full_name").notNull(),
-  shippingAddress: jsonb("shipping_address").$type<Record<string, string>>().notNull(),
-  subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull(),
-  shippingTotal: numeric("shipping_total", { precision: 12, scale: 2 }).notNull().default("0"),
-  discountTotal: numeric("discount_total", { precision: 12, scale: 2 }).notNull().default("0"),
-  grandTotal: numeric("grand_total", { precision: 12, scale: 2 }).notNull(),
-  couponCode: text("coupon_code"),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id),
+  customerId: char("customer_id", { length: 36 }).references(() => customers.id),
+  orderNo: varchar("order_no", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("pending_payment"),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 64 }).notNull(),
+  fullName: varchar("full_name", { length: 255 }).notNull(),
+  shippingAddress: json("shipping_address").$type<Record<string, string>>().notNull(),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  shippingTotal: decimal("shipping_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  discountTotal: decimal("discount_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  grandTotal: decimal("grand_total", { precision: 12, scale: 2 }).notNull(),
+  couponCode: varchar("coupon_code", { length: 64 }),
   notes: text("notes"),
   ...timestamps,
 }, (t) => [
@@ -136,51 +138,52 @@ export const orders = pgTable("orders", {
   index("orders_status_idx").on(t.status),
 ]);
 
-export const orderItems = pgTable("order_items", {
+export const orderItems = mysqlTable("order_items", {
   id,
-  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  productId: uuid("product_id").notNull().references(() => products.id),
-  name: text("name").notNull(),
-  sku: text("sku").notNull(),
+  orderId: char("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id),
+  name: varchar("name", { length: 512 }).notNull(),
+  sku: varchar("sku", { length: 191 }).notNull(),
   imageUrl: text("image_url"),
-  qty: integer("qty").notNull(),
-  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  qty: int("qty").notNull(),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
   ...timestamps,
 }, (t) => [
   index("order_items_order_idx").on(t.orderId),
+  index("order_items_product_idx").on(t.productId),
 ]);
 
-export const payments = pgTable("payments", {
+export const payments = mysqlTable("payments", {
   id,
-  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  method: text("method").notNull().default("bank_transfer"),
-  status: text("status").notNull().default("awaiting"),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-  providerRef: text("provider_ref"),
+  orderId: char("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id),
+  method: varchar("method", { length: 32 }).notNull().default("bank_transfer"),
+  status: varchar("status", { length: 32 }).notNull().default("awaiting"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  providerRef: varchar("provider_ref", { length: 255 }),
   ...timestamps,
 }, (t) => [
   index("payments_order_idx").on(t.orderId),
   index("payments_tenant_idx").on(t.tenantId),
 ]);
 
-export const shipments = pgTable("shipments", {
+export const shipments = mysqlTable("shipments", {
   id,
-  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  carrier: text("carrier"),
-  trackingNo: text("tracking_no"),
-  status: text("status").notNull().default("pending"),
+  orderId: char("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
+  carrier: varchar("carrier", { length: 128 }),
+  trackingNo: varchar("tracking_no", { length: 128 }),
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
   ...timestamps,
 }, (t) => [
   index("shipments_order_idx").on(t.orderId),
 ]);
 
-export const returnRequests = pgTable("return_requests", {
+export const returnRequests = mysqlTable("return_requests", {
   id,
-  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  orderId: char("order_id", { length: 36 }).notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id),
   reason: text("reason").notNull(),
-  status: text("status").notNull().default("open"),
+  status: varchar("status", { length: 32 }).notNull().default("open"),
   ...timestamps,
 }, (t) => [
   index("return_requests_order_idx").on(t.orderId),

@@ -5,7 +5,8 @@ import {
   compileVisibility,
   db,
   manufacturers,
-  pg,
+  newId,
+  pool,
   productCategories,
   productFitments,
   productOems,
@@ -47,7 +48,9 @@ async function upsertNamed(
     cache.set(slug, existing);
     return existing;
   }
-  const [row] = await db.insert(table).values({ name, slug, ...extra } as never).returning();
+  const id = newId();
+  await db.insert(table).values({ id, name, slug, ...extra } as never);
+  const [row] = await db.select().from(table).where(eq(table.id, id)).limit(1);
   cache.set(slug, row!);
   return row!;
 }
@@ -66,33 +69,30 @@ async function main() {
 
   let supplier = (await db.select().from(suppliers).where(eq(suppliers.code, SUPPLIER_CODE)).limit(1))[0];
   if (!supplier) {
-    [supplier] = await db
-      .insert(suppliers)
-      .values({ name: "Basbug", code: SUPPLIER_CODE })
-      .returning();
+    const id = newId();
+    await db.insert(suppliers).values({ id, name: "Basbug", code: SUPPLIER_CODE });
+    supplier = (await db.select().from(suppliers).where(eq(suppliers.id, id)).limit(1))[0]!;
   }
 
   const existingFeed = await db.select().from(xmlFeeds).where(eq(xmlFeeds.name, FEED_NAME)).limit(1);
   let feedId = existingFeed[0]?.id;
   if (!feedId) {
-    const [feed] = await db
-      .insert(xmlFeeds)
-      .values({
-        supplierId: supplier!.id,
-        name: FEED_NAME,
-        filePath,
-        mapping: {
-          externalId: "no",
-          sku: "no",
-          name: "ac",
-          manufacturer: "uk",
-          oem: "oe",
-          category: "_listeGrubuAd",
-          price: "lf",
-        },
-      })
-      .returning();
-    feedId = feed!.id;
+    feedId = newId();
+    await db.insert(xmlFeeds).values({
+      id: feedId,
+      supplierId: supplier!.id,
+      name: FEED_NAME,
+      filePath,
+      mapping: {
+        externalId: "no",
+        sku: "no",
+        name: "ac",
+        manufacturer: "uk",
+        oem: "oe",
+        category: "_listeGrubuAd",
+        price: "lf",
+      },
+    });
   } else {
     await db.update(xmlFeeds).set({ filePath }).where(eq(xmlFeeds.id, feedId));
   }
@@ -109,15 +109,14 @@ async function main() {
   const mappedPairs = Array.from(byExternal.values());
   console.log(`Mapped unique products: ${mappedPairs.length}`);
 
-  const [run] = await db
-    .insert(xmlImportRuns)
-    .values({
-      feedId,
-      status: IMPORT_RUN_STATUS.RUNNING,
-      startedAt: new Date().toISOString(),
-      total: mappedPairs.length,
-    })
-    .returning();
+  const runId = newId();
+  await db.insert(xmlImportRuns).values({
+    id: runId,
+    feedId,
+    status: IMPORT_RUN_STATUS.RUNNING,
+    startedAt: new Date().toISOString(),
+    total: mappedPairs.length,
+  });
 
   const brandCache = new Map<string, typeof vehicleBrands.$inferSelect>();
   for (const b of await db.select().from(vehicleBrands)) brandCache.set(b.slug, b);
@@ -148,9 +147,10 @@ async function main() {
       modelCache.set(key, existing);
       return existing;
     }
-    const [row] = await db.insert(vehicleModels).values({ brandId, name, slug }).returning();
-    modelCache.set(key, row!);
-    return row!;
+    const row = { id: newId(), brandId, name, slug };
+    await db.insert(vehicleModels).values(row);
+    modelCache.set(key, row);
+    return row;
   }
   async function ensureMfr(name: string) {
     const slug = slugify(name);
@@ -165,8 +165,8 @@ async function main() {
       mfrCache.set(slug, existing);
       return existing;
     }
-    const [row] = await db.insert(manufacturers).values({ name, slug }).returning();
-    const rec = { id: row!.id, slug };
+    const rec = { id: newId(), slug };
+    await db.insert(manufacturers).values({ id: rec.id, name, slug });
     mfrCache.set(slug, rec);
     return rec;
   }
@@ -174,20 +174,16 @@ async function main() {
     const path = `basbug/${slugify(name)}`;
     let cat = catCache.get(path);
     if (cat) return cat;
-    const [row] = await db
-      .insert(categories)
-      .values({
-        name,
-        slug: slugify(name),
-        path,
-        sortOrder: 60,
-      })
-      .onConflictDoNothing({ target: categories.path })
-      .returning();
-    if (!row) {
-      const [ex] = await db.select().from(categories).where(eq(categories.path, path)).limit(1);
-      cat = ex!;
-    } else cat = row;
+    const id = newId();
+    await db.insert(categories).ignore().values({
+      id,
+      name,
+      slug: slugify(name),
+      path,
+      sortOrder: 60,
+    });
+    const [ex] = await db.select().from(categories).where(eq(categories.path, path)).limit(1);
+    cat = ex!;
     catCache.set(path, cat);
     return cat;
   }
@@ -220,6 +216,7 @@ async function main() {
       if (usedSlugs.has(slug)) slug = `${slug}-${i}`;
       usedSlugs.add(slug);
       values.push({
+        id: newId(),
         supplierId: supplier!.id,
         manufacturerId: mfr?.id ?? null,
         sku: row.sku,
@@ -237,24 +234,31 @@ async function main() {
       });
     }
     try {
+      await db.insert(products).values(values).onDuplicateKeyUpdate({
+        set: {
+          name: sql`VALUES(name)`,
+          price: sql`VALUES(price)`,
+          compareAtPrice: sql`VALUES(compare_at_price)`,
+          stockQty: sql`VALUES(stock_qty)`,
+          stockStatus: sql`VALUES(stock_status)`,
+          manufacturerId: sql`VALUES(manufacturer_id)`,
+          description: sql`VALUES(description)`,
+          contentHash: sql`VALUES(content_hash)`,
+          status: sql`VALUES(status)`,
+        },
+      });
       const inserted = await db
-        .insert(products)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [products.supplierId, products.externalId],
-          set: {
-            name: sql`excluded.name`,
-            price: sql`excluded.price`,
-            compareAtPrice: sql`excluded.compare_at_price`,
-            stockQty: sql`excluded.stock_qty`,
-            stockStatus: sql`excluded.stock_status`,
-            manufacturerId: sql`excluded.manufacturer_id`,
-            description: sql`excluded.description`,
-            contentHash: sql`excluded.content_hash`,
-            status: sql`excluded.status`,
-          },
-        })
-        .returning({ id: products.id, externalId: products.externalId });
+        .select({ id: products.id, externalId: products.externalId })
+        .from(products)
+        .where(
+          and(
+            eq(products.supplierId, supplier!.id),
+            inArray(
+              products.externalId,
+              batch.map((r) => r.mapped.externalId),
+            ),
+          ),
+        );
 
       const productIds = inserted.map((r) => r.id);
       if (productIds.length) {
@@ -288,9 +292,9 @@ async function main() {
           });
         }
       }
-      if (oems.length) await db.insert(productOems).values(oems).onConflictDoNothing();
-      if (cats.length) await db.insert(productCategories).values(cats).onConflictDoNothing();
-      if (fits.length) await db.insert(productFitments).values(fits).onConflictDoNothing();
+      if (oems.length) await db.insert(productOems).ignore().values(oems);
+      if (cats.length) await db.insert(productCategories).ignore().values(cats);
+      if (fits.length) await db.insert(productFitments).ignore().values(fits);
       created += inserted.length;
       if (i === 0) console.log(`First batch OK, inserted=${inserted.length}`);
     } catch (err) {
@@ -329,14 +333,14 @@ async function main() {
       failedCount: failed,
       inactivatedCount: dedupe.deactivated,
     })
-    .where(eq(xmlImportRuns.id, run!.id));
+    .where(eq(xmlImportRuns.id, runId));
 
   console.log({ created, failed, total: mappedPairs.length, dedupe: {
     groups: dedupe.groups,
     deactivated: dedupe.deactivated,
     activated: dedupe.activated,
   } });
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

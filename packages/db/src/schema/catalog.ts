@@ -1,55 +1,56 @@
-import { desc, sql } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import {
   boolean,
+  char,
+  decimal,
   index,
-  integer,
-  numeric,
-  pgTable,
+  int,
+  mysqlTable,
   primaryKey,
   text,
   uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+  varchar,
+} from "drizzle-orm/mysql-core";
 import { id, timestamps } from "./common";
 import { tenants } from "./tenant";
 
-export const vehicleBrands = pgTable("vehicle_brands", {
+export const vehicleBrands = mysqlTable("vehicle_brands", {
   id,
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
   logoUrl: text("logo_url"),
   isActive: boolean("is_active").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   seoContent: text("seo_content"),
   ...timestamps,
 }, (t) => [
   uniqueIndex("vehicle_brands_slug_uidx").on(t.slug),
 ]);
 
-export const brandGroups = pgTable("brand_groups", {
+export const brandGroups = mysqlTable("brand_groups", {
   id,
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("brand_groups_slug_uidx").on(t.slug),
 ]);
 
-export const brandGroupMembers = pgTable("brand_group_members", {
-  groupId: uuid("group_id").notNull().references(() => brandGroups.id, { onDelete: "cascade" }),
-  brandId: uuid("brand_id").notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
+export const brandGroupMembers = mysqlTable("brand_group_members", {
+  groupId: char("group_id", { length: 36 }).notNull().references(() => brandGroups.id, { onDelete: "cascade" }),
+  brandId: char("brand_id", { length: 36 }).notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.groupId, t.brandId] }),
 ]);
 
-export const vehicleModels = pgTable("vehicle_models", {
+export const vehicleModels = mysqlTable("vehicle_models", {
   id,
-  brandId: uuid("brand_id").notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
+  brandId: char("brand_id", { length: 36 }).notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
   imageUrl: text("image_url"),
   isActive: boolean("is_active").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   seoContent: text("seo_content"),
   ...timestamps,
 }, (t) => [
@@ -57,43 +58,43 @@ export const vehicleModels = pgTable("vehicle_models", {
   index("vehicle_models_brand_idx").on(t.brandId),
 ]);
 
-export const vehicleGenerations = pgTable("vehicle_generations", {
+export const vehicleGenerations = mysqlTable("vehicle_generations", {
   id,
-  modelId: uuid("model_id").notNull().references(() => vehicleModels.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
-  bodyCode: text("body_code"),
-  yearFrom: integer("year_from"),
-  yearTo: integer("year_to"),
+  modelId: char("model_id", { length: 36 }).notNull().references(() => vehicleModels.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
+  bodyCode: varchar("body_code", { length: 64 }),
+  yearFrom: int("year_from"),
+  yearTo: int("year_to"),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
 }, (t) => [
   index("vehicle_generations_model_idx").on(t.modelId),
 ]);
 
-export const vehicleEngines = pgTable("vehicle_engines", {
+export const vehicleEngines = mysqlTable("vehicle_engines", {
   id,
-  generationId: uuid("generation_id").notNull().references(() => vehicleGenerations.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
-  fuel: text("fuel"),
-  displacementCc: integer("displacement_cc"),
-  powerHp: integer("power_hp"),
-  code: text("code"),
+  generationId: char("generation_id", { length: 36 }).notNull().references(() => vehicleGenerations.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
+  fuel: varchar("fuel", { length: 64 }),
+  displacementCc: int("displacement_cc"),
+  powerHp: int("power_hp"),
+  code: varchar("code", { length: 64 }),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
 }, (t) => [
   index("vehicle_engines_generation_idx").on(t.generationId),
 ]);
 
-export const categories = pgTable("categories", {
+export const categories = mysqlTable("categories", {
   id,
-  parentId: uuid("parent_id"),
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
-  path: text("path").notNull(),
+  parentId: char("parent_id", { length: 36 }),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
+  path: varchar("path", { length: 512 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
-  sortOrder: integer("sort_order").notNull().default(0),
+  sortOrder: int("sort_order").notNull().default(0),
   seoContent: text("seo_content"),
   ...timestamps,
 }, (t) => [
@@ -101,10 +102,10 @@ export const categories = pgTable("categories", {
   index("categories_parent_idx").on(t.parentId),
 ]);
 
-export const manufacturers = pgTable("manufacturers", {
+export const manufacturers = mysqlTable("manufacturers", {
   id,
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
   logoUrl: text("logo_url"),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
@@ -112,84 +113,88 @@ export const manufacturers = pgTable("manufacturers", {
   uniqueIndex("manufacturers_slug_uidx").on(t.slug),
 ]);
 
-export const suppliers = pgTable("suppliers", {
+export const suppliers = mysqlTable("suppliers", {
   id,
-  name: text("name").notNull(),
-  code: text("code").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 64 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("suppliers_code_uidx").on(t.code),
 ]);
 
-export const products = pgTable("products", {
+export const products = mysqlTable("products", {
   id,
-  supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
-  manufacturerId: uuid("manufacturer_id").references(() => manufacturers.id),
-  sku: text("sku").notNull(),
-  externalId: text("external_id").notNull(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull(),
+  supplierId: char("supplier_id", { length: 36 }).notNull().references(() => suppliers.id),
+  manufacturerId: char("manufacturer_id", { length: 36 }).references(() => manufacturers.id),
+  sku: varchar("sku", { length: 191 }).notNull(),
+  externalId: varchar("external_id", { length: 191 }).notNull(),
+  name: varchar("name", { length: 512 }).notNull(),
+  slug: varchar("slug", { length: 191 }).notNull(),
   description: text("description"),
-  barcode: text("barcode"),
-  price: numeric("price", { precision: 12, scale: 2 }).notNull(),
-  compareAtPrice: numeric("compare_at_price", { precision: 12, scale: 2 }),
-  vatRate: numeric("vat_rate", { precision: 5, scale: 2 }).notNull().default("20"),
-  stockQty: integer("stock_qty").notNull().default(0),
-  reservedQty: integer("reserved_qty").notNull().default(0),
-  stockStatus: text("stock_status").notNull().default("in_stock"),
-  status: text("status").notNull().default("active"),
-  contentHash: text("content_hash"),
-  source: text("source").notNull().default("manual"),
-  publishedAt: text("published_at"),
+  barcode: varchar("barcode", { length: 64 }),
+  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  compareAtPrice: decimal("compare_at_price", { precision: 12, scale: 2 }),
+  vatRate: decimal("vat_rate", { precision: 5, scale: 2 }).notNull().default("20"),
+  stockQty: int("stock_qty").notNull().default(0),
+  reservedQty: int("reserved_qty").notNull().default(0),
+  stockStatus: varchar("stock_status", { length: 32 }).notNull().default("in_stock"),
+  status: varchar("status", { length: 32 }).notNull().default("active"),
+  contentHash: varchar("content_hash", { length: 64 }),
+  source: varchar("source", { length: 32 }).notNull().default("manual"),
+  publishedAt: varchar("published_at", { length: 64 }),
   ...timestamps,
 }, (t) => [
   uniqueIndex("products_supplier_external_uidx").on(t.supplierId, t.externalId),
   uniqueIndex("products_slug_uidx").on(t.slug),
   index("products_status_idx").on(t.status),
   index("products_sku_idx").on(t.sku),
-  index("products_active_stock_idx").on(desc(t.stockQty), desc(t.updatedAt)).where(sql`${t.status} = 'active'`),
+  index("products_active_stock_idx").on(t.status, desc(t.stockQty), desc(t.updatedAt)),
+  index("products_manufacturer_active_idx").on(t.status, t.manufacturerId),
+  index("products_price_active_idx").on(t.status, t.price),
+  index("products_name_prefix_idx").on(t.name),
+  index("products_sku_prefix_idx").on(t.sku),
 ]);
 
-export const productImages = pgTable("product_images", {
+export const productImages = mysqlTable("product_images", {
   id,
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  s3Key: text("s3_key").notNull(),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  s3Key: varchar("s3_key", { length: 512 }).notNull(),
   url: text("url").notNull(),
-  alt: text("alt"),
-  sortOrder: integer("sort_order").notNull().default(0),
+  alt: varchar("alt", { length: 255 }),
+  sortOrder: int("sort_order").notNull().default(0),
   ...timestamps,
 }, (t) => [
   index("product_images_product_idx").on(t.productId, t.sortOrder),
 ]);
 
-export const productOems = pgTable("product_oems", {
+export const productOems = mysqlTable("product_oems", {
   id,
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  raw: text("raw").notNull(),
-  normalized: text("normalized").notNull(),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  raw: varchar("raw", { length: 191 }).notNull(),
+  normalized: varchar("normalized", { length: 191 }).notNull(),
   ...timestamps,
 }, (t) => [
   uniqueIndex("product_oems_product_norm_uidx").on(t.productId, t.normalized),
   index("product_oems_normalized_idx").on(t.normalized),
 ]);
 
-export const productCategories = pgTable("product_categories", {
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  categoryId: uuid("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
+export const productCategories = mysqlTable("product_categories", {
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  categoryId: char("category_id", { length: 36 }).notNull().references(() => categories.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.productId, t.categoryId] }),
   index("product_categories_category_idx").on(t.categoryId),
 ]);
 
-export const productFitments = pgTable("product_fitments", {
+export const productFitments = mysqlTable("product_fitments", {
   id,
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  vehicleBrandId: uuid("vehicle_brand_id").notNull().references(() => vehicleBrands.id),
-  vehicleModelId: uuid("vehicle_model_id").notNull().references(() => vehicleModels.id),
-  vehicleGenerationId: uuid("vehicle_generation_id").references(() => vehicleGenerations.id),
-  vehicleEngineId: uuid("vehicle_engine_id").references(() => vehicleEngines.id),
-  yearFrom: integer("year_from"),
-  yearTo: integer("year_to"),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  vehicleBrandId: char("vehicle_brand_id", { length: 36 }).notNull().references(() => vehicleBrands.id),
+  vehicleModelId: char("vehicle_model_id", { length: 36 }).notNull().references(() => vehicleModels.id),
+  vehicleGenerationId: char("vehicle_generation_id", { length: 36 }).references(() => vehicleGenerations.id),
+  vehicleEngineId: char("vehicle_engine_id", { length: 36 }).references(() => vehicleEngines.id),
+  yearFrom: int("year_from"),
+  yearTo: int("year_to"),
   notes: text("notes"),
   ...timestamps,
 }, (t) => [
@@ -202,30 +207,31 @@ export const productFitments = pgTable("product_fitments", {
   index("product_fitments_brand_model_idx").on(t.vehicleBrandId, t.vehicleModelId),
   index("product_fitments_brand_product_idx").on(t.vehicleBrandId, t.productId),
   index("product_fitments_model_product_idx").on(t.vehicleModelId, t.productId),
+  index("product_fitments_engine_idx").on(t.vehicleEngineId),
 ]);
 
-export const tenantCatalogIndex = pgTable("tenant_catalog_index", {
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+export const tenantCatalogIndex = mysqlTable("tenant_catalog_index", {
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.tenantId, t.productId] }),
   index("tenant_catalog_index_product_idx").on(t.productId),
 ]);
 
-export const tenantVisibleBrands = pgTable("tenant_visible_brands", {
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  brandId: uuid("brand_id").notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
+export const tenantVisibleBrands = mysqlTable("tenant_visible_brands", {
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  brandId: char("brand_id", { length: 36 }).notNull().references(() => vehicleBrands.id, { onDelete: "cascade" }),
 }, (t) => [
   primaryKey({ columns: [t.tenantId, t.brandId] }),
 ]);
 
-export const tenantProductOverrides = pgTable("tenant_product_overrides", {
+export const tenantProductOverrides = mysqlTable("tenant_product_overrides", {
   id,
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  price: numeric("price", { precision: 12, scale: 2 }),
-  compareAtPrice: numeric("compare_at_price", { precision: 12, scale: 2 }),
-  minQty: integer("min_qty"),
+  tenantId: char("tenant_id", { length: 36 }).notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  productId: char("product_id", { length: 36 }).notNull().references(() => products.id, { onDelete: "cascade" }),
+  price: decimal("price", { precision: 12, scale: 2 }),
+  compareAtPrice: decimal("compare_at_price", { precision: 12, scale: 2 }),
+  minQty: int("min_qty"),
   isHidden: boolean("is_hidden").notNull().default(false),
   ...timestamps,
 }, (t) => [

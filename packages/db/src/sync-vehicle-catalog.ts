@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db, pg } from "./client";
+import { db, pool } from "./client";
 import {
   brandGroupMembers,
   brandGroups,
@@ -8,6 +8,7 @@ import {
   vehicleBrands,
   vehicleModels,
 } from "./schema";
+import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
 import { VEHICLE_BRANDS, brandLogoUrl } from "./vehicle-catalog";
 
@@ -27,7 +28,9 @@ function slugify(value: string): string {
 async function upsertGroup(name: string, slug: string) {
   const existing = await db.select().from(brandGroups).where(eq(brandGroups.slug, slug)).limit(1);
   if (existing[0]) return existing[0];
-  const [row] = await db.insert(brandGroups).values({ name, slug }).returning();
+  const id = newId();
+  await db.insert(brandGroups).values({ id, name, slug });
+  const [row] = await db.select().from(brandGroups).where(eq(brandGroups.id, id)).limit(1);
   return row!;
 }
 
@@ -51,11 +54,10 @@ async function main() {
     if (brandId) {
       await db.update(vehicleBrands).set({ name: brand.name, logoUrl, sortOrder: i, isActive: true }).where(eq(vehicleBrands.id, brandId));
     } else {
-      const [row] = await db
+      brandId = newId();
+      await db
         .insert(vehicleBrands)
-        .values({ name: brand.name, slug: brand.slug, logoUrl, sortOrder: i, isActive: true })
-        .returning();
-      brandId = row!.id;
+        .values({ id: brandId, name: brand.name, slug: brand.slug, logoUrl, sortOrder: i, isActive: true });
     }
 
     const group = groupRows[brand.group];
@@ -101,7 +103,7 @@ async function main() {
 
   await compileVisibility(db);
   console.log(`Synced ${VEHICLE_BRANDS.length} brands with logos and models.`);
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

@@ -23,7 +23,7 @@
   "dependencies": {
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.40.0",
-    "postgres": "^3.4.5"
+    "mysql2": "^3.14.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.5",

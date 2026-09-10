@@ -7,7 +7,8 @@ import {
   compileVisibility,
   db,
   manufacturers,
-  pg,
+  newId,
+  pool,
   productCategories,
   productFitments,
   productOems,
@@ -73,7 +74,9 @@ async function upsertNamed<T extends { id: string; slug: string }>(
     cache.set(slug, existing as T);
     return existing as T;
   }
-  const [row] = await db.insert(table).values({ name, slug, ...extra } as never).returning();
+  const id = newId();
+  await db.insert(table).values({ id, name, slug, ...extra } as never);
+  const [row] = await db.select().from(table).where(eq(table.id, id)).limit(1);
   cache.set(slug, row as T);
   return row as T;
 }
@@ -95,23 +98,26 @@ async function main() {
   const existingFeed = await db.select().from(xmlFeeds).where(eq(xmlFeeds.name, "Güntan ürün XML")).limit(1);
   let feedId = existingFeed[0]?.id;
   if (!feedId) {
-    const [feed] = await db.insert(xmlFeeds).values({
+    feedId = newId();
+    await db.insert(xmlFeeds).values({
+      id: feedId,
       supplierId: supplier.id,
       name: "Güntan ürün XML",
       filePath,
       mapping: MAPPING,
-    }).returning();
-    feedId = feed!.id;
+    });
   } else {
     await db.update(xmlFeeds).set({ filePath, mapping: MAPPING }).where(eq(xmlFeeds.id, feedId));
   }
 
-  const [run] = await db.insert(xmlImportRuns).values({
+  const runId = newId();
+  await db.insert(xmlImportRuns).values({
+    id: runId,
     feedId,
     status: IMPORT_RUN_STATUS.RUNNING,
     startedAt: new Date().toISOString(),
     total: mapped.length,
-  }).returning();
+  });
 
   const brandCache = new Map<string, typeof vehicleBrands.$inferSelect>();
   for (const b of await db.select().from(vehicleBrands)) brandCache.set(b.slug, b);
@@ -136,9 +142,10 @@ async function main() {
       modelCache.set(key, existing);
       return existing;
     }
-    const [row] = await db.insert(vehicleModels).values({ brandId, name, slug }).returning();
-    modelCache.set(key, row!);
-    return row!;
+    const row = { id: newId(), brandId, name, slug };
+    await db.insert(vehicleModels).values(row);
+    modelCache.set(key, row);
+    return row;
   }
   async function ensureMfr(name: string) {
     const slug = slugify(name);
@@ -149,8 +156,8 @@ async function main() {
       mfrCache.set(slug, existing);
       return existing;
     }
-    const [row] = await db.insert(manufacturers).values({ name, slug }).returning();
-    const rec = { id: row!.id, slug };
+    const rec = { id: newId(), slug };
+    await db.insert(manufacturers).values({ id: rec.id, name, slug });
     mfrCache.set(slug, rec);
     return rec;
   }
@@ -161,32 +168,32 @@ async function main() {
     const parentPath = slugify(parentName);
     let parent = catCache.get(parentPath);
     if (!parent) {
-        const [row] = await db.insert(categories).values({
+      const id = newId();
+      await db.insert(categories).ignore().values({
+        id,
         name: parentName,
         slug: parentPath,
         path: parentPath,
         sortOrder: PARENT_SORT[parentName] ?? 50,
-      }).onConflictDoNothing({ target: categories.path }).returning();
-      if (!row) {
-        const [ex] = await db.select().from(categories).where(eq(categories.path, parentPath)).limit(1);
-        parent = ex!;
-      } else parent = row;
+      });
+      const [ex] = await db.select().from(categories).where(eq(categories.path, parentPath)).limit(1);
+      parent = ex!;
       catCache.set(parentPath, parent);
     }
     const childPath = `${parentPath}/${slugify(childName)}`;
     let child = catCache.get(childPath);
     if (!child) {
-      const [row] = await db.insert(categories).values({
+      const id = newId();
+      await db.insert(categories).ignore().values({
+        id,
         name: childName,
         slug: slugify(childName),
         path: childPath,
         parentId: parent.id,
         sortOrder: 0,
-      }).onConflictDoNothing({ target: categories.path }).returning();
-      if (!row) {
-        const [ex] = await db.select().from(categories).where(eq(categories.path, childPath)).limit(1);
-        child = ex!;
-      } else child = row;
+      });
+      const [ex] = await db.select().from(categories).where(eq(categories.path, childPath)).limit(1);
+      child = ex!;
       catCache.set(childPath, child);
     }
     return child;
@@ -221,6 +228,7 @@ async function main() {
       if (usedSlugs.has(slug)) slug = `${slug}-${row.externalId}`;
       usedSlugs.add(slug);
       values.push({
+        id: newId(),
         supplierId: supplier.id,
         manufacturerId: mfr?.id ?? null,
         sku: row.sku,
@@ -238,19 +246,22 @@ async function main() {
       });
     }
     try {
-      const inserted = await db.insert(products).values(values).onConflictDoUpdate({
-        target: [products.supplierId, products.externalId],
+      await db.insert(products).values(values).onDuplicateKeyUpdate({
         set: {
-          name: sql`excluded.name`,
-          price: sql`excluded.price`,
-          compareAtPrice: sql`excluded.compare_at_price`,
-          stockQty: sql`excluded.stock_qty`,
-          stockStatus: sql`excluded.stock_status`,
-          manufacturerId: sql`excluded.manufacturer_id`,
-          contentHash: sql`excluded.content_hash`,
-          status: sql`excluded.status`,
+          name: sql`VALUES(name)`,
+          price: sql`VALUES(price)`,
+          compareAtPrice: sql`VALUES(compare_at_price)`,
+          stockQty: sql`VALUES(stock_qty)`,
+          stockStatus: sql`VALUES(stock_status)`,
+          manufacturerId: sql`VALUES(manufacturer_id)`,
+          contentHash: sql`VALUES(content_hash)`,
+          status: sql`VALUES(status)`,
         },
-      }).returning({ id: products.id, externalId: products.externalId });
+      });
+      const inserted = await db
+        .select({ id: products.id, externalId: products.externalId })
+        .from(products)
+        .where(and(eq(products.supplierId, supplier.id), inArray(products.externalId, batch.map((r) => r.externalId))));
       const productIds = inserted.map((r) => r.id);
       if (productIds.length) {
         await db.delete(productOems).where(inArray(productOems.productId, productIds));
@@ -258,9 +269,9 @@ async function main() {
         await db.delete(productFitments).where(inArray(productFitments.productId, productIds));
       }
 
-      const oems = [];
-      const cats = [];
-      const fits = [];
+      const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
+      const cats: Array<{ productId: string; categoryId: string }> = [];
+      const fits: Array<{ productId: string; vehicleBrandId: string; vehicleModelId: string }> = [];
       for (const row of batch) {
         const rec = inserted.find((r) => r.externalId === row.externalId);
         if (!rec) continue;
@@ -282,10 +293,10 @@ async function main() {
           });
         }
       }
-      if (oems.length) await db.insert(productOems).values(oems).onConflictDoNothing();
-      if (cats.length) await db.insert(productCategories).values(cats).onConflictDoNothing();
+      if (oems.length) await db.insert(productOems).ignore().values(oems);
+      if (cats.length) await db.insert(productCategories).ignore().values(cats);
       if (fits.length) {
-        await db.insert(productFitments).values(fits).onConflictDoNothing();
+        await db.insert(productFitments).ignore().values(fits);
       }
       created += inserted.length;
     } catch (err) {
@@ -305,9 +316,9 @@ async function main() {
     createdCount: created,
     updatedCount: updated,
     failedCount: failed,
-  }).where(eq(xmlImportRuns.id, run!.id));
+  }).where(eq(xmlImportRuns.id, runId));
   console.log({ created, failed, total: mapped.length });
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

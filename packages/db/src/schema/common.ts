@@ -1,9 +1,14 @@
-import { sql } from "drizzle-orm";
-import { timestamp, uuid } from "drizzle-orm/pg-core";
+import { randomUUID } from "node:crypto";
+import { char, timestamp } from "drizzle-orm/mysql-core";
 
 export const timestamps = {
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 };
 
-export const id = uuid("id").primaryKey().default(sql`gen_random_uuid()`);
+/** Client-side UUID — MySQL has no RETURNING; callers that need the id should set it explicitly or rely on $defaultFn. */
+export const id = char("id", { length: 36 }).primaryKey().$defaultFn(() => randomUUID());
+
+export function newId(): string {
+  return randomUUID();
+}

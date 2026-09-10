@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
 import { db, products } from "@guntan/db";
 import { withBase } from "@/src/paths";
 import { EmptyState, PageHeader, Panel, StatusBadge } from "@/src/ui";
@@ -18,9 +18,9 @@ export default async function ProductsPage({
   if (q) {
     conditions.push(
       or(
-        ilike(products.sku, `%${q}%`),
-        ilike(products.name, `%${q}%`),
-        ilike(products.barcode, `%${q}%`),
+        like(products.sku, `%${q}%`),
+        like(products.name, `%${q}%`),
+        like(products.barcode, `%${q}%`),
       )!,
     );
   }

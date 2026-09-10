@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
     unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED !== "false",
     remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }],
   },
-  serverExternalPackages: ["postgres", "ioredis", "bullmq", "meilisearch", "saxes"],
+  serverExternalPackages: ["mysql2", "ioredis", "bullmq", "meilisearch", "saxes"],
   experimental: {
     staleTimes: {
       dynamic: 30,
@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       "drizzle-orm": pkgDir("drizzle-orm"),
-      postgres: pkgDir("postgres"),
+      mysql2: pkgDir("mysql2"),
       ioredis: pkgDir("ioredis"),
       zod: pkgDir("zod"),
     };

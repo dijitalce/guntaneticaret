@@ -8,6 +8,7 @@ import {
   compileVisibility,
   db,
   manufacturers,
+  newId,
   productCategories,
   productFitments,
   productOems,
@@ -148,8 +149,9 @@ async function upsertBrand(name: string) {
   const slug = slugify(name);
   const [existing] = await db.select().from(vehicleBrands).where(eq(vehicleBrands.slug, slug)).limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(vehicleBrands).values({ name, slug }).returning();
-  return row!;
+  const row = { id: newId(), name, slug };
+  await db.insert(vehicleBrands).values(row);
+  return row as typeof vehicleBrands.$inferSelect;
 }
 
 async function upsertModel(brandId: string, name: string) {
@@ -160,8 +162,9 @@ async function upsertModel(brandId: string, name: string) {
     .where(and(eq(vehicleModels.brandId, brandId), eq(vehicleModels.slug, slug)))
     .limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(vehicleModels).values({ brandId, name, slug }).returning();
-  return row!;
+  const row = { id: newId(), brandId, name, slug };
+  await db.insert(vehicleModels).values(row);
+  return row as typeof vehicleModels.$inferSelect;
 }
 
 async function upsertGeneration(modelId: string, name: string) {
@@ -172,8 +175,9 @@ async function upsertGeneration(modelId: string, name: string) {
     .where(and(eq(vehicleGenerations.modelId, modelId), eq(vehicleGenerations.slug, slug)))
     .limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(vehicleGenerations).values({ modelId, name, slug }).returning();
-  return row!;
+  const row = { id: newId(), modelId, name, slug };
+  await db.insert(vehicleGenerations).values(row);
+  return row as typeof vehicleGenerations.$inferSelect;
 }
 
 async function upsertEngine(generationId: string, name: string) {
@@ -184,24 +188,27 @@ async function upsertEngine(generationId: string, name: string) {
     .where(and(eq(vehicleEngines.generationId, generationId), eq(vehicleEngines.slug, slug)))
     .limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(vehicleEngines).values({ generationId, name, slug }).returning();
-  return row!;
+  const row = { id: newId(), generationId, name, slug };
+  await db.insert(vehicleEngines).values(row);
+  return row as typeof vehicleEngines.$inferSelect;
 }
 
 async function upsertManufacturer(name: string) {
   const slug = slugify(name);
   const [existing] = await db.select().from(manufacturers).where(eq(manufacturers.slug, slug)).limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(manufacturers).values({ name, slug }).returning();
-  return row!;
+  const row = { id: newId(), name, slug };
+  await db.insert(manufacturers).values(row);
+  return row as typeof manufacturers.$inferSelect;
 }
 
 async function upsertCategory(name: string) {
   const slug = slugify(name);
   const [existing] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
   if (existing) return existing;
-  const [row] = await db.insert(categories).values({ name, slug, path: slug }).returning();
-  return row!;
+  const row = { id: newId(), name, slug, path: slug };
+  await db.insert(categories).values(row);
+  return row as typeof categories.$inferSelect;
 }
 
 type ImportStats = {
@@ -255,8 +262,8 @@ async function processBatch(supplierId: string, batch: MappedProduct[], stats: I
         productId = existing.id;
         stats.updated += 1;
       } else {
-        const [created] = await db.insert(products).values(payload).returning();
-        productId = created!.id;
+        productId = newId();
+        await db.insert(products).values({ id: productId, ...payload });
         stats.created += 1;
       }
 
@@ -304,10 +311,10 @@ async function processBatch(supplierId: string, batch: MappedProduct[], stats: I
 export async function runXmlImport(feedId: string) {
   const [feed] = await db.select().from(xmlFeeds).where(eq(xmlFeeds.id, feedId)).limit(1);
   if (!feed) throw new Error("Feed bulunamadı.");
-  const [run] = await db
+  const runId = newId();
+  await db
     .insert(xmlImportRuns)
-    .values({ feedId, status: IMPORT_RUN_STATUS.RUNNING, startedAt: new Date().toISOString() })
-    .returning();
+    .values({ id: runId, feedId, status: IMPORT_RUN_STATUS.RUNNING, startedAt: new Date().toISOString() });
 
     const stats: ImportStats = { created: 0, updated: 0, unchanged: 0, failed: 0, inactivated: 0, total: 0 };
   const seenExternalIds: string[] = [];
@@ -332,7 +339,7 @@ export async function runXmlImport(feedId: string) {
     for (let i = 0; i < mapped.length; i += XML_BATCH_SIZE) {
       const batch = mapped.slice(i, i + XML_BATCH_SIZE);
       seenExternalIds.push(...batch.map((b) => b.externalId));
-      await processBatch(feed.supplierId, batch, stats, run!.id);
+      await processBatch(feed.supplierId, batch, stats, runId);
     }
 
     if (seenExternalIds.length > 0 && seenExternalIds.length < 20_000) {
@@ -373,8 +380,8 @@ export async function runXmlImport(feedId: string) {
         failedCount: stats.failed,
         inactivatedCount: stats.inactivated,
       })
-      .where(eq(xmlImportRuns.id, run!.id));
-    return { runId: run!.id, ...stats, status };
+      .where(eq(xmlImportRuns.id, runId));
+    return { runId, ...stats, status };
   } catch (err) {
     await db
       .update(xmlImportRuns)
@@ -383,7 +390,7 @@ export async function runXmlImport(feedId: string) {
         finishedAt: new Date().toISOString(),
         errorMessage: err instanceof Error ? err.message : "unknown",
       })
-      .where(eq(xmlImportRuns.id, run!.id));
+      .where(eq(xmlImportRuns.id, runId));
     throw err;
   }
 }

@@ -297,7 +297,7 @@ async function listProductsUncached(query: ListingQuery) {
       conditions.push(sql`exists (
         select 1 from product_categories pc
         where pc.product_id = ${products.id}
-          and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}::uuid`), sql`, `)})
+          and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}`), sql`, `)})
       )`);
     }
     const fitIds = db
@@ -726,8 +726,8 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
         tenantVisibleSql(tenantId, seesAll),
         or(
           eq(products.sku, query),
-          sql`${products.sku} ilike ${prefix}`,
-          sql`${products.name} ilike ${prefix}`,
+          sql`${products.sku} like ${prefix}`,
+          sql`${products.name} like ${prefix}`,
           matchOem,
         ),
       ),

@@ -1,19 +1,33 @@
 services:
-  postgres:
-    image: postgres:16-alpine
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_USER: guntan
-      POSTGRES_PASSWORD: guntan
-      POSTGRES_DB: guntan
+      MYSQL_USER: guntan
+      MYSQL_PASSWORD: guntan
+      MYSQL_DATABASE: guntan
+      MYSQL_ROOT_PASSWORD: guntan
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-authentication-plugin=caching_sha2_password"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U guntan"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uguntan", "-pguntan"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: guntan
+      PMA_PASSWORD: guntan
+    ports:
+      - "8080:80"
 
   redis:
     image: redis:7-alpine
@@ -61,6 +75,6 @@ services:
       "
 
 volumes:
-  pgdata:
+  mysqldata:
   meilidata:
   miniodata:

@@ -3,8 +3,8 @@ import { defineConfig } from "drizzle-kit";
 export default defineConfig({
   schema: "./src/schema/index.ts",
   out: "./drizzle",
-  dialect: "postgresql",
+  dialect: "mysql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://guntan:guntan@localhost:5432/guntan",
+    url: process.env.DATABASE_URL ?? "mysql://guntan:guntan@localhost:3306/guntan",
   },
 });

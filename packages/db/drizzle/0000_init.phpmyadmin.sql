@@ -10,7 +10,6 @@ CREATE TABLE `tenant_bank_accounts` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `tenant_bank_accounts_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_catalog_rules` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -21,7 +20,6 @@ CREATE TABLE `tenant_catalog_rules` (
 	CONSTRAINT `tenant_catalog_rules_id` PRIMARY KEY(`id`),
 	CONSTRAINT `tenant_catalog_rules_uidx` UNIQUE(`tenant_id`,`kind`,`target_id`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_domains` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -32,7 +30,6 @@ CREATE TABLE `tenant_domains` (
 	CONSTRAINT `tenant_domains_id` PRIMARY KEY(`id`),
 	CONSTRAINT `tenant_domains_hostname_uidx` UNIQUE(`hostname`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_settings` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -64,7 +61,6 @@ CREATE TABLE `tenant_settings` (
 	CONSTRAINT `tenant_settings_id` PRIMARY KEY(`id`),
 	CONSTRAINT `tenant_settings_tenant_uidx` UNIQUE(`tenant_id`)
 );
---> statement-breakpoint
 CREATE TABLE `tenants` (
 	`id` char(36) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -76,13 +72,11 @@ CREATE TABLE `tenants` (
 	CONSTRAINT `tenants_id` PRIMARY KEY(`id`),
 	CONSTRAINT `tenants_slug_uidx` UNIQUE(`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `brand_group_members` (
 	`group_id` char(36) NOT NULL,
 	`brand_id` char(36) NOT NULL,
 	CONSTRAINT `brand_group_members_group_id_brand_id_pk` PRIMARY KEY(`group_id`,`brand_id`)
 );
---> statement-breakpoint
 CREATE TABLE `brand_groups` (
 	`id` char(36) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -92,7 +86,6 @@ CREATE TABLE `brand_groups` (
 	CONSTRAINT `brand_groups_id` PRIMARY KEY(`id`),
 	CONSTRAINT `brand_groups_slug_uidx` UNIQUE(`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `categories` (
 	`id` char(36) NOT NULL,
 	`parent_id` char(36),
@@ -107,7 +100,6 @@ CREATE TABLE `categories` (
 	CONSTRAINT `categories_id` PRIMARY KEY(`id`),
 	CONSTRAINT `categories_path_uidx` UNIQUE(`path`)
 );
---> statement-breakpoint
 CREATE TABLE `manufacturers` (
 	`id` char(36) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -119,13 +111,11 @@ CREATE TABLE `manufacturers` (
 	CONSTRAINT `manufacturers_id` PRIMARY KEY(`id`),
 	CONSTRAINT `manufacturers_slug_uidx` UNIQUE(`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `product_categories` (
 	`product_id` char(36) NOT NULL,
 	`category_id` char(36) NOT NULL,
 	CONSTRAINT `product_categories_product_id_category_id_pk` PRIMARY KEY(`product_id`,`category_id`)
 );
---> statement-breakpoint
 CREATE TABLE `product_fitments` (
 	`id` char(36) NOT NULL,
 	`product_id` char(36) NOT NULL,
@@ -141,7 +131,6 @@ CREATE TABLE `product_fitments` (
 	CONSTRAINT `product_fitments_id` PRIMARY KEY(`id`),
 	CONSTRAINT `product_fitments_uidx` UNIQUE(`product_id`,`vehicle_model_id`,`vehicle_generation_id`,`vehicle_engine_id`)
 );
---> statement-breakpoint
 CREATE TABLE `product_images` (
 	`id` char(36) NOT NULL,
 	`product_id` char(36) NOT NULL,
@@ -153,7 +142,6 @@ CREATE TABLE `product_images` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `product_images_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `product_oems` (
 	`id` char(36) NOT NULL,
 	`product_id` char(36) NOT NULL,
@@ -164,7 +152,6 @@ CREATE TABLE `product_oems` (
 	CONSTRAINT `product_oems_id` PRIMARY KEY(`id`),
 	CONSTRAINT `product_oems_product_norm_uidx` UNIQUE(`product_id`,`normalized`)
 );
---> statement-breakpoint
 CREATE TABLE `products` (
 	`id` char(36) NOT NULL,
 	`supplier_id` char(36) NOT NULL,
@@ -191,7 +178,6 @@ CREATE TABLE `products` (
 	CONSTRAINT `products_supplier_external_uidx` UNIQUE(`supplier_id`,`external_id`),
 	CONSTRAINT `products_slug_uidx` UNIQUE(`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `suppliers` (
 	`id` char(36) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -201,13 +187,11 @@ CREATE TABLE `suppliers` (
 	CONSTRAINT `suppliers_id` PRIMARY KEY(`id`),
 	CONSTRAINT `suppliers_code_uidx` UNIQUE(`code`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_catalog_index` (
 	`tenant_id` char(36) NOT NULL,
 	`product_id` char(36) NOT NULL,
 	CONSTRAINT `tenant_catalog_index_tenant_id_product_id_pk` PRIMARY KEY(`tenant_id`,`product_id`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_product_overrides` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -221,13 +205,11 @@ CREATE TABLE `tenant_product_overrides` (
 	CONSTRAINT `tenant_product_overrides_id` PRIMARY KEY(`id`),
 	CONSTRAINT `tenant_product_overrides_uidx` UNIQUE(`tenant_id`,`product_id`)
 );
---> statement-breakpoint
 CREATE TABLE `tenant_visible_brands` (
 	`tenant_id` char(36) NOT NULL,
 	`brand_id` char(36) NOT NULL,
 	CONSTRAINT `tenant_visible_brands_tenant_id_brand_id_pk` PRIMARY KEY(`tenant_id`,`brand_id`)
 );
---> statement-breakpoint
 CREATE TABLE `vehicle_brands` (
 	`id` char(36) NOT NULL,
 	`name` varchar(255) NOT NULL,
@@ -241,7 +223,6 @@ CREATE TABLE `vehicle_brands` (
 	CONSTRAINT `vehicle_brands_id` PRIMARY KEY(`id`),
 	CONSTRAINT `vehicle_brands_slug_uidx` UNIQUE(`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `vehicle_engines` (
 	`id` char(36) NOT NULL,
 	`generation_id` char(36) NOT NULL,
@@ -256,7 +237,6 @@ CREATE TABLE `vehicle_engines` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `vehicle_engines_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `vehicle_generations` (
 	`id` char(36) NOT NULL,
 	`model_id` char(36) NOT NULL,
@@ -270,7 +250,6 @@ CREATE TABLE `vehicle_generations` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `vehicle_generations_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `vehicle_models` (
 	`id` char(36) NOT NULL,
 	`brand_id` char(36) NOT NULL,
@@ -285,7 +264,6 @@ CREATE TABLE `vehicle_models` (
 	CONSTRAINT `vehicle_models_id` PRIMARY KEY(`id`),
 	CONSTRAINT `vehicle_models_brand_slug_uidx` UNIQUE(`brand_id`,`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `cart_items` (
 	`id` char(36) NOT NULL,
 	`cart_id` char(36) NOT NULL,
@@ -296,7 +274,6 @@ CREATE TABLE `cart_items` (
 	CONSTRAINT `cart_items_id` PRIMARY KEY(`id`),
 	CONSTRAINT `cart_items_cart_product_uidx` UNIQUE(`cart_id`,`product_id`)
 );
---> statement-breakpoint
 CREATE TABLE `carts` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -306,7 +283,6 @@ CREATE TABLE `carts` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `carts_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `coupons` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -320,7 +296,6 @@ CREATE TABLE `coupons` (
 	CONSTRAINT `coupons_id` PRIMARY KEY(`id`),
 	CONSTRAINT `coupons_tenant_code_uidx` UNIQUE(`tenant_id`,`code`)
 );
---> statement-breakpoint
 CREATE TABLE `customer_addresses` (
 	`id` char(36) NOT NULL,
 	`customer_id` char(36) NOT NULL,
@@ -337,7 +312,6 @@ CREATE TABLE `customer_addresses` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `customer_addresses_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `customer_sessions` (
 	`id` char(36) NOT NULL,
 	`customer_id` char(36) NOT NULL,
@@ -348,7 +322,6 @@ CREATE TABLE `customer_sessions` (
 	CONSTRAINT `customer_sessions_id` PRIMARY KEY(`id`),
 	CONSTRAINT `customer_sessions_token_uidx` UNIQUE(`token_hash`)
 );
---> statement-breakpoint
 CREATE TABLE `customer_vehicles` (
 	`id` char(36) NOT NULL,
 	`customer_id` char(36) NOT NULL,
@@ -363,7 +336,6 @@ CREATE TABLE `customer_vehicles` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `customer_vehicles_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `customers` (
 	`id` char(36) NOT NULL,
 	`email` varchar(255) NOT NULL,
@@ -376,7 +348,6 @@ CREATE TABLE `customers` (
 	CONSTRAINT `customers_id` PRIMARY KEY(`id`),
 	CONSTRAINT `customers_email_uidx` UNIQUE(`email`)
 );
---> statement-breakpoint
 CREATE TABLE `order_items` (
 	`id` char(36) NOT NULL,
 	`order_id` char(36) NOT NULL,
@@ -390,7 +361,6 @@ CREATE TABLE `order_items` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `order_items_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `orders` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -412,7 +382,6 @@ CREATE TABLE `orders` (
 	CONSTRAINT `orders_id` PRIMARY KEY(`id`),
 	CONSTRAINT `orders_order_no_uidx` UNIQUE(`order_no`)
 );
---> statement-breakpoint
 CREATE TABLE `payments` (
 	`id` char(36) NOT NULL,
 	`order_id` char(36) NOT NULL,
@@ -425,7 +394,6 @@ CREATE TABLE `payments` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `payments_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `return_requests` (
 	`id` char(36) NOT NULL,
 	`order_id` char(36) NOT NULL,
@@ -436,7 +404,6 @@ CREATE TABLE `return_requests` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `return_requests_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `shipments` (
 	`id` char(36) NOT NULL,
 	`order_id` char(36) NOT NULL,
@@ -447,7 +414,6 @@ CREATE TABLE `shipments` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `shipments_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `wishlists` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -458,7 +424,6 @@ CREATE TABLE `wishlists` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `wishlists_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `banners` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -472,7 +437,6 @@ CREATE TABLE `banners` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `banners_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `blog_posts` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -486,7 +450,6 @@ CREATE TABLE `blog_posts` (
 	CONSTRAINT `blog_posts_id` PRIMARY KEY(`id`),
 	CONSTRAINT `blog_posts_tenant_slug_uidx` UNIQUE(`tenant_id`,`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `faqs` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -497,7 +460,6 @@ CREATE TABLE `faqs` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `faqs_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `homepage_sections` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -511,7 +473,6 @@ CREATE TABLE `homepage_sections` (
 	CONSTRAINT `homepage_sections_id` PRIMARY KEY(`id`),
 	CONSTRAINT `homepage_sections_tenant_key_uidx` UNIQUE(`tenant_id`,`key`)
 );
---> statement-breakpoint
 CREATE TABLE `menu_items` (
 	`id` char(36) NOT NULL,
 	`menu_id` char(36) NOT NULL,
@@ -522,7 +483,6 @@ CREATE TABLE `menu_items` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `menu_items_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `menus` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -533,7 +493,6 @@ CREATE TABLE `menus` (
 	CONSTRAINT `menus_id` PRIMARY KEY(`id`),
 	CONSTRAINT `menus_tenant_key_uidx` UNIQUE(`tenant_id`,`key`)
 );
---> statement-breakpoint
 CREATE TABLE `pages` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36) NOT NULL,
@@ -548,7 +507,6 @@ CREATE TABLE `pages` (
 	CONSTRAINT `pages_id` PRIMARY KEY(`id`),
 	CONSTRAINT `pages_tenant_slug_uidx` UNIQUE(`tenant_id`,`slug`)
 );
---> statement-breakpoint
 CREATE TABLE `redirects` (
 	`id` char(36) NOT NULL,
 	`tenant_id` char(36),
@@ -559,7 +517,6 @@ CREATE TABLE `redirects` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `redirects_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `xml_feeds` (
 	`id` char(36) NOT NULL,
 	`supplier_id` char(36) NOT NULL,
@@ -574,7 +531,6 @@ CREATE TABLE `xml_feeds` (
 	CONSTRAINT `xml_feeds_id` PRIMARY KEY(`id`),
 	CONSTRAINT `xml_feeds_name_uidx` UNIQUE(`name`)
 );
---> statement-breakpoint
 CREATE TABLE `xml_import_row_errors` (
 	`id` char(36) NOT NULL,
 	`run_id` char(36) NOT NULL,
@@ -586,7 +542,6 @@ CREATE TABLE `xml_import_row_errors` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `xml_import_row_errors_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `xml_import_runs` (
 	`id` char(36) NOT NULL,
 	`feed_id` char(36) NOT NULL,
@@ -604,7 +559,6 @@ CREATE TABLE `xml_import_runs` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `xml_import_runs_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `admin_sessions` (
 	`id` char(36) NOT NULL,
 	`admin_user_id` char(36) NOT NULL,
@@ -615,13 +569,11 @@ CREATE TABLE `admin_sessions` (
 	CONSTRAINT `admin_sessions_id` PRIMARY KEY(`id`),
 	CONSTRAINT `admin_sessions_token_uidx` UNIQUE(`token_hash`)
 );
---> statement-breakpoint
 CREATE TABLE `admin_user_roles` (
 	`admin_user_id` char(36) NOT NULL,
 	`role_id` char(36) NOT NULL,
 	CONSTRAINT `admin_user_roles_admin_user_id_role_id_pk` PRIMARY KEY(`admin_user_id`,`role_id`)
 );
---> statement-breakpoint
 CREATE TABLE `admin_users` (
 	`id` char(36) NOT NULL,
 	`email` varchar(255) NOT NULL,
@@ -633,7 +585,6 @@ CREATE TABLE `admin_users` (
 	CONSTRAINT `admin_users_id` PRIMARY KEY(`id`),
 	CONSTRAINT `admin_users_email_uidx` UNIQUE(`email`)
 );
---> statement-breakpoint
 CREATE TABLE `audit_logs` (
 	`id` char(36) NOT NULL,
 	`actor_id` char(36),
@@ -648,7 +599,6 @@ CREATE TABLE `audit_logs` (
 	`updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `audit_logs_id` PRIMARY KEY(`id`)
 );
---> statement-breakpoint
 CREATE TABLE `permissions` (
 	`id` char(36) NOT NULL,
 	`key` varchar(64) NOT NULL,
@@ -658,13 +608,11 @@ CREATE TABLE `permissions` (
 	CONSTRAINT `permissions_id` PRIMARY KEY(`id`),
 	CONSTRAINT `permissions_key_uidx` UNIQUE(`key`)
 );
---> statement-breakpoint
 CREATE TABLE `role_permissions` (
 	`role_id` char(36) NOT NULL,
 	`permission_id` char(36) NOT NULL,
 	CONSTRAINT `role_permissions_role_id_permission_id_pk` PRIMARY KEY(`role_id`,`permission_id`)
 );
---> statement-breakpoint
 CREATE TABLE `roles` (
 	`id` char(36) NOT NULL,
 	`key` varchar(64) NOT NULL,
@@ -674,110 +622,109 @@ CREATE TABLE `roles` (
 	CONSTRAINT `roles_id` PRIMARY KEY(`id`),
 	CONSTRAINT `roles_key_uidx` UNIQUE(`key`)
 );
---> statement-breakpoint
-ALTER TABLE `tenant_bank_accounts` ADD CONSTRAINT `tenant_bank_accounts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_catalog_rules` ADD CONSTRAINT `tenant_catalog_rules_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_domains` ADD CONSTRAINT `tenant_domains_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_settings` ADD CONSTRAINT `tenant_settings_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `brand_group_members` ADD CONSTRAINT `brand_group_members_group_id_brand_groups_id_fk` FOREIGN KEY (`group_id`) REFERENCES `brand_groups`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `brand_group_members` ADD CONSTRAINT `brand_group_members_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_categories` ADD CONSTRAINT `product_categories_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_categories` ADD CONSTRAINT `product_categories_category_id_categories_id_fk` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`vehicle_brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_model_id_vehicle_models_id_fk` FOREIGN KEY (`vehicle_model_id`) REFERENCES `vehicle_models`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_generation_id_vehicle_generations_id_fk` FOREIGN KEY (`vehicle_generation_id`) REFERENCES `vehicle_generations`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_engine_id_vehicle_engines_id_fk` FOREIGN KEY (`vehicle_engine_id`) REFERENCES `vehicle_engines`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_images` ADD CONSTRAINT `product_images_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `product_oems` ADD CONSTRAINT `product_oems_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `products` ADD CONSTRAINT `products_supplier_id_suppliers_id_fk` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `products` ADD CONSTRAINT `products_manufacturer_id_manufacturers_id_fk` FOREIGN KEY (`manufacturer_id`) REFERENCES `manufacturers`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_catalog_index` ADD CONSTRAINT `tenant_catalog_index_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_catalog_index` ADD CONSTRAINT `tenant_catalog_index_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_product_overrides` ADD CONSTRAINT `tenant_product_overrides_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_product_overrides` ADD CONSTRAINT `tenant_product_overrides_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_visible_brands` ADD CONSTRAINT `tenant_visible_brands_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `tenant_visible_brands` ADD CONSTRAINT `tenant_visible_brands_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `vehicle_engines` ADD CONSTRAINT `vehicle_engines_generation_id_vehicle_generations_id_fk` FOREIGN KEY (`generation_id`) REFERENCES `vehicle_generations`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `vehicle_generations` ADD CONSTRAINT `vehicle_generations_model_id_vehicle_models_id_fk` FOREIGN KEY (`model_id`) REFERENCES `vehicle_models`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `vehicle_models` ADD CONSTRAINT `vehicle_models_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `cart_items` ADD CONSTRAINT `cart_items_cart_id_carts_id_fk` FOREIGN KEY (`cart_id`) REFERENCES `carts`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `cart_items` ADD CONSTRAINT `cart_items_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `carts` ADD CONSTRAINT `carts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `carts` ADD CONSTRAINT `carts_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `coupons` ADD CONSTRAINT `coupons_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `customer_addresses` ADD CONSTRAINT `customer_addresses_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `customer_sessions` ADD CONSTRAINT `customer_sessions_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `customer_vehicles` ADD CONSTRAINT `customer_vehicles_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_items` ADD CONSTRAINT `order_items_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `order_items` ADD CONSTRAINT `order_items_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `orders` ADD CONSTRAINT `orders_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `orders` ADD CONSTRAINT `orders_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payments` ADD CONSTRAINT `payments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `payments` ADD CONSTRAINT `payments_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `return_requests` ADD CONSTRAINT `return_requests_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `return_requests` ADD CONSTRAINT `return_requests_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `shipments` ADD CONSTRAINT `shipments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `banners` ADD CONSTRAINT `banners_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `blog_posts` ADD CONSTRAINT `blog_posts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `faqs` ADD CONSTRAINT `faqs_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `homepage_sections` ADD CONSTRAINT `homepage_sections_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `menu_items` ADD CONSTRAINT `menu_items_menu_id_menus_id_fk` FOREIGN KEY (`menu_id`) REFERENCES `menus`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `menus` ADD CONSTRAINT `menus_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `pages` ADD CONSTRAINT `pages_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `redirects` ADD CONSTRAINT `redirects_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `xml_feeds` ADD CONSTRAINT `xml_feeds_supplier_id_suppliers_id_fk` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `xml_import_row_errors` ADD CONSTRAINT `xml_import_row_errors_run_id_xml_import_runs_id_fk` FOREIGN KEY (`run_id`) REFERENCES `xml_import_runs`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `xml_import_runs` ADD CONSTRAINT `xml_import_runs_feed_id_xml_feeds_id_fk` FOREIGN KEY (`feed_id`) REFERENCES `xml_feeds`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `admin_sessions` ADD CONSTRAINT `admin_sessions_admin_user_id_admin_users_id_fk` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `admin_user_roles` ADD CONSTRAINT `admin_user_roles_admin_user_id_admin_users_id_fk` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `admin_user_roles` ADD CONSTRAINT `admin_user_roles_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_permission_id_permissions_id_fk` FOREIGN KEY (`permission_id`) REFERENCES `permissions`(`id`) ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX `tenant_bank_accounts_tenant_idx` ON `tenant_bank_accounts` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `tenant_catalog_rules_tenant_idx` ON `tenant_catalog_rules` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `tenant_domains_tenant_idx` ON `tenant_domains` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `categories_parent_idx` ON `categories` (`parent_id`);--> statement-breakpoint
-CREATE INDEX `product_categories_category_idx` ON `product_categories` (`category_id`);--> statement-breakpoint
-CREATE INDEX `product_fitments_brand_model_idx` ON `product_fitments` (`vehicle_brand_id`,`vehicle_model_id`);--> statement-breakpoint
-CREATE INDEX `product_fitments_brand_product_idx` ON `product_fitments` (`vehicle_brand_id`,`product_id`);--> statement-breakpoint
-CREATE INDEX `product_fitments_model_product_idx` ON `product_fitments` (`vehicle_model_id`,`product_id`);--> statement-breakpoint
-CREATE INDEX `product_fitments_engine_idx` ON `product_fitments` (`vehicle_engine_id`);--> statement-breakpoint
-CREATE INDEX `product_images_product_idx` ON `product_images` (`product_id`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `product_oems_normalized_idx` ON `product_oems` (`normalized`);--> statement-breakpoint
-CREATE INDEX `products_status_idx` ON `products` (`status`);--> statement-breakpoint
-CREATE INDEX `products_sku_idx` ON `products` (`sku`);--> statement-breakpoint
-CREATE INDEX `products_active_stock_idx` ON `products` (`status`,`stock_qty` desc,`updated_at` desc);--> statement-breakpoint
-CREATE INDEX `products_manufacturer_active_idx` ON `products` (`status`,`manufacturer_id`);--> statement-breakpoint
-CREATE INDEX `products_price_active_idx` ON `products` (`status`,`price`);--> statement-breakpoint
-CREATE INDEX `products_name_prefix_idx` ON `products` (`name`);--> statement-breakpoint
-CREATE INDEX `products_sku_prefix_idx` ON `products` (`sku`);--> statement-breakpoint
-CREATE INDEX `tenant_catalog_index_product_idx` ON `tenant_catalog_index` (`product_id`);--> statement-breakpoint
-CREATE INDEX `vehicle_engines_generation_idx` ON `vehicle_engines` (`generation_id`);--> statement-breakpoint
-CREATE INDEX `vehicle_generations_model_idx` ON `vehicle_generations` (`model_id`);--> statement-breakpoint
-CREATE INDEX `vehicle_models_brand_idx` ON `vehicle_models` (`brand_id`);--> statement-breakpoint
-CREATE INDEX `cart_items_product_idx` ON `cart_items` (`product_id`);--> statement-breakpoint
-CREATE INDEX `carts_tenant_customer_idx` ON `carts` (`tenant_id`,`customer_id`);--> statement-breakpoint
-CREATE INDEX `carts_tenant_session_idx` ON `carts` (`tenant_id`,`session_id`);--> statement-breakpoint
-CREATE INDEX `customer_addresses_customer_idx` ON `customer_addresses` (`customer_id`);--> statement-breakpoint
-CREATE INDEX `customer_sessions_customer_idx` ON `customer_sessions` (`customer_id`);--> statement-breakpoint
-CREATE INDEX `customer_vehicles_customer_idx` ON `customer_vehicles` (`customer_id`);--> statement-breakpoint
-CREATE INDEX `order_items_order_idx` ON `order_items` (`order_id`);--> statement-breakpoint
-CREATE INDEX `order_items_product_idx` ON `order_items` (`product_id`);--> statement-breakpoint
-CREATE INDEX `orders_tenant_idx` ON `orders` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `orders_customer_idx` ON `orders` (`customer_id`);--> statement-breakpoint
-CREATE INDEX `orders_status_idx` ON `orders` (`status`);--> statement-breakpoint
-CREATE INDEX `payments_order_idx` ON `payments` (`order_id`);--> statement-breakpoint
-CREATE INDEX `payments_tenant_idx` ON `payments` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `return_requests_order_idx` ON `return_requests` (`order_id`);--> statement-breakpoint
-CREATE INDEX `shipments_order_idx` ON `shipments` (`order_id`);--> statement-breakpoint
-CREATE INDEX `wishlists_tenant_customer_idx` ON `wishlists` (`tenant_id`,`customer_id`);--> statement-breakpoint
-CREATE INDEX `banners_tenant_idx` ON `banners` (`tenant_id`);--> statement-breakpoint
-CREATE INDEX `menu_items_menu_idx` ON `menu_items` (`menu_id`);--> statement-breakpoint
-CREATE INDEX `redirects_old_path_idx` ON `redirects` (`old_path`);--> statement-breakpoint
-CREATE INDEX `xml_import_row_errors_run_idx` ON `xml_import_row_errors` (`run_id`);--> statement-breakpoint
-CREATE INDEX `xml_import_runs_feed_idx` ON `xml_import_runs` (`feed_id`);--> statement-breakpoint
+ALTER TABLE `tenant_bank_accounts` ADD CONSTRAINT `tenant_bank_accounts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_catalog_rules` ADD CONSTRAINT `tenant_catalog_rules_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_domains` ADD CONSTRAINT `tenant_domains_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_settings` ADD CONSTRAINT `tenant_settings_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `brand_group_members` ADD CONSTRAINT `brand_group_members_group_id_brand_groups_id_fk` FOREIGN KEY (`group_id`) REFERENCES `brand_groups`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `brand_group_members` ADD CONSTRAINT `brand_group_members_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `product_categories` ADD CONSTRAINT `product_categories_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `product_categories` ADD CONSTRAINT `product_categories_category_id_categories_id_fk` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`vehicle_brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_model_id_vehicle_models_id_fk` FOREIGN KEY (`vehicle_model_id`) REFERENCES `vehicle_models`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_generation_id_vehicle_generations_id_fk` FOREIGN KEY (`vehicle_generation_id`) REFERENCES `vehicle_generations`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `product_fitments` ADD CONSTRAINT `product_fitments_vehicle_engine_id_vehicle_engines_id_fk` FOREIGN KEY (`vehicle_engine_id`) REFERENCES `vehicle_engines`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `product_images` ADD CONSTRAINT `product_images_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `product_oems` ADD CONSTRAINT `product_oems_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `products` ADD CONSTRAINT `products_supplier_id_suppliers_id_fk` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `products` ADD CONSTRAINT `products_manufacturer_id_manufacturers_id_fk` FOREIGN KEY (`manufacturer_id`) REFERENCES `manufacturers`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `tenant_catalog_index` ADD CONSTRAINT `tenant_catalog_index_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_catalog_index` ADD CONSTRAINT `tenant_catalog_index_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_product_overrides` ADD CONSTRAINT `tenant_product_overrides_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_product_overrides` ADD CONSTRAINT `tenant_product_overrides_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_visible_brands` ADD CONSTRAINT `tenant_visible_brands_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `tenant_visible_brands` ADD CONSTRAINT `tenant_visible_brands_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `vehicle_engines` ADD CONSTRAINT `vehicle_engines_generation_id_vehicle_generations_id_fk` FOREIGN KEY (`generation_id`) REFERENCES `vehicle_generations`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `vehicle_generations` ADD CONSTRAINT `vehicle_generations_model_id_vehicle_models_id_fk` FOREIGN KEY (`model_id`) REFERENCES `vehicle_models`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `vehicle_models` ADD CONSTRAINT `vehicle_models_brand_id_vehicle_brands_id_fk` FOREIGN KEY (`brand_id`) REFERENCES `vehicle_brands`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `cart_items` ADD CONSTRAINT `cart_items_cart_id_carts_id_fk` FOREIGN KEY (`cart_id`) REFERENCES `carts`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `cart_items` ADD CONSTRAINT `cart_items_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `carts` ADD CONSTRAINT `carts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `carts` ADD CONSTRAINT `carts_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE set null ON UPDATE no action;
+ALTER TABLE `coupons` ADD CONSTRAINT `coupons_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `customer_addresses` ADD CONSTRAINT `customer_addresses_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `customer_sessions` ADD CONSTRAINT `customer_sessions_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `customer_vehicles` ADD CONSTRAINT `customer_vehicles_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `order_items` ADD CONSTRAINT `order_items_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `order_items` ADD CONSTRAINT `order_items_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `orders` ADD CONSTRAINT `orders_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `orders` ADD CONSTRAINT `orders_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `payments` ADD CONSTRAINT `payments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `payments` ADD CONSTRAINT `payments_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `return_requests` ADD CONSTRAINT `return_requests_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `return_requests` ADD CONSTRAINT `return_requests_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `shipments` ADD CONSTRAINT `shipments_order_id_orders_id_fk` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_customer_id_customers_id_fk` FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `wishlists` ADD CONSTRAINT `wishlists_product_id_products_id_fk` FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `banners` ADD CONSTRAINT `banners_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `blog_posts` ADD CONSTRAINT `blog_posts_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `faqs` ADD CONSTRAINT `faqs_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `homepage_sections` ADD CONSTRAINT `homepage_sections_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `menu_items` ADD CONSTRAINT `menu_items_menu_id_menus_id_fk` FOREIGN KEY (`menu_id`) REFERENCES `menus`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `menus` ADD CONSTRAINT `menus_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `pages` ADD CONSTRAINT `pages_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `redirects` ADD CONSTRAINT `redirects_tenant_id_tenants_id_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `xml_feeds` ADD CONSTRAINT `xml_feeds_supplier_id_suppliers_id_fk` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE no action ON UPDATE no action;
+ALTER TABLE `xml_import_row_errors` ADD CONSTRAINT `xml_import_row_errors_run_id_xml_import_runs_id_fk` FOREIGN KEY (`run_id`) REFERENCES `xml_import_runs`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `xml_import_runs` ADD CONSTRAINT `xml_import_runs_feed_id_xml_feeds_id_fk` FOREIGN KEY (`feed_id`) REFERENCES `xml_feeds`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `admin_sessions` ADD CONSTRAINT `admin_sessions_admin_user_id_admin_users_id_fk` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `admin_user_roles` ADD CONSTRAINT `admin_user_roles_admin_user_id_admin_users_id_fk` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `admin_user_roles` ADD CONSTRAINT `admin_user_roles_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE cascade ON UPDATE no action;
+ALTER TABLE `role_permissions` ADD CONSTRAINT `role_permissions_permission_id_permissions_id_fk` FOREIGN KEY (`permission_id`) REFERENCES `permissions`(`id`) ON DELETE cascade ON UPDATE no action;
+CREATE INDEX `tenant_bank_accounts_tenant_idx` ON `tenant_bank_accounts` (`tenant_id`);
+CREATE INDEX `tenant_catalog_rules_tenant_idx` ON `tenant_catalog_rules` (`tenant_id`);
+CREATE INDEX `tenant_domains_tenant_idx` ON `tenant_domains` (`tenant_id`);
+CREATE INDEX `categories_parent_idx` ON `categories` (`parent_id`);
+CREATE INDEX `product_categories_category_idx` ON `product_categories` (`category_id`);
+CREATE INDEX `product_fitments_brand_model_idx` ON `product_fitments` (`vehicle_brand_id`,`vehicle_model_id`);
+CREATE INDEX `product_fitments_brand_product_idx` ON `product_fitments` (`vehicle_brand_id`,`product_id`);
+CREATE INDEX `product_fitments_model_product_idx` ON `product_fitments` (`vehicle_model_id`,`product_id`);
+CREATE INDEX `product_fitments_engine_idx` ON `product_fitments` (`vehicle_engine_id`);
+CREATE INDEX `product_images_product_idx` ON `product_images` (`product_id`,`sort_order`);
+CREATE INDEX `product_oems_normalized_idx` ON `product_oems` (`normalized`);
+CREATE INDEX `products_status_idx` ON `products` (`status`);
+CREATE INDEX `products_sku_idx` ON `products` (`sku`);
+CREATE INDEX `products_active_stock_idx` ON `products` (`status`,`stock_qty` desc,`updated_at` desc);
+CREATE INDEX `products_manufacturer_active_idx` ON `products` (`status`,`manufacturer_id`);
+CREATE INDEX `products_price_active_idx` ON `products` (`status`,`price`);
+CREATE INDEX `products_name_prefix_idx` ON `products` (`name`);
+CREATE INDEX `products_sku_prefix_idx` ON `products` (`sku`);
+CREATE INDEX `tenant_catalog_index_product_idx` ON `tenant_catalog_index` (`product_id`);
+CREATE INDEX `vehicle_engines_generation_idx` ON `vehicle_engines` (`generation_id`);
+CREATE INDEX `vehicle_generations_model_idx` ON `vehicle_generations` (`model_id`);
+CREATE INDEX `vehicle_models_brand_idx` ON `vehicle_models` (`brand_id`);
+CREATE INDEX `cart_items_product_idx` ON `cart_items` (`product_id`);
+CREATE INDEX `carts_tenant_customer_idx` ON `carts` (`tenant_id`,`customer_id`);
+CREATE INDEX `carts_tenant_session_idx` ON `carts` (`tenant_id`,`session_id`);
+CREATE INDEX `customer_addresses_customer_idx` ON `customer_addresses` (`customer_id`);
+CREATE INDEX `customer_sessions_customer_idx` ON `customer_sessions` (`customer_id`);
+CREATE INDEX `customer_vehicles_customer_idx` ON `customer_vehicles` (`customer_id`);
+CREATE INDEX `order_items_order_idx` ON `order_items` (`order_id`);
+CREATE INDEX `order_items_product_idx` ON `order_items` (`product_id`);
+CREATE INDEX `orders_tenant_idx` ON `orders` (`tenant_id`);
+CREATE INDEX `orders_customer_idx` ON `orders` (`customer_id`);
+CREATE INDEX `orders_status_idx` ON `orders` (`status`);
+CREATE INDEX `payments_order_idx` ON `payments` (`order_id`);
+CREATE INDEX `payments_tenant_idx` ON `payments` (`tenant_id`);
+CREATE INDEX `return_requests_order_idx` ON `return_requests` (`order_id`);
+CREATE INDEX `shipments_order_idx` ON `shipments` (`order_id`);
+CREATE INDEX `wishlists_tenant_customer_idx` ON `wishlists` (`tenant_id`,`customer_id`);
+CREATE INDEX `banners_tenant_idx` ON `banners` (`tenant_id`);
+CREATE INDEX `menu_items_menu_idx` ON `menu_items` (`menu_id`);
+CREATE INDEX `redirects_old_path_idx` ON `redirects` (`old_path`);
+CREATE INDEX `xml_import_row_errors_run_idx` ON `xml_import_row_errors` (`run_id`);
+CREATE INDEX `xml_import_runs_feed_idx` ON `xml_import_runs` (`feed_id`);
 CREATE INDEX `audit_logs_entity_idx` ON `audit_logs` (`entity`,`entity_id`);

@@ -3,6 +3,7 @@ import {
   cartItems,
   carts,
   db,
+  newId,
   orderItems,
   orders,
   payments,
@@ -46,10 +47,14 @@ export async function getOrCreateCart(tenantId: string, customerId?: string | nu
       .limit(1);
     if (existing) return existing;
   }
-  const [created] = await db
-    .insert(carts)
-    .values({ tenantId, customerId: customerId ?? null, sessionId: sessionId ?? null })
-    .returning();
+  const id = newId();
+  await db.insert(carts).values({
+    id,
+    tenantId,
+    customerId: customerId ?? null,
+    sessionId: sessionId ?? null,
+  });
+  const [created] = await db.select().from(carts).where(eq(carts.id, id)).limit(1);
   return created!;
 }
 
@@ -154,32 +159,31 @@ export async function checkout(input: {
   const grand = view.subtotal + shipping;
   const orderNo = nextOrderNo();
 
-  const [order] = await db
-    .insert(orders)
-    .values({
-      tenantId: input.tenantId,
-      customerId: input.customerId ?? null,
-      orderNo,
-      status: ORDER_STATUS.PENDING_PAYMENT,
-      email: input.email,
-      phone: input.phone,
-      fullName: input.fullName,
-      shippingAddress: {
-        city: input.city,
-        district: input.district,
-        line1: input.line1,
-        postalCode: input.postalCode ?? "",
-      },
-      subtotal: view.subtotal.toFixed(2),
-      shippingTotal: shipping.toFixed(2),
-      discountTotal: "0.00",
-      grandTotal: grand.toFixed(2),
-    })
-    .returning();
+  const order = {
+    id: newId(),
+    tenantId: input.tenantId,
+    customerId: input.customerId ?? null,
+    orderNo,
+    status: ORDER_STATUS.PENDING_PAYMENT,
+    email: input.email,
+    phone: input.phone,
+    fullName: input.fullName,
+    shippingAddress: {
+      city: input.city,
+      district: input.district,
+      line1: input.line1,
+      postalCode: input.postalCode ?? "",
+    },
+    subtotal: view.subtotal.toFixed(2),
+    shippingTotal: shipping.toFixed(2),
+    discountTotal: "0.00",
+    grandTotal: grand.toFixed(2),
+  };
+  await db.insert(orders).values(order);
 
   for (const item of view.items) {
     await db.insert(orderItems).values({
-      orderId: order!.id,
+      orderId: order.id,
       productId: item.productId,
       name: item.name,
       sku: item.sku,
@@ -194,7 +198,7 @@ export async function checkout(input: {
   }
 
   await db.insert(payments).values({
-    orderId: order!.id,
+    orderId: order.id,
     tenantId: input.tenantId,
     method: PAYMENT_METHOD.BANK_TRANSFER,
     status: PAYMENT_STATUS.AWAITING,
@@ -214,7 +218,8 @@ export async function checkout(input: {
   });
 
   await db.delete(cartItems).where(eq(cartItems.cartId, input.cartId));
-  return { order: order!, intent };
+  const [savedOrder] = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);
+  return { order: savedOrder!, intent };
 }
 
 export async function confirmBankTransfer(orderId: string) {

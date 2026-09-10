@@ -1,19 +1,31 @@
-import postgres from "postgres";
 import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { pgConnectOptions } from "./pg-options";
+import { fileURLToPath } from "node:url";
+import mysql from "mysql2/promise";
+import { mysqlConnectOptions } from "./mysql-options";
 
-const url = process.env.DATABASE_URL ?? "postgres://guntan:guntan@localhost:5432/guntan";
-const sql = postgres(url, pgConnectOptions(url, { max: 1 }));
+const url = process.env.DATABASE_URL ?? "mysql://guntan:guntan@localhost:3306/guntan";
+const pool = mysql.createPool({
+  ...mysqlConnectOptions(url, { connectionLimit: 1 }),
+  multipleStatements: true,
+});
+
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../drizzle");
 const files = readdirSync(dir)
   .filter((f) => f.endsWith(".sql"))
   .sort();
+
 for (const file of files) {
   const ddl = readFileSync(path.join(dir, file), "utf8");
-  await sql.unsafe(ddl);
+  // Strip drizzle statement breakpoints; run whole file (multipleStatements).
+  const cleaned = ddl
+    .split("--> statement-breakpoint")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(";\n");
+  await pool.query(cleaned);
   console.log("Applied", file);
 }
-await sql.end();
+
+await pool.end();
 console.log("Schema applied.");

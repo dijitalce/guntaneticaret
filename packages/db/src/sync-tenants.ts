@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { DEFAULT_THEME_TOKENS } from "@guntan/types";
-import { db, pg } from "./client";
+import { db, pool } from "./client";
 import {
   brandGroups,
   tenantBankAccounts,
@@ -9,6 +9,7 @@ import {
   tenantSettings,
   tenants,
 } from "./schema";
+import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES, siteHosts } from "./group-sites";
 
@@ -25,13 +26,15 @@ type SiteDef = {
 async function ensureTenant(site: SiteDef) {
   let [tenant] = await db.select().from(tenants).where(eq(tenants.slug, site.slug)).limit(1);
   if (!tenant) {
-    const [created] = await db.insert(tenants).values({
+    const id = newId();
+    await db.insert(tenants).values({
+      id,
       name: site.name,
       slug: site.slug,
       status: "active",
       visibilityMode: site.visibilityMode,
-    }).returning();
-    tenant = created!;
+    });
+    [tenant] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
   } else {
     await db.update(tenants).set({
       name: site.name,
@@ -39,7 +42,7 @@ async function ensureTenant(site: SiteDef) {
       visibilityMode: site.visibilityMode,
     }).where(eq(tenants.id, tenant.id));
   }
-  return tenant;
+  return tenant!;
 }
 
 async function ensureHosts(tenantId: string, productionHost: string, aliases: readonly string[]) {
@@ -131,7 +134,7 @@ async function main() {
   for (const site of [ALL_SITE, ...GROUP_SITES]) {
     console.log(`  ${site.productionHost}  (${siteHosts(site).slice(1).join(", ") || "no aliases"})`);
   }
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

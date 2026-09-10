@@ -1,11 +1,11 @@
 import { compileVisibility } from "./compile-visibility";
-import { db, pg } from "./client";
+import { db, pool } from "./client";
 
 async function main() {
   console.log("Compiling tenant visibility…");
   await compileVisibility(db);
   console.log("Done.");
-  await pg.end();
+  await pool.end();
 }
 
 main().catch((err) => {

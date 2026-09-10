@@ -6,6 +6,7 @@ import {
   adminUserRoles,
   adminUsers,
   db,
+  newId,
   permissions,
   rolePermissions,
   roles,
@@ -36,16 +37,18 @@ async function ensureRbac() {
   const permByKey = Object.fromEntries(existingPerms.map((p) => [p.key, p.id]));
   for (const key of Object.values(ADMIN_PERMISSION)) {
     if (permByKey[key]) continue;
-    const [row] = await db.insert(permissions).values({ key, name: key }).returning();
-    permByKey[key] = row!.id;
+    const id = newId();
+    await db.insert(permissions).values({ id, key, name: key });
+    permByKey[key] = id;
   }
 
   const existingRoles = await db.select().from(roles);
   const roleByKey = Object.fromEntries(existingRoles.map((r) => [r.key, r.id]));
   for (const key of Object.values(ADMIN_ROLE)) {
     if (roleByKey[key]) continue;
-    const [row] = await db.insert(roles).values({ key, name: key }).returning();
-    roleByKey[key] = row!.id;
+    const id = newId();
+    await db.insert(roles).values({ id, key, name: key });
+    roleByKey[key] = id;
   }
 
   for (const [roleKey, perms] of Object.entries(ROLE_PERMISSIONS)) {
@@ -54,7 +57,7 @@ async function ensureRbac() {
     for (const p of perms) {
       const permissionId = permByKey[p];
       if (!permissionId) continue;
-      await db.insert(rolePermissions).values({ roleId, permissionId }).onConflictDoNothing();
+      await db.insert(rolePermissions).ignore().values({ roleId, permissionId });
     }
   }
   return roleByKey;
@@ -98,18 +101,14 @@ export async function POST(request: Request) {
     adminId = existing.id;
     action = "updated";
   } else {
-    const [created] = await db
+    adminId = newId();
+    await db
       .insert(adminUsers)
-      .values({ email, name, passwordHash: hashPassword(password), isActive: "true" })
-      .returning();
-    adminId = created!.id;
+      .values({ id: adminId, email, name, passwordHash: hashPassword(password), isActive: "true" });
     action = "created";
   }
 
-  await db
-    .insert(adminUserRoles)
-    .values({ adminUserId: adminId, roleId: superRoleId })
-    .onConflictDoNothing();
+  await db.insert(adminUserRoles).ignore().values({ adminUserId: adminId, roleId: superRoleId });
 
   return NextResponse.json({ ok: true, action, email });
 }
