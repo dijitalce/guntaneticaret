@@ -21,12 +21,15 @@ import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
 const LISTING_CACHE_TTL_SECONDS = 90;
 const PRODUCT_CACHE_TTL_SECONDS = 300;
 
-export function cachedVisibleBrands(tenantId: string) {
-  return unstable_cache(
+export async function cachedVisibleBrands(tenantId: string) {
+  const rows = await unstable_cache(
     () => listVisibleBrands(tenantId),
-    ["nav-brands", tenantId],
+    ["nav-brands", tenantId, "v2"],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
+  // Tenant sync sırasında boş sonuç gelirse cache’i zehirleme.
+  if (rows.length === 0) return listVisibleBrands(tenantId);
+  return rows;
 }
 
 export function cachedPopularCategories(limit = 8) {
