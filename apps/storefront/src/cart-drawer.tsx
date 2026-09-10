@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { IconCart, IconClose, IconTruck } from "./icons";
 
 export type CartSummaryPayload = {
@@ -38,7 +39,7 @@ export function FreeShippingBar({
   remainingForFreeShipping: number;
   freeShippingUnlocked: boolean;
 }) {
-  const progress = Math.min(100, freeShippingMin > 0 ? (subtotal / freeShippingMin) * 100 : 0);
+  const progress = Math.min(100, Math.max(4, freeShippingMin > 0 ? (subtotal / freeShippingMin) * 100 : 0));
   return (
     <div className={`free-ship-bar${freeShippingUnlocked ? " is-unlocked" : ""}`}>
       <div className="free-ship-bar-head">
@@ -46,13 +47,11 @@ export function FreeShippingBar({
         {freeShippingUnlocked ? (
           <strong>Ücretsiz kargo kazandın</strong>
         ) : (
-          <strong>
-            Ücretsiz kargoya {money(remainingForFreeShipping)} kaldı
-          </strong>
+          <strong>Ücretsiz kargoya {money(remainingForFreeShipping)} kaldı</strong>
         )}
       </div>
       <div className="free-ship-track" aria-hidden>
-        <span style={{ width: `${progress}%` }} />
+        <span style={{ width: `${freeShippingUnlocked ? 100 : progress}%` }} />
       </div>
       <p>
         {freeShippingUnlocked
@@ -75,6 +74,7 @@ const emptyCart: CartSummaryPayload = {
 
 export function CartShell({ placeholder }: { placeholder: string }) {
   const titleId = useId();
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cart, setCart] = useState<CartSummaryPayload>(emptyCart);
@@ -85,6 +85,10 @@ export function CartShell({ placeholder }: { placeholder: string }) {
     const data = (await res.json()) as CartSummaryPayload;
     setCart(data);
     return data;
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -157,6 +161,136 @@ export function CartShell({ placeholder }: { placeholder: string }) {
     refresh().catch(() => {});
   }
 
+  const drawer =
+    open && mounted
+      ? createPortal(
+          <div className="cart-drawer-root" role="presentation">
+            <button
+              type="button"
+              className="cart-drawer-backdrop"
+              aria-label="Sepeti kapat"
+              onClick={() => setOpen(false)}
+            />
+            <aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+              <header className="cart-drawer-head">
+                <div>
+                  <h2 id={titleId}>Sepetim</h2>
+                  <p>{cart.qty > 0 ? `${cart.qty} ürün` : "Henüz ürün yok"}</p>
+                </div>
+                <button
+                  type="button"
+                  className="cart-drawer-close"
+                  onClick={() => setOpen(false)}
+                  aria-label="Kapat"
+                >
+                  <IconClose />
+                </button>
+              </header>
+
+              <div className="cart-drawer-ship">
+                <FreeShippingBar
+                  subtotal={cart.subtotal}
+                  freeShippingMin={cart.freeShippingMin}
+                  remainingForFreeShipping={cart.remainingForFreeShipping}
+                  freeShippingUnlocked={cart.freeShippingUnlocked}
+                />
+              </div>
+
+              <div className="cart-drawer-body">
+                {cart.items.length === 0 ? (
+                  <div className="cart-drawer-empty">
+                    <p>Sepetin boş. Aracına uygun parçayı ekleyerek başla.</p>
+                    <Link className="btn btn-secondary" href="/" onClick={() => setOpen(false)}>
+                      Alışverişe başla
+                    </Link>
+                  </div>
+                ) : (
+                  <ul className="cart-drawer-list">
+                    {cart.items.map((item) => {
+                      const unit = Number(item.price);
+                      const line = unit * item.qty;
+                      return (
+                        <li key={item.id} className="cart-drawer-item">
+                          <Link
+                            href={`/urun/${item.slug}`}
+                            className="cart-drawer-thumb"
+                            onClick={() => setOpen(false)}
+                          >
+                            <Image src={item.imageUrl || placeholder} alt="" width={72} height={72} />
+                          </Link>
+                          <div className="cart-drawer-item-main">
+                            <Link href={`/urun/${item.slug}`} onClick={() => setOpen(false)}>
+                              {item.name}
+                            </Link>
+                            <span>{item.sku}</span>
+                            <div className="cart-drawer-item-actions">
+                              <div className="qty-stepper" role="group" aria-label="Adet">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  aria-label="Adeti azalt"
+                                  onClick={() => mutate("update", item.id, item.qty - 1)}
+                                >
+                                  −
+                                </button>
+                                <span>{item.qty}</span>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  aria-label="Adeti artır"
+                                  onClick={() => mutate("update", item.id, item.qty + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                className="cart-remove"
+                                disabled={busy}
+                                onClick={() => mutate("remove", item.id)}
+                              >
+                                Kaldır
+                              </button>
+                            </div>
+                          </div>
+                          <strong>{money(line)}</strong>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {cart.items.length > 0 && (
+                <footer className="cart-drawer-foot">
+                  <dl>
+                    <div>
+                      <dt>Ara toplam</dt>
+                      <dd>{money(cart.subtotal)}</dd>
+                    </div>
+                    <div>
+                      <dt>Kargo</dt>
+                      <dd>{cart.shippingAmount <= 0 ? "Ücretsiz" : money(cart.shippingAmount)}</dd>
+                    </div>
+                    <div className="is-total">
+                      <dt>Toplam</dt>
+                      <dd>{money(cart.subtotal + cart.shippingAmount)}</dd>
+                    </div>
+                  </dl>
+                  <Link className="btn btn-primary" href="/odeme" onClick={() => setOpen(false)}>
+                    Ödemeye geç
+                  </Link>
+                  <Link className="cart-drawer-full" href="/sepet" onClick={() => setOpen(false)}>
+                    Sepet sayfasına git
+                  </Link>
+                </footer>
+              )}
+            </aside>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       <button type="button" className="icon-btn cart-chip" onClick={openDrawer} aria-expanded={open}>
@@ -164,118 +298,7 @@ export function CartShell({ placeholder }: { placeholder: string }) {
         <span>Sepet</span>
         {cart.qty > 0 && <em>{cart.qty}</em>}
       </button>
-
-      {open && (
-        <div className="cart-drawer-root" role="presentation">
-          <button type="button" className="cart-drawer-backdrop" aria-label="Sepeti kapat" onClick={() => setOpen(false)} />
-          <aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-            <header className="cart-drawer-head">
-              <div>
-                <h2 id={titleId}>Sepetin</h2>
-                <p>{cart.qty > 0 ? `${cart.qty} ürün` : "Henüz ürün yok"}</p>
-              </div>
-              <button type="button" className="cart-drawer-close" onClick={() => setOpen(false)} aria-label="Kapat">
-                <IconClose />
-              </button>
-            </header>
-
-            <div className="cart-drawer-ship">
-              <FreeShippingBar
-                subtotal={cart.subtotal}
-                freeShippingMin={cart.freeShippingMin}
-                remainingForFreeShipping={cart.remainingForFreeShipping}
-                freeShippingUnlocked={cart.freeShippingUnlocked}
-              />
-            </div>
-
-            <div className="cart-drawer-body">
-              {cart.items.length === 0 ? (
-                <div className="cart-drawer-empty">
-                  <p>Sepetin boş. Aracına uygun parçayı ekleyerek başla.</p>
-                  <Link className="btn btn-secondary" href="/" onClick={() => setOpen(false)}>
-                    Alışverişe başla
-                  </Link>
-                </div>
-              ) : (
-                <ul className="cart-drawer-list">
-                  {cart.items.map((item) => {
-                    const unit = Number(item.price);
-                    const line = unit * item.qty;
-                    return (
-                      <li key={item.id} className="cart-drawer-item">
-                        <Link href={`/urun/${item.slug}`} className="cart-drawer-thumb" onClick={() => setOpen(false)}>
-                          <Image src={item.imageUrl || placeholder} alt="" width={72} height={72} />
-                        </Link>
-                        <div className="cart-drawer-item-main">
-                          <Link href={`/urun/${item.slug}`} onClick={() => setOpen(false)}>
-                            {item.name}
-                          </Link>
-                          <span>{item.sku}</span>
-                          <div className="cart-drawer-item-actions">
-                            <div className="qty-stepper" role="group" aria-label="Adet">
-                              <button
-                                type="button"
-                                disabled={busy}
-                                aria-label="Adeti azalt"
-                                onClick={() => mutate("update", item.id, item.qty - 1)}
-                              >
-                                −
-                              </button>
-                              <span>{item.qty}</span>
-                              <button
-                                type="button"
-                                disabled={busy}
-                                aria-label="Adeti artır"
-                                onClick={() => mutate("update", item.id, item.qty + 1)}
-                              >
-                                +
-                              </button>
-                            </div>
-                            <button
-                              type="button"
-                              className="cart-remove"
-                              disabled={busy}
-                              onClick={() => mutate("remove", item.id)}
-                            >
-                              Kaldır
-                            </button>
-                          </div>
-                        </div>
-                        <strong>{money(line)}</strong>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-
-            {cart.items.length > 0 && (
-              <footer className="cart-drawer-foot">
-                <dl>
-                  <div>
-                    <dt>Ara toplam</dt>
-                    <dd>{money(cart.subtotal)}</dd>
-                  </div>
-                  <div>
-                    <dt>Kargo</dt>
-                    <dd>{cart.shippingAmount <= 0 ? "Ücretsiz" : money(cart.shippingAmount)}</dd>
-                  </div>
-                  <div className="is-total">
-                    <dt>Toplam</dt>
-                    <dd>{money(cart.subtotal + cart.shippingAmount)}</dd>
-                  </div>
-                </dl>
-                <Link className="btn btn-primary" href="/odeme" onClick={() => setOpen(false)}>
-                  Ödemeye geç
-                </Link>
-                <Link className="cart-drawer-full" href="/sepet" onClick={() => setOpen(false)}>
-                  Sepet sayfasına git
-                </Link>
-              </footer>
-            )}
-          </aside>
-        </div>
-      )}
+      {drawer}
     </>
   );
 }
