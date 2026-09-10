@@ -54,55 +54,98 @@ function slugify(value: string): string {
 }
 
 async function main() {
-  const existing = await db.select({ id: tenants.id }).from(tenants).limit(1);
-  if (existing.length > 0) {
-    console.log("Seed skipped: data already present.");
+  const existingTenants = await db.select({ id: tenants.id, slug: tenants.slug }).from(tenants).limit(5);
+  const [existingBrand] = await db.select({ id: vehicleBrands.id }).from(vehicleBrands).limit(1);
+  const [existingAdmin] = await db.select({ id: adminUsers.id }).from(adminUsers).limit(1);
+
+  if (existingTenants.length > 0 && existingBrand && existingAdmin) {
+    console.log("Seed skipped: tenants, catalog and admin already present. Use db:sync-catalog / XML import for more data.");
     await pool.end();
     return;
   }
 
-  const permValues = Object.values(ADMIN_PERMISSION).map((key) => ({ id: newId(), key, name: key }));
-  await db.insert(permissions).values(permValues);
-  const permByKey = Object.fromEntries(permValues.map((p) => [p.key, p.id]));
-
-  const roleValues = Object.entries(ADMIN_ROLE).map(([, key]) => ({
-    id: newId(),
-    key,
-    name: key,
-  }));
-  await db.insert(roles).values(roleValues);
-  const roleByKey = Object.fromEntries(roleValues.map((r) => [r.key, r.id]));
-
-  for (const [roleKey, perms] of Object.entries(ROLE_PERMISSIONS)) {
-    const roleId = roleByKey[roleKey];
-    if (!roleId) continue;
-    await db.insert(rolePermissions).values(
-      perms.map((p) => ({
-        roleId,
-        permissionId: permByKey[p]!,
-      })),
-    );
+  if (existingTenants.length > 0) {
+    console.log("Tenants already exist — seeding missing catalog/CMS/admin only…");
   }
 
-  const admin = {
-    id: newId(),
-    email: "admin@guntan.local",
-    name: "Süper Admin",
-    passwordHash: hashPassword("Admin123!"),
-  };
-  await db.insert(adminUsers).values(admin);
-  await db.insert(adminUserRoles).values({
-    adminUserId: admin.id,
-    roleId: roleByKey[ADMIN_ROLE.SUPER_ADMIN]!,
-  });
+  let permByKey: Record<string, string> = {};
+  let roleByKey: Record<string, string> = {};
+
+  if (!existingAdmin) {
+    const permValues = Object.values(ADMIN_PERMISSION).map((key) => ({ id: newId(), key, name: key }));
+    for (const p of permValues) {
+      const [have] = await db.select().from(permissions).where(eq(permissions.key, p.key)).limit(1);
+      if (!have) await db.insert(permissions).values(p);
+    }
+    const allPerms = await db.select().from(permissions);
+    permByKey = Object.fromEntries(allPerms.map((p) => [p.key, p.id]));
+
+    for (const key of Object.values(ADMIN_ROLE)) {
+      const [have] = await db.select().from(roles).where(eq(roles.key, key)).limit(1);
+      if (!have) await db.insert(roles).values({ id: newId(), key, name: key });
+    }
+    const allRoles = await db.select().from(roles);
+    roleByKey = Object.fromEntries(allRoles.map((r) => [r.key, r.id]));
+
+    for (const [roleKey, perms] of Object.entries(ROLE_PERMISSIONS)) {
+      const roleId = roleByKey[roleKey];
+      if (!roleId) continue;
+      for (const p of perms) {
+        const permissionId = permByKey[p];
+        if (!permissionId) continue;
+        await db.insert(rolePermissions).ignore().values({ roleId, permissionId });
+      }
+    }
+
+    const admin = {
+      id: newId(),
+      email: "admin@guntan.local",
+      name: "Süper Admin",
+      passwordHash: hashPassword("Admin123!"),
+    };
+    await db.insert(adminUsers).values(admin);
+    await db.insert(adminUserRoles).ignore().values({
+      adminUserId: admin.id,
+      roleId: roleByKey[ADMIN_ROLE.SUPER_ADMIN]!,
+    });
+    console.log("Admin: admin@guntan.local / Admin123!");
+  }
+
+  if (existingBrand) {
+    console.log("Catalog already present — ensuring CMS pages…");
+    const [guntanRow] = await db.select().from(tenants).where(eq(tenants.slug, "guntan")).limit(1);
+    if (guntanRow) {
+      for (const page of [
+        { title: "Hakkımızda", slug: "hakkimizda", body: "Hakkımızda içeriği." },
+        { title: "Mesafeli Satış Sözleşmesi", slug: "mesafeli-satis", body: "Sözleşme metni." },
+        { title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
+        { title: "İade Şartları", slug: "iade", body: "İade koşulları." },
+      ]) {
+        const [have] = await db
+          .select()
+          .from(pages)
+          .where(eq(pages.slug, page.slug))
+          .limit(1);
+        if (!have) await db.insert(pages).values({ tenantId: guntanRow.id, ...page });
+      }
+    }
+    await compileVisibility(db);
+    await pool.end();
+    return;
+  }
 
   const supplier = { id: newId(), name: "Demo Tedarikçi", code: "DEMO" };
-  await db.insert(suppliers).values(supplier);
+  const [haveSupplier] = await db.select().from(suppliers).where(eq(suppliers.code, "DEMO")).limit(1);
+  if (!haveSupplier) await db.insert(suppliers).values(supplier);
+  else Object.assign(supplier, haveSupplier);
 
   const bosch = { id: newId(), name: "Bosch", slug: "bosch" };
-  await db.insert(manufacturers).values(bosch);
   const mann = { id: newId(), name: "MANN-FILTER", slug: "mann-filter" };
-  await db.insert(manufacturers).values(mann);
+  for (const m of [bosch, mann]) {
+    const [have] = await db.select().from(manufacturers).where(eq(manufacturers.slug, m.slug)).limit(1);
+    if (have) Object.assign(m, have);
+    else await db.insert(manufacturers).values(m);
+  }
 
   const brandDefs = [
     { name: "Alfa Romeo", slug: "alfa-romeo", group: "italy" },
@@ -325,20 +368,34 @@ async function main() {
   const guntanTheme = { ...DEFAULT_THEME_TOKENS };
   const japonTheme = { ...DEFAULT_THEME_TOKENS, primary: "#0f766e", accent: "#0e7490" };
 
-  const guntan = { id: newId(), name: "Güntan Oto Yedek Parça", slug: "guntan", status: "active", visibilityMode: "ALL" };
-  await db.insert(tenants).values(guntan);
-  const japon = { id: newId(), name: "Japon Grup Oto Yedek Parça", slug: "japon", status: "active", visibilityMode: "GROUPS" };
-  await db.insert(tenants).values(japon);
+  let guntan = (await db.select().from(tenants).where(eq(tenants.slug, "guntan")).limit(1))[0] as
+    | { id: string; name: string; slug: string; status: string; visibilityMode: string }
+    | undefined;
+  let japon = (await db.select().from(tenants).where(eq(tenants.slug, "japon")).limit(1))[0] as
+    | { id: string; name: string; slug: string; status: string; visibilityMode: string }
+    | undefined;
+
+  if (!guntan) {
+    guntan = { id: newId(), name: "Güntan Oto Yedek Parça", slug: "guntan", status: "active", visibilityMode: "ALL" };
+    await db.insert(tenants).values(guntan);
+  }
+  if (!japon) {
+    japon = { id: newId(), name: "Japon Grup Oto Yedek Parça", slug: "japon", status: "active", visibilityMode: "GROUPS" };
+    await db.insert(tenants).values(japon);
+  }
 
   const japonSite = GROUP_SITES.find((s) => s.slug === "japon")!;
-  await db.insert(tenantDomains).values([
+  for (const row of [
     { tenantId: guntan.id, hostname: ALL_SITE.productionHost, isPrimary: true },
     ...ALL_SITE.localHosts.map((hostname) => ({ tenantId: guntan.id, hostname, isPrimary: false })),
     { tenantId: japon.id, hostname: japonSite.productionHost, isPrimary: true },
     ...japonSite.localHosts.map((hostname) => ({ tenantId: japon.id, hostname, isPrimary: false })),
-  ]);
+  ]) {
+    const [have] = await db.select().from(tenantDomains).where(eq(tenantDomains.hostname, row.hostname)).limit(1);
+    if (!have) await db.insert(tenantDomains).values(row);
+  }
 
-  await db.insert(tenantSettings).values([
+  for (const row of [
     {
       tenantId: guntan.id,
       siteName: "Güntan Oto Yedek Parça",
@@ -369,15 +426,25 @@ async function main() {
       placeholderImageUrl: "/placeholder-product.jpg",
       socialJson: { allCatalogUrl: ALL_CATALOG_URL },
     },
-  ]);
+  ]) {
+    const [have] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, row.tenantId)).limit(1);
+    if (!have) await db.insert(tenantSettings).values(row);
+  }
 
-  await db.insert(tenantCatalogRules).values({
-    tenantId: japon.id,
-    kind: "include_group",
-    targetId: japanGroup.id,
-  });
+  const [haveRule] = await db
+    .select()
+    .from(tenantCatalogRules)
+    .where(eq(tenantCatalogRules.tenantId, japon.id))
+    .limit(1);
+  if (!haveRule) {
+    await db.insert(tenantCatalogRules).values({
+      tenantId: japon.id,
+      kind: "include_group",
+      targetId: japanGroup.id,
+    });
+  }
 
-  await db.insert(tenantBankAccounts).values([
+  for (const row of [
     {
       tenantId: guntan.id,
       bankName: "Ziraat Bankası",
@@ -390,49 +457,74 @@ async function main() {
       accountHolder: "Japon Grup Oto Yedek Parça",
       iban: "TR00 0000 0000 0000 0000 0000 02",
     },
-  ]);
-
-  for (const tenant of [guntan, japon]) {
-    await db.insert(pages).values([
-      { tenantId: tenant.id, title: "Hakkımızda", slug: "hakkimizda", body: "Hakkımızda içeriği." },
-      { tenantId: tenant.id, title: "Mesafeli Satış Sözleşmesi", slug: "mesafeli-satis", body: "Sözleşme metni." },
-      { tenantId: tenant.id, title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
-      { tenantId: tenant.id, title: "İade Şartları", slug: "iade", body: "İade koşulları." },
-    ]);
-    const menu = { id: newId(), tenantId: tenant.id, key: "header", name: "Header" };
-    await db.insert(menus).values(menu);
-    await db.insert(menuItems).values([
-      { menuId: menu.id, label: "Ana Sayfa", href: "/", sortOrder: 0 },
-      { menuId: menu.id, label: "İletişim", href: "/iletisim", sortOrder: 1 },
-    ]);
+  ]) {
+    const [have] = await db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, row.tenantId)).limit(1);
+    if (!have) await db.insert(tenantBankAccounts).values(row);
   }
 
-  await db.insert(xmlFeeds).values({
-    supplierId: supplier.id,
-    name: "Demo Fixture Feed",
-    filePath: "packages/import/fixtures/demo-products.xml",
-    mapping: {
-      externalId: "id",
-      sku: "sku",
-      name: "name",
-      description: "description",
-      manufacturer: "manufacturer",
-      category: "category",
-      price: "price",
-      compareAtPrice: "compareAtPrice",
-      stock: "stock",
-      barcode: "barcode",
-      oem: "oem",
-      imageUrl: "image",
-      vehicleBrand: "fitment.brand",
-      vehicleModel: "fitment.model",
-      vehicleGeneration: "fitment.generation",
-      vehicleEngine: "fitment.engine",
-    },
-  });
+  for (const tenant of [guntan, japon]) {
+    for (const page of [
+      { title: "Hakkımızda", slug: "hakkimizda", body: "Hakkımızda içeriği." },
+      { title: "Mesafeli Satış Sözleşmesi", slug: "mesafeli-satis", body: "Sözleşme metni." },
+      { title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
+      { title: "İade Şartları", slug: "iade", body: "İade koşulları." },
+    ]) {
+      const [have] = await db
+        .select()
+        .from(pages)
+        .where(eq(pages.slug, page.slug))
+        .limit(1);
+      // slug is per-tenant unique; check tenant+slug properly
+      const [haveTenantPage] = await db
+        .select()
+        .from(pages)
+        .where(eq(pages.tenantId, tenant.id))
+        .limit(100);
+      if (!haveTenantPage.some((p) => p.slug === page.slug)) {
+        await db.insert(pages).values({ tenantId: tenant.id, ...page });
+      }
+      void have;
+    }
+    const [haveMenu] = await db.select().from(menus).where(eq(menus.tenantId, tenant.id)).limit(1);
+    if (!haveMenu) {
+      const menu = { id: newId(), tenantId: tenant.id, key: "header", name: "Header" };
+      await db.insert(menus).values(menu);
+      await db.insert(menuItems).values([
+        { menuId: menu.id, label: "Ana Sayfa", href: "/", sortOrder: 0 },
+        { menuId: menu.id, label: "İletişim", href: "/iletisim", sortOrder: 1 },
+      ]);
+    }
+  }
+
+  const [haveFeed] = await db.select().from(xmlFeeds).limit(1);
+  if (!haveFeed) {
+    await db.insert(xmlFeeds).values({
+      supplierId: supplier.id,
+      name: "Demo Fixture Feed",
+      filePath: "packages/import/fixtures/demo-products.xml",
+      mapping: {
+        externalId: "id",
+        sku: "sku",
+        name: "name",
+        description: "description",
+        manufacturer: "manufacturer",
+        category: "category",
+        price: "price",
+        compareAtPrice: "compareAtPrice",
+        stock: "stock",
+        barcode: "barcode",
+        oem: "oem",
+        imageUrl: "image",
+        vehicleBrand: "fitment.brand",
+        vehicleModel: "fitment.model",
+        vehicleGeneration: "fitment.generation",
+        vehicleEngine: "fitment.engine",
+      },
+    });
+  }
 
   await compileVisibility(db);
-  console.log("Seed complete. Admin: admin@guntan.local / Admin123!");
+  console.log("Seed complete.");
   await pool.end();
 }
 

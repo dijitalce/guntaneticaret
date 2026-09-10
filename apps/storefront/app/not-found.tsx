@@ -14,28 +14,25 @@ export default function NotFound() {
       }}
     >
       <div style={{ maxWidth: 480 }}>
-        <h1 style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>Site henüz hazır değil</h1>
+        <h1 style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>Sayfa bulunamadı</h1>
         <p style={{ lineHeight: 1.55, color: "#444", marginBottom: "1rem" }}>
-          Bu domain için veritabanında tenant kaydı bulunamadı. Hostinger MySQL’de şema ve seed
-          çalıştırılmamış olabilir veya <code>DATABASE_URL</code> hâlâ Postgres.
+          İstediğiniz sayfa yok veya henüz oluşturulmamış. Marka / kategori / ürün listeleri boşsa
+          sunucuda katalog seed veya XML import gerekir.
         </p>
-        <ol style={{ lineHeight: 1.7, color: "#333", paddingLeft: "1.25rem" }}>
+        <ul style={{ lineHeight: 1.7, color: "#333", paddingLeft: "1.25rem" }}>
           <li>
-            <code>DATABASE_URL=mysql://...@localhost:3306/...</code>
+            <code>pnpm db:sync-catalog</code> — araç markaları
           </li>
           <li>
-            <code>pnpm db:migrate</code>
+            <code>pnpm db:seed</code> — demo katalog (boşsa)
           </li>
           <li>
-            <code>pnpm db:seed</code>
+            <code>pnpm import:xml</code> / <code>pnpm import:basbug</code> — gerçek ürünler
           </li>
-          <li>
-            <code>pnpm db:sync-tenants</code>
-          </li>
-        </ol>
+        </ul>
         <p style={{ marginTop: "1.25rem" }}>
           <Link href="/" style={{ color: "#0b57d0" }}>
-            Anasayfayı yenile
+            Anasayfaya dön
           </Link>
         </p>
       </div>
