@@ -2,15 +2,17 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
-import { getTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
+import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
 import { CartBadge } from "../src/cart-badge";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
+import { TENANT_STATUS } from "@guntan/types";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -18,7 +20,10 @@ const font = DM_Sans({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const tenant = await getTenant();
+  const tenant = await tryGetTenant();
+  if (!tenant) {
+    return { title: "Sayfa bulunamadı", robots: { index: false, follow: false } };
+  }
   return {
     title: tenant.defaultMetaTitle ?? tenant.siteName,
     description: tenant.defaultMetaDescription ?? undefined,
@@ -44,7 +49,17 @@ function cssVars(css: string): CSSProperties {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const tenant = await getTenant();
+  const tenant = await tryGetTenant();
+  if (!tenant) {
+    return (
+      <html lang="tr" className={font.className}>
+        <body>{children}</body>
+      </html>
+    );
+  }
+  if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
+    redirect("/bakim");
+  }
   const [brands, categories] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedPopularCategories(8),

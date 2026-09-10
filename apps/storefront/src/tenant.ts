@@ -6,6 +6,10 @@ import { resolveTenantByHost, themeToCssVars } from "@guntan/tenant";
 import { TENANT_HOST_CACHE_TTL_SECONDS, TENANT_STATUS } from "@guntan/types";
 import type { TenantPublicConfig } from "@guntan/types";
 
+function requestHost(h: Headers): string {
+  return h.get("x-request-host") ?? h.get("host") ?? "guntan.localhost";
+}
+
 function cachedTenantByHost(host: string) {
   return unstable_cache(
     () => resolveTenantByHost(host),
@@ -14,10 +18,14 @@ function cachedTenantByHost(host: string) {
   )();
 }
 
-export const getTenant = cache(async (): Promise<TenantPublicConfig> => {
+/** Layout / metadata: tenant yoksa null (notFound çağırmaz — beyaz ekranı önler). */
+export const tryGetTenant = cache(async (): Promise<TenantPublicConfig | null> => {
   const h = await headers();
-  const host = h.get("x-request-host") ?? h.get("host") ?? "guntan.localhost";
-  const tenant = await cachedTenantByHost(host);
+  return cachedTenantByHost(requestHost(h));
+});
+
+export const getTenant = cache(async (): Promise<TenantPublicConfig> => {
+  const tenant = await tryGetTenant();
   if (!tenant) notFound();
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
