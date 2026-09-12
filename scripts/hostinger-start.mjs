@@ -638,10 +638,15 @@ async function bootNext() {
   // kilidi bırakıp çıkalım ki Hostinger'ın "3 sn içinde listen()"
   // beklentisini bozan ani/sessiz ölümler yerine öngörülebilir,
   // loglanan bir devir teslim olsun.
-  setInterval(checkMemoryCeiling, 15_000).unref();
+  setInterval(checkMemoryCeiling, 8_000).unref();
 }
 
-const memoryCeilingMb = Number(process.env.HOSTINGER_MEM_CEILING_MB ?? "200");
+// Gözlemlenen normal çalışma seviyesi zaten ~200-260MB civarında (leak değil,
+// Next.js + admin + DB havuzunun doğal ayak izi); tavanı 200'de tutmak
+// gereksiz sık devir teslime yol açıyordu. Hostinger'ın kendi sınırına
+// (gözlemlenen ~225-256MB) hâlâ pay bırakarak 215'e çıkarıyoruz; kontrol
+// aralığı da 15sn'den 8sn'e indirildi ki hızlı sıçramaları daha erken yakalasın.
+const memoryCeilingMb = Number(process.env.HOSTINGER_MEM_CEILING_MB ?? "215");
 
 function checkMemoryCeiling() {
   if (shuttingDown) return;
