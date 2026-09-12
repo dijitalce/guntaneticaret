@@ -52,6 +52,8 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 180,
     },
+    workerThreads: false,
+    cpus: 1,
   },
   webpack: (config) => {
     config.resolve.modules = [

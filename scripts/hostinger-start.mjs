@@ -1,9 +1,15 @@
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import fs from "node:fs";
+import os from "node:os";
 import { parse } from "node:url";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// Next, SIGTERM'de process.exit yapmasın — Hostinger bazen sağlıklı süreci yeniler.
+process.env.NEXT_MANUAL_SIG_HANDLE ??= "1";
+process.env.NEXT_TELEMETRY_DISABLED ??= "1";
+process.env.UV_THREADPOOL_SIZE ??= "2";
 
 const NodeModule = createRequire(import.meta.url)("module");
 
@@ -52,6 +58,35 @@ function rssMb() {
   return Math.round(process.memoryUsage().rss / 1024 / 1024);
 }
 
+/** Hostinger output dir (.next) izlerse cache yazmak SIGTERM + restart tetikler. */
+function redirectNextWritable(appDir, label) {
+  const nextDir = join(appDir, ".next");
+  if (!fs.existsSync(nextDir)) return;
+  const tmpBase = join(os.tmpdir(), "guntan-next", label);
+  for (const name of ["cache", "trace", "diagnostics"]) {
+    const appPath = join(nextDir, name);
+    const tmpPath = join(tmpBase, name);
+    fs.mkdirSync(tmpPath, { recursive: true });
+    try {
+      const st = fs.lstatSync(appPath);
+      if (st.isSymbolicLink()) {
+        if (fs.readlinkSync(appPath) === tmpPath) continue;
+        fs.unlinkSync(appPath);
+      } else {
+        fs.rmSync(appPath, { recursive: true, force: true });
+      }
+    } catch {
+      /* yok */
+    }
+    try {
+      fs.symlinkSync(tmpPath, appPath);
+      console.log(`[hostinger] ${label} .next/${name} → ${tmpPath}`);
+    } catch (err) {
+      console.warn(`[hostinger] ${label} .next/${name} symlink yok:`, err instanceof Error ? err.message : err);
+    }
+  }
+}
+
 process.on("uncaughtException", (err) => {
   console.error("[hostinger] yakalanmamış hata (süreç açık kalıyor):", err);
 });
@@ -59,10 +94,10 @@ process.on("unhandledRejection", (err) => {
   console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
 });
 process.on("SIGTERM", () => {
-  console.error(`[hostinger] SIGTERM pid=${process.pid} rss=${rssMb()}MB`);
+  console.error(`[hostinger] SIGTERM yoksayıldı pid=${process.pid} rss=${rssMb()}MB (süreç açık)`);
 });
 process.on("SIGINT", () => {
-  console.error(`[hostinger] SIGINT pid=${process.pid} rss=${rssMb()}MB`);
+  console.error(`[hostinger] SIGINT yoksayıldı pid=${process.pid} rss=${rssMb()}MB (süreç açık)`);
 });
 
 function pinResolves(pinned) {
@@ -380,9 +415,14 @@ function bindPort() {
 }
 
 server.on("error", (err) => {
-  if (err?.code === "EADDRINUSE" && listenAttempts < 12) {
-    console.warn(`[hostinger] ${port} dolu (${listenAttempts}), 400ms sonra yeniden denenecek`);
-    setTimeout(bindPort, 400);
+  if (err?.code === "EADDRINUSE" && listenAttempts < 8) {
+    console.warn(`[hostinger] ${port} dolu (${listenAttempts}) — başka kopya çalışıyor olabilir, 500ms sonra...`);
+    setTimeout(bindPort, 500);
+    return;
+  }
+  if (err?.code === "EADDRINUSE") {
+    console.warn(`[hostinger] ${port} hâlâ dolu; bu kopya çıkıyor (çalışan süreç korunur)`);
+    process.exit(0);
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
@@ -407,6 +447,7 @@ async function ensureAdmin() {
   if (adminPrepare) return adminPrepare;
   adminPrepare = (async () => {
     console.log(`[hostinger] admin yükleniyor (path ${adminBasePath}) rss=${rssMb()}MB`);
+    redirectNextWritable(adminDir, "admin");
     const next = loadNext();
     const admin = next({
       dev: false,
@@ -429,6 +470,7 @@ async function ensureAdmin() {
 }
 
 async function bootNext() {
+  redirectNextWritable(storefrontDir, "storefront");
   const next = loadNext();
   const storefront = next({
     dev: false,
@@ -449,6 +491,10 @@ async function bootNext() {
   } else {
     console.log(`[hostinger] ${hostname}:${port} — vitrin hazır, admin ilk ${adminBasePath} isteğinde yüklenecek`);
   }
+
+  setInterval(() => {
+    console.log(`[hostinger] canlı pid=${process.pid} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)}`);
+  }, 120_000).unref();
 }
 
 try {

@@ -55,6 +55,10 @@ const nextConfig: NextConfig = {
   },
   // ioredis'i bundle'la; Hostinger nested node_modules @ioredis/commands'u düşürüyor.
   serverExternalPackages: ["mysql2", "bullmq", "meilisearch"],
+  experimental: {
+    workerThreads: false,
+    cpus: 1,
+  },
   webpack: (config) => {
     config.resolve.modules = [
       path.join(repoRoot, "node_modules"),
