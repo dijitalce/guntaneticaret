@@ -1,5 +1,6 @@
 "use strict";
-// Hostinger Entry file: node server.js (pnpm/npm sarmalayıcısı olmadan).
+// Hostinger: Start command VE Entry file ikisi birden OLAMAZ.
+// Tek satır: node server.js
 const { pathToFileURL } = require("node:url");
 const { join } = require("node:path");
 

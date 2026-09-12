@@ -117,13 +117,41 @@ function clearLock() {
   }
 }
 
-function stopPid(pid) {
-  if (!pid || pid === process.pid) return;
+function pidAlive(pid) {
+  if (!pid || pid === process.pid) return false;
   try {
-    process.kill(pid, "SIGTERM");
-    console.warn(`[hostinger] eski süreç ${pid} durduruluyor`);
+    process.kill(pid, 0);
+    return true;
   } catch {
-    /* zaten yok */
+    return false;
+  }
+}
+
+function becomePrimaryOrExit() {
+  const lockPath = pidFile;
+  for (let i = 0; i < 6; i++) {
+    try {
+      const fd = fs.openSync(lockPath, "wx");
+      fs.writeFileSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      console.log(`[hostinger] birincil kilit pid=${process.pid}`);
+      return;
+    } catch (err) {
+      if (err?.code !== "EEXIST") {
+        console.warn("[hostinger] kilit atlandı:", err instanceof Error ? err.message : err);
+        return;
+      }
+      const prev = readLockPid();
+      if (pidAlive(prev)) {
+        console.warn(`[hostinger] kopya çıkıyor — birincil pid=${prev} zaten çalışıyor`);
+        process.exit(0);
+      }
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        /* */
+      }
+    }
   }
 }
 
@@ -466,14 +494,11 @@ function bindPort() {
 }
 
 server.on("error", (err) => {
-  if (err?.code === "EADDRINUSE" && listenAttempts < 10) {
-    stopPid(readLockPid());
-    console.warn(`[hostinger] ${port} dolu (${listenAttempts}), eski kopya kapatılıp 200ms sonra yeniden`);
-    setTimeout(bindPort, 200);
-    return;
-  }
   if (err?.code === "EADDRINUSE") {
-    console.warn(`[hostinger] ${port} hâlâ dolu; bu kopya çıkıyor`);
+    const owner = readLockPid();
+    console.warn(
+      `[hostinger] ${port} dolu (pid ${owner ?? "?"}); bu kopya Next yüklemeden çıkıyor`,
+    );
     process.exit(0);
     return;
   }
@@ -482,6 +507,7 @@ server.on("error", (err) => {
 });
 
 // Hostinger 3 sn kuralı: Next/prepare beklenmeden portu aç.
+becomePrimaryOrExit();
 bindPort();
 
 function loadNext() {
