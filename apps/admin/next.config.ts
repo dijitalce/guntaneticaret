@@ -61,21 +61,20 @@ const nextConfig: NextConfig = {
       path.join(__dirname, "node_modules"),
       ...(config.resolve.modules ?? ["node_modules"]),
     ];
-    const ioredisPkg = optionalPkgDir("ioredis");
-    const ioredisPkgJson = ioredisPkg ? path.join(ioredisPkg, "package.json") : undefined;
-    config.resolve.alias = {
-      ...config.resolve.alias,
+    const extra: Record<string, string> = {
       "drizzle-orm": pkgDir("drizzle-orm"),
       mysql2: pkgDir("mysql2"),
-      ...(ioredisPkg ? { ioredis: ioredisPkg } : {}),
-      ...(ioredisPkgJson
-        ? { "@ioredis/commands": optionalPkgDir("@ioredis/commands", ioredisPkgJson) }
-        : {}),
     };
-    const alias = config.resolve.alias as Record<string, unknown>;
-    for (const [key, value] of Object.entries(alias)) {
-      if (!value) delete alias[key];
-    }
+    const ioredisPkg = optionalPkgDir("ioredis");
+    if (ioredisPkg) extra.ioredis = ioredisPkg;
+    const commands = ioredisPkg
+      ? optionalPkgDir("@ioredis/commands", path.join(ioredisPkg, "package.json"))
+      : undefined;
+    if (commands) extra["@ioredis/commands"] = commands;
+
+    // Next aliases `private-next-empty-module: false`. Never strip falsy aliases.
+    const prev = config.resolve.alias;
+    config.resolve.alias = Array.isArray(prev) ? [...prev, extra] : { ...prev, ...extra };
     return config;
   },
 };
