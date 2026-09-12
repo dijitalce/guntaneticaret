@@ -715,12 +715,21 @@ async function bootNext() {
   setInterval(checkMemoryCeiling, 8_000).unref();
 }
 
-// Gözlemlenen normal çalışma seviyesi zaten ~200-260MB civarında (leak değil,
-// Next.js + admin + DB havuzunun doğal ayak izi); tavanı 200'de tutmak
-// gereksiz sık devir teslime yol açıyordu. Hostinger'ın kendi sınırına
-// (gözlemlenen ~225-256MB) hâlâ pay bırakarak 215'e çıkarıyoruz; kontrol
-// aralığı da 15sn'den 8sn'e indirildi ki hızlı sıçramaları daha erken yakalasın.
-const memoryCeilingMb = Number(process.env.HOSTINGER_MEM_CEILING_MB ?? "215");
+// 215MB tavanı denendi ama loglar gösterdi ki uygulama "vitrin hazır" olduktan
+// hemen sonra doğal olarak ~216-240MB'a sıçrıyor (leak değil — Next.js'in ilk
+// gerçek trafikte route'ları JIT derlemesi, DB/Redis havuzu ısınması) — yani
+// tavan, uygulamanın normal ısınma seviyesinin TAM İÇİNDEYDİ. Sonuç: neredeyse
+// HER döngüde restart, ve kullanıcının "önce hızlı, biraz sonra donuk" şikayeti
+// tam da bu sürekli devir-teslim penceresine denk gelmekten kaynaklanıyordu.
+//
+// Hesabın gerçek RAM tahsisi (Hostinger Business/Unlimited: 3GB, Cloud: 4GB+)
+// bu ~240MB'lık ayak izinin çok üzerinde — önceki "~225-256MB'da Hostinger
+// öldürüyor" varsayımı aslında bizim KENDİ eski tavan kodumuzun etkisiydi,
+// platformun gerçek bir sınırı değildi. Bu yüzden tavanı ciddi şekilde
+// yükseltip uygulamanın doğal ısınma seviyesine ulaşmasına izin veriyoruz;
+// kontrol aralığı 8sn'de kalıyor ki gerçek bir sızıntı olursa (sürekli
+// tırmanan, plato yapmayan bir eğri) yine erken yakalanabilsin.
+const memoryCeilingMb = Number(process.env.HOSTINGER_MEM_CEILING_MB ?? "400");
 
 function checkMemoryCeiling() {
   if (shuttingDown) return;
