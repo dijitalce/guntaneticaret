@@ -176,7 +176,12 @@ function shutdown(signal) {
   } catch {
     process.exit(0);
   }
-  setTimeout(() => process.exit(0), 2000);
+  // .close() portu hemen bırakır (yeni süreç dinlemeye başlayabilir); bu süre
+  // sadece hâlâ devam eden isteklerin (yoğunluk anında yavaşlamış olabilir)
+  // yarıda kesilmeden bitmesi için tanınan ek tolerans. 2sn bazı yavaş
+  // isteklerin ortasında kesilmesine (504/bağlantı sıfırlama gibi görünen
+  // hatalara) yol açabiliyordu.
+  setTimeout(() => process.exit(0), 5000);
 }
 
 process.on("uncaughtException", (err) => {
@@ -424,6 +429,17 @@ function notifyBootFailed() {
   waiters = [];
 }
 
+// LiteSpeed'in kendi ters-vekil (reverse proxy) zaman aşımı muhtemelen
+// 90 saniyeden çok daha kısa (tipik olarak 30-60 sn). İstekleri 90 sn
+// bekletmek, LiteSpeed zaten 504 döndürüp gittikten SONRA bile bağlantıyı
+// açık tutup kaynak tüketmek demekti — hem gereksiz, hem de yeniden
+// başlatma anlarında isteklerin yığılıp ("thundering herd") bir sonraki
+// bellek sıçramasını tetiklemesine katkıda bulunuyordu. Kısa tutup, normal
+// devir teslim penceresinden (birkaç saniye) biraz fazla pay bırakarak
+// LiteSpeed'in 504'ünden ÖNCE kendi temiz 503 sayfamızı (Retry-After ile)
+// döndürüyoruz.
+const readyWaitMs = Number(process.env.HOSTINGER_READY_WAIT_MS ?? "15000");
+
 function waitUntilReady(kind, req) {
   if (isAppReady(kind)) return Promise.resolve(true);
   if (bootFailed) return Promise.resolve(false);
@@ -431,7 +447,7 @@ function waitUntilReady(kind, req) {
     const timer = setTimeout(() => {
       waiters = waiters.filter((w) => w !== entry);
       resolve(false);
-    }, 90_000);
+    }, readyWaitMs);
     const entry = { kind, resolve, timer };
     waiters.push(entry);
     req.on("close", () => {
