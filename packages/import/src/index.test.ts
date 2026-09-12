@@ -11,7 +11,16 @@ describe("xml mapping", () => {
     const a = mapRaw({ id: "1", sku: "S", name: "N", price: "10" }, mapping);
     const b = mapRaw({ id: "1", sku: "S", name: "N", price: "10" }, mapping);
     expect(a?.sku).toBe("S");
+    expect(a?.price).toBe("13.00");
     expect(contentHash(a!)).toBe(contentHash(b!));
+  });
+  it("marks up list price with the cost band percent", () => {
+    const row = mapRaw(
+      { id: "1", sku: "S", name: "N", price: "1000", list: "1500" },
+      { externalId: "id", sku: "sku", name: "name", price: "price", compareAtPrice: "list" },
+    );
+    expect(row?.price).toBe("1300.00");
+    expect(row?.compareAtPrice).toBe("1950.00");
   });
   it("maps VAR availability to in-stock qty", () => {
     const row = mapRaw({ Id: "1", Code: "S", Name: "N", Price: "10", Availability: "VAR" }, {

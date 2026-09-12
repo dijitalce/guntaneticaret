@@ -23,6 +23,8 @@ export function ProductCard({
     imageUrl?: string | null;
     oem?: string | null;
     stockStatus?: string;
+    fitments?: { href: string; label: string }[];
+    fitmentExtra?: number;
   };
   placeholder: string | null;
   priority?: boolean;
@@ -30,6 +32,7 @@ export function ProductCard({
   const img = productImageUrl(product.imageUrl, placeholder);
   const disc = product.price ? discountPercent(product.price, product.compareAtPrice ?? null) : null;
   const inStock = product.stockStatus !== "out_of_stock";
+  const fitments = product.fitments ?? [];
   return (
     <article className="product-card">
       <Link className="product-card-media" href={`/urun/${product.slug}`}>
@@ -46,7 +49,18 @@ export function ProductCard({
       <div className="product-card-body">
         {product.manufacturerName && <span className="product-card-mfr">{product.manufacturerName}</span>}
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
-        {product.oem && <small className="product-card-oem">OEM {product.oem}</small>}
+        {fitments.length > 0 && (
+          <p className="product-card-fit">
+            <span>Uyumlu</span>
+            {fitments.map((f, i) => (
+              <span key={f.href}>
+                {i > 0 ? ", " : ""}
+                <Link href={f.href}>{f.label}</Link>
+              </span>
+            ))}
+            {product.fitmentExtra ? <em>+{product.fitmentExtra}</em> : null}
+          </p>
+        )}
         {product.price != null && product.price !== "" && (
           <div className="product-card-price">
             {product.compareAtPrice && <s>{formatPrice(product.compareAtPrice)}</s>}

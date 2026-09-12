@@ -84,10 +84,6 @@ export default async function ProductPage({
         <div className="pdp-info">
           {data.manufacturerName && <div className="badge">{data.manufacturerName}</div>}
           <h1>{product.name}</h1>
-          <dl className="pdp-meta">
-            <div><dt>SKU</dt><dd>{product.sku}</dd></div>
-            {data.oems.length > 0 && <div><dt>OEM</dt><dd>{data.oems.map((o) => o.raw).join(", ")}</dd></div>}
-          </dl>
           <p className="price">
             {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}
             {Number(product.price).toLocaleString("tr-TR")} TL

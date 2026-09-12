@@ -100,8 +100,6 @@ export default async function CartPage({
                     {i.name}
                   </Link>
                   <p className="cart-row-meta">
-                    <span>{i.sku}</span>
-                    <span>·</span>
                     <span>Birim {money(unit)}</span>
                   </p>
                   <div className="cart-row-actions">

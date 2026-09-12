@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import IORedis from "ioredis";
 import { db, tenantDomains, tenantSettings, tenants } from "@guntan/db";
 import { CACHE_KEYS, TENANT_CONFIG_CACHE_TTL_SECONDS, TENANT_HOST_CACHE_TTL_SECONDS } from "@guntan/config";
 import {
@@ -9,7 +8,11 @@ import {
   type ThemeTokens,
 } from "@guntan/types";
 
-let redis: IORedis | null = null;
+type RedisClient = import("ioredis").default;
+type RedisCtor = typeof import("ioredis").default;
+
+let redis: RedisClient | null = null;
+let redisCtor: RedisCtor | null | undefined;
 const memCache = new Map<string, { value: TenantPublicConfig | null; exp: number }>();
 const MEM_TTL_MS = 5 * 60_000;
 
@@ -28,7 +31,23 @@ function memSet(hostname: string, value: TenantPublicConfig | null) {
   memCache.set(hostname, { value, exp: Date.now() + MEM_TTL_MS });
 }
 
-function getRedis() {
+async function loadRedisCtor(): Promise<RedisCtor | null> {
+  if (redisCtor !== undefined) return redisCtor;
+  try {
+    const mod = await import("ioredis");
+    redisCtor = mod.default;
+  } catch (err) {
+    // Hostinger sometimes copies ioredis without @ioredis/commands. Cache is optional.
+    console.warn(
+      "[tenant] ioredis yüklenemedi, bellek önbelleği kullanılıyor:",
+      err instanceof Error ? err.message : err,
+    );
+    redisCtor = null;
+  }
+  return redisCtor;
+}
+
+async function getRedis() {
   const url = process.env.REDIS_URL;
   if (!url) return null;
   // Hostinger Cloud'da REDIS_URL çoğu zaman localhost kalıyor; bağlanmayı
@@ -36,31 +55,42 @@ function getRedis() {
   if (process.env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(url)) {
     return null;
   }
-  const g = globalThis as unknown as { __guntanRedis?: IORedis | null };
+  const g = globalThis as unknown as { __guntanRedis?: RedisClient | null };
   if (g.__guntanRedis !== undefined) return g.__guntanRedis;
+  const IORedis = await loadRedisCtor();
+  if (!IORedis) {
+    g.__guntanRedis = null;
+    return null;
+  }
   if (!redis) {
-    redis = new IORedis(url, {
-      maxRetriesPerRequest: 2,
-      lazyConnect: true,
-      // If REDIS_URL points at something unreachable (e.g. a leftover
-      // "localhost" value in production with no Redis running there), the
-      // default 10s connect timeout would otherwise stall every single
-      // request on every domain by that long before falling back to the DB.
-      connectTimeout: 1500,
-      retryStrategy: () => null,
-      enableOfflineQueue: false,
-    });
-    // ioredis crashes the whole process on an unhandled "error" event; the
-    // cache is optional here, so swallow connection errors and let callers'
-    // try/catch fall back to reading straight from the database.
-    redis.on("error", () => {});
+    try {
+      redis = new IORedis(url, {
+        maxRetriesPerRequest: 2,
+        lazyConnect: true,
+        // If REDIS_URL points at something unreachable (e.g. a leftover
+        // "localhost" value in production with no Redis running there), the
+        // default 10s connect timeout would otherwise stall every single
+        // request on every domain by that long before falling back to the DB.
+        connectTimeout: 1500,
+        retryStrategy: () => null,
+        enableOfflineQueue: false,
+      });
+      // ioredis crashes the whole process on an unhandled "error" event; the
+      // cache is optional here, so swallow connection errors and let callers'
+      // try/catch fall back to reading straight from the database.
+      redis.on("error", () => {});
+    } catch (err) {
+      console.warn("[tenant] Redis kurulamadı:", err instanceof Error ? err.message : err);
+      g.__guntanRedis = null;
+      return null;
+    }
   }
   g.__guntanRedis = redis;
   return redis;
 }
 
-function liveRedis() {
-  const cache = getRedis();
+async function liveRedis() {
+  const cache = await getRedis();
   if (!cache) return null;
   if (cache.status === "wait") {
     cache.connect().catch(() => {});
@@ -72,7 +102,7 @@ export function normalizeHost(host: string): string {
   return host.replace(/:\d+$/, "").replace(/^www\./i, "").toLowerCase();
 }
 
-async function safeCacheSet(cache: IORedis | null, key: string, value: string, ttlSeconds: number) {
+async function safeCacheSet(cache: RedisClient | null, key: string, value: string, ttlSeconds: number) {
   if (!cache || cache.status !== "ready") return;
   try {
     await cache.set(key, value, "EX", ttlSeconds);
@@ -86,7 +116,7 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
   if (!hostname) return null;
   const cached = memGet(hostname);
   if (cached !== undefined) return cached;
-  const cache = liveRedis();
+  const cache = await liveRedis();
   const cacheKey = CACHE_KEYS.tenantHost(hostname);
   if (cache) {
     try {
@@ -190,7 +220,7 @@ export function themeToCssVars(theme: ThemeTokens): string {
 
 export async function invalidateTenantCache(tenantId: string, hostnames: string[]) {
   memCache.clear();
-  const cache = liveRedis();
+  const cache = await liveRedis();
   if (!cache) return;
   try {
     await cache.del(CACHE_KEYS.tenantConfig(tenantId), ...hostnames.map((h) => CACHE_KEYS.tenantHost(normalizeHost(h))));

@@ -222,7 +222,6 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                             <Link href={`/urun/${item.slug}`} onClick={() => setOpen(false)}>
                               {item.name}
                             </Link>
-                            <span>{item.sku}</span>
                             <div className="cart-drawer-item-actions">
                               <div className="qty-stepper" role="group" aria-label="Adet">
                                 <button

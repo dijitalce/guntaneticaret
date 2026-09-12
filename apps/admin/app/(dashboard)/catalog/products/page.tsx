@@ -1,5 +1,5 @@
-import { and, desc, eq, like, or } from "drizzle-orm";
-import { db, products } from "@guntan/db";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { db, productOems, products } from "@guntan/db";
 import { withBase } from "@/src/paths";
 import { EmptyState, PageHeader, Panel, StatusBadge } from "@/src/ui";
 
@@ -16,11 +16,17 @@ export default async function ProductsPage({
 
   const conditions = [];
   if (q) {
+    const pattern = `%${q}%`;
     conditions.push(
       or(
-        like(products.sku, `%${q}%`),
-        like(products.name, `%${q}%`),
-        like(products.barcode, `%${q}%`),
+        like(products.sku, pattern),
+        like(products.name, pattern),
+        like(products.barcode, pattern),
+        sql`exists (
+          select 1 from product_oems po
+          where po.product_id = ${products.id}
+            and po.raw like ${pattern}
+        )`,
       )!,
     );
   }
@@ -33,6 +39,20 @@ export default async function ProductsPage({
     .orderBy(desc(products.updatedAt))
     .limit(50);
 
+  const ids = rows.map((r) => r.id);
+  const oemRows = ids.length
+    ? await db
+        .select({ productId: productOems.productId, raw: productOems.raw })
+        .from(productOems)
+        .where(inArray(productOems.productId, ids))
+    : [];
+  const oemBy = new Map<string, string[]>();
+  for (const oem of oemRows) {
+    const list = oemBy.get(oem.productId) ?? [];
+    if (list.length < 4) list.push(oem.raw);
+    oemBy.set(oem.productId, list);
+  }
+
   const nextQuery = new URLSearchParams();
   if (q) nextQuery.set("q", q);
   if (status) nextQuery.set("status", status);
@@ -42,7 +62,7 @@ export default async function ProductsPage({
     <>
       <PageHeader
         title="Ürünler"
-        description="SKU / ad / barkod ile ara; fiyat, stok ve yayın durumunu hızlı güncelle. Kaynak XML olan ürünlerde değişiklikler bir sonraki sync’te ezilebilir."
+        description="SKU / OEM / ad / barkod ile ara; fiyat, stok ve yayın durumunu hızlı güncelle. Kaynak XML olan ürünlerde değişiklikler bir sonraki sync’te ezilebilir."
       />
 
       {sp.ok === "1" && (
@@ -60,7 +80,7 @@ export default async function ProductsPage({
         <form className="toolbar" method="get">
           <div className="field" style={{ minWidth: 240, flex: 1 }}>
             <label htmlFor="q">Ara</label>
-            <input className="input" id="q" name="q" defaultValue={q} placeholder="SKU, ürün adı veya barkod" />
+            <input className="input" id="q" name="q" defaultValue={q} placeholder="SKU, OEM, ürün adı veya barkod" />
           </div>
           <div className="field">
             <label htmlFor="status">Durum</label>
@@ -96,7 +116,8 @@ export default async function ProductsPage({
                     <td>
                       <div style={{ fontWeight: 700 }}>{p.name}</div>
                       <div style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-                        <code>{p.sku}</code>
+                        SKU <code>{p.sku}</code>
+                        {oemBy.get(p.id)?.length ? ` · OEM ${oemBy.get(p.id)!.join(", ")}` : ""}
                         {p.source ? ` · ${p.source}` : ""}
                         {" · "}
                         <StatusBadge tone={p.stockStatus === "out_of_stock" ? "bad" : "ok"}>

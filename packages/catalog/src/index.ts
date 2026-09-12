@@ -50,6 +50,47 @@ export function productImageUrl(
   return productUrl || tenantPlaceholder || globalPlaceholder;
 }
 
+export type CardFitmentLink = { href: string; label: string };
+
+/** Kartta görünen uyumlu marka/model özeti (aynı markada model adı tekrarlanmaz). */
+export function formatCardFitments(
+  rows: Array<{
+    brandName: string;
+    brandSlug: string;
+    brandSort?: number | null;
+    modelName: string;
+    modelSlug: string;
+    modelSort?: number | null;
+  }>,
+  maxItems = 3,
+): { items: CardFitmentLink[]; extra: number } {
+  const sorted = [...rows].sort(
+    (a, b) =>
+      (a.brandSort ?? 0) - (b.brandSort ?? 0) ||
+      a.brandName.localeCompare(b.brandName, "tr") ||
+      (a.modelSort ?? 0) - (b.modelSort ?? 0) ||
+      a.modelName.localeCompare(b.modelName, "tr"),
+  );
+  const unique: typeof sorted = [];
+  const seen = new Set<string>();
+  for (const row of sorted) {
+    const key = `${row.brandSlug}:${row.modelSlug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  const shown = unique.slice(0, maxItems);
+  const items = shown.map((row, i) => {
+    const prev = shown[i - 1];
+    const sameBrand = prev?.brandSlug === row.brandSlug;
+    return {
+      href: `/${row.brandSlug}/${row.modelSlug}`,
+      label: sameBrand ? row.modelName : `${row.brandName} ${row.modelName}`,
+    };
+  });
+  return { items, extra: Math.max(0, unique.length - shown.length) };
+}
+
 export async function listVisibleBrands(tenantId: string) {
   return db
     .select({
@@ -191,6 +232,35 @@ async function primaryOemsByProductIds(ids: string[]) {
   return oemBy;
 }
 
+export async function cardFitmentsByProductIds(ids: string[]) {
+  const byProduct = new Map<string, { items: CardFitmentLink[]; extra: number }>();
+  if (ids.length === 0) return byProduct;
+  const rows = await db
+    .select({
+      productId: productFitments.productId,
+      brandName: vehicleBrands.name,
+      brandSlug: vehicleBrands.slug,
+      brandSort: vehicleBrands.sortOrder,
+      modelName: vehicleModels.name,
+      modelSlug: vehicleModels.slug,
+      modelSort: vehicleModels.sortOrder,
+    })
+    .from(productFitments)
+    .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
+    .innerJoin(vehicleModels, eq(productFitments.vehicleModelId, vehicleModels.id))
+    .where(inArray(productFitments.productId, ids));
+  const grouped = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = grouped.get(row.productId);
+    if (list) list.push(row);
+    else grouped.set(row.productId, [row]);
+  }
+  for (const id of ids) {
+    byProduct.set(id, formatCardFitments(grouped.get(id) ?? [], 3));
+  }
+  return byProduct;
+}
+
 export type ListingQuery = {
   tenantId: string;
   brandId?: string;
@@ -230,6 +300,7 @@ function listingCacheKey(query: ListingQuery) {
     query.maxPrice ?? "",
     query.sort ?? "",
     query.page ?? 1,
+    "fitv1",
   ].join("|");
 }
 
@@ -402,16 +473,22 @@ async function attachListingExtras(
   page: number,
 ) {
   const ids = rows.map((r) => r.id);
-  const [imageBy, oemBy] = await Promise.all([
+  const [imageBy, oemBy, fitBy] = await Promise.all([
     primaryImagesByProductIds(ids),
     primaryOemsByProductIds(ids),
+    cardFitmentsByProductIds(ids),
   ]);
   return {
-    items: rows.map((r) => ({
-      ...r,
-      imageUrl: imageBy.get(r.id) ?? null,
-      oem: oemBy.get(r.id) ?? null,
-    })),
+    items: rows.map((r) => {
+      const fit = fitBy.get(r.id);
+      return {
+        ...r,
+        imageUrl: imageBy.get(r.id) ?? null,
+        oem: oemBy.get(r.id) ?? null,
+        fitments: fit?.items ?? [],
+        fitmentExtra: fit?.extra ?? 0,
+      };
+    }),
     total: Number(total),
     page,
     pageSize: LISTING_PAGE_SIZE,
@@ -662,8 +739,20 @@ export async function relatedProducts(tenantId: string, productId: string, model
       ),
     )
     .limit(limit);
-  const imageBy = await primaryImagesByProductIds(rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, imageUrl: imageBy.get(r.id) ?? null }));
+  const ids = rows.map((r) => r.id);
+  const [imageBy, fitBy] = await Promise.all([
+    primaryImagesByProductIds(ids),
+    cardFitmentsByProductIds(ids),
+  ]);
+  return rows.map((r) => {
+    const fit = fitBy.get(r.id);
+    return {
+      ...r,
+      imageUrl: imageBy.get(r.id) ?? null,
+      fitments: fit?.items ?? [],
+      fitmentExtra: fit?.extra ?? 0,
+    };
+  });
 }
 
 export async function featuredProducts(tenantId: string, limit = 8) {
@@ -687,8 +776,20 @@ export async function featuredProducts(tenantId: string, limit = 8) {
     ))
     .orderBy(desc(products.stockQty), desc(products.updatedAt))
     .limit(limit);
-  const imageBy = await primaryImagesByProductIds(rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, imageUrl: imageBy.get(r.id) ?? null }));
+  const ids = rows.map((r) => r.id);
+  const [imageBy, fitBy] = await Promise.all([
+    primaryImagesByProductIds(ids),
+    cardFitmentsByProductIds(ids),
+  ]);
+  return rows.map((r) => {
+    const fit = fitBy.get(r.id);
+    return {
+      ...r,
+      imageUrl: imageBy.get(r.id) ?? null,
+      fitments: fit?.items ?? [],
+      fitmentExtra: fit?.extra ?? 0,
+    };
+  });
 }
 
 export async function listPopularCategories(limit = 8) {

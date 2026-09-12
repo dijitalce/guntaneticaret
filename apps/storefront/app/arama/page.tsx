@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { searchProducts } from "@guntan/search";
-import { searchCatalog } from "@guntan/catalog";
+import { cardFitmentsByProductIds, searchCatalog } from "@guntan/catalog";
 import { getTenant } from "../../src/tenant";
 import { ProductCard } from "../../src/product-card";
 import { cachedFeaturedProducts } from "../../src/cached-catalog";
@@ -28,6 +28,7 @@ export default async function SearchPage({
         price: h.price,
       }));
   const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
+  const fitBy = hits.length > 0 ? await cardFitmentsByProductIds(hits.map((h) => h.id)) : new Map();
 
   return (
     <div className="container page-surface">
@@ -35,21 +36,26 @@ export default async function SearchPage({
       <h1>{sp.q ? `“${sp.q}” araması` : "Arama"}</h1>
       {hits.length > 0 && (
         <div className="product-grid">
-          {hits.map((h) => (
-            <ProductCard
-              key={h.id}
-              product={{
-                name: h.title,
-                slug: h.slug,
-                sku: h.sku,
-                price: "price" in h && h.price != null ? String(h.price) : undefined,
-                manufacturerName: h.manufacturer,
-                imageUrl: "thumbnail" in h && h.thumbnail ? String(h.thumbnail) : null,
-                stockStatus: "in_stock",
-              }}
-              placeholder={tenant.placeholderImageUrl}
-            />
-          ))}
+          {hits.map((h) => {
+            const fit = fitBy.get(h.id);
+            return (
+              <ProductCard
+                key={h.id}
+                product={{
+                  name: h.title,
+                  slug: h.slug,
+                  sku: h.sku,
+                  price: "price" in h && h.price != null ? String(h.price) : undefined,
+                  manufacturerName: h.manufacturer,
+                  imageUrl: "thumbnail" in h && h.thumbnail ? String(h.thumbnail) : null,
+                  stockStatus: "in_stock",
+                  fitments: fit?.items,
+                  fitmentExtra: fit?.extra,
+                }}
+                placeholder={tenant.placeholderImageUrl}
+              />
+            );
+          })}
         </div>
       )}
       {sp.q && hits.length === 0 && (

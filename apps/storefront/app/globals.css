@@ -558,6 +558,31 @@ body {
   min-height: 2.4em;
 }
 .product-card-mfr { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; color: var(--muted-foreground); text-transform: uppercase; }
+.product-card-fit {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.product-card-fit > span:first-child {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 0.3rem;
+  color: var(--foreground);
+}
+.product-card-fit a { color: inherit; font-weight: 600; }
+.product-card-fit a:hover { color: var(--primary); }
+.product-card-fit em {
+  font-style: normal;
+  font-weight: 700;
+  margin-left: 0.2rem;
+  color: var(--foreground);
+}
 .product-card-oem { color: var(--muted-foreground); }
 .product-card-price { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; margin-top: auto; }
 .product-card-price strong { color: var(--primary); font-size: 1.08rem; }
@@ -2325,4 +2350,65 @@ body {
     grid-template-columns: 1fr;
   }
   .header-tools .icon-btn:not(.cart-chip) { display: none; }
+}
+
+.launch-notice-root {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  isolation: isolate;
+}
+.launch-notice-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(12, 18, 24, 0.55);
+  cursor: pointer;
+}
+.launch-notice {
+  position: relative;
+  width: min(28rem, 100%);
+  background: #fff;
+  color: var(--foreground);
+  border-radius: 18px;
+  padding: 1.5rem 1.4rem 1.25rem;
+  box-shadow: 0 24px 60px rgb(16 24 40 / 22%);
+  text-align: center;
+}
+.launch-notice-kicker {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.launch-notice h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+.launch-notice p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+.launch-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+.launch-notice-actions .btn { min-width: 8.5rem; }
+.launch-notice-phone {
+  margin-top: 0.85rem !important;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--foreground) !important;
 }

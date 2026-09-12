@@ -92,7 +92,7 @@ export function cachedListProducts(query: ListingQuery) {
   return unstable_cache(
     () => listProducts(query),
     [
-      "listing",
+      "listing-fitv1",
       query.tenantId,
       query.brandId ?? "",
       query.modelId ?? "",
@@ -128,7 +128,7 @@ export function cachedListingFacetsForCategory(tenantId: string, categoryId: str
 export function cachedFeaturedProducts(tenantId: string, limit = 8) {
   return unstable_cache(
     () => featuredProducts(tenantId, limit),
-    ["featured", tenantId, String(limit)],
+    ["featured-fitv1", tenantId, String(limit)],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }
@@ -144,7 +144,7 @@ export function cachedProductBySlug(tenantId: string, slug: string) {
 export function cachedRelatedProducts(tenantId: string, productId: string, modelId: string | undefined, limit = 8) {
   return unstable_cache(
     () => relatedProducts(tenantId, productId, modelId, limit),
-    ["related-products", tenantId, productId, modelId ?? "", String(limit)],
+    ["related-products-fitv1", tenantId, productId, modelId ?? "", String(limit)],
     { revalidate: PRODUCT_CACHE_TTL_SECONDS },
   )();
 }

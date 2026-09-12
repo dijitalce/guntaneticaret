@@ -56,7 +56,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <li key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span className="muted">SKU {item.sku} · {item.qty} adet</span>
+                  <span className="muted">{item.qty} adet</span>
                 </div>
                 <b>{formatMoney(Number(item.unitPrice) * item.qty)}</b>
               </li>

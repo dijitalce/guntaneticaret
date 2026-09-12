@@ -5,6 +5,8 @@ import { parse } from "node:url";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const NodeModule = createRequire(import.meta.url)("module");
+
 // Hostinger: listen() 3 sn içinde çağrılmalı. Next'i listen'den SONRA yükle.
 // - /yonetim/* → admin paneli (subdomain gerekmez)
 // - admin.* host → ana site /yonetim’e yönlendir
@@ -44,6 +46,73 @@ function isAdminHost(hostHeader) {
 function isAdminPath(urlPath) {
   const path = String(urlPath ?? "/").split("?")[0];
   return path === adminBasePath || path.startsWith(`${adminBasePath}/`);
+}
+
+process.on("uncaughtException", (err) => {
+  console.error("[hostinger] yakalanmamış hata (süreç açık kalıyor):", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
+});
+
+function pinResolves(pinned) {
+  const orig = NodeModule._resolveFilename;
+  NodeModule._resolveFilename = function pinnedResolve(request, parent, isMain, options) {
+    if (Object.prototype.hasOwnProperty.call(pinned, request)) {
+      return pinned[request];
+    }
+    return orig.call(this, request, parent, isMain, options);
+  };
+}
+
+function pinReactAndIoredis() {
+  const fromSf = createRequire(join(storefrontDir, "package.json"));
+  const pinned = Object.create(null);
+  for (const name of [
+    "react",
+    "react/jsx-runtime",
+    "react/jsx-dev-runtime",
+    "react-dom",
+    "react-dom/client",
+    "react-dom/server",
+    "react-dom/server.edge",
+    "react-dom/server.browser",
+  ]) {
+    try {
+      pinned[name] = fromSf.resolve(name);
+    } catch {
+      /* optional */
+    }
+  }
+
+  const ioredisPkgCandidates = [];
+  try {
+    ioredisPkgCandidates.push(fromSf.resolve("ioredis/package.json"));
+  } catch {
+    /* missing */
+  }
+  const pnpmDir = join(root, "node_modules/.pnpm");
+  if (fs.existsSync(pnpmDir)) {
+    for (const name of fs.readdirSync(pnpmDir)) {
+      if (!name.startsWith("ioredis@")) continue;
+      const pkg = join(pnpmDir, name, "node_modules/ioredis/package.json");
+      if (fs.existsSync(pkg)) ioredisPkgCandidates.push(pkg);
+    }
+  }
+
+  for (const pkgJson of ioredisPkgCandidates) {
+    const fromIoredis = createRequire(pkgJson);
+    try {
+      fromIoredis.resolve("@ioredis/commands");
+      pinned.ioredis = fromIoredis.resolve("ioredis");
+      pinned["@ioredis/commands"] = fromIoredis.resolve("@ioredis/commands");
+      break;
+    } catch {
+      /* nested Hostinger copy without commands */
+    }
+  }
+
+  pinResolves(pinned);
 }
 
 function isPrivatePath(urlPath) {
@@ -124,22 +193,73 @@ function sendHtml(res, status, html, extraHeaders) {
   res.end(html);
 }
 
-function sendStarting(res) {
+function sendUnavailable(res, title, body) {
   sendHtml(
     res,
     503,
-    `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>Başlatılıyor</title>
+    `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>${title}</title>
 <body style="font-family:system-ui;padding:2rem;max-width:40rem">
-<h1>Uygulama başlatılıyor</h1>
-<p>Sunucu ayağa kalkıyor. Birkaç saniye içinde yenileyin.</p>
+<h1>${title}</h1>
+<p>${body}</p>
 </body></html>`,
     {
-      "x-guntan-app": "starting",
-      "Retry-After": "2",
+      "x-guntan-app": "unavailable",
+      "Retry-After": "5",
       "Cache-Control": "no-store",
       "CDN-Cache-Control": "no-store",
     },
   );
+}
+
+let sfHandler = null;
+let adminHandler = null;
+let bootFailed = false;
+/** @type {{ kind: "sf" | "admin", resolve: (ok: boolean) => void, timer: ReturnType<typeof setTimeout> }[]} */
+let waiters = [];
+
+function isAppReady(kind) {
+  return kind === "admin" ? Boolean(adminHandler) : Boolean(sfHandler);
+}
+
+function notifyReady(kind) {
+  const leftover = [];
+  for (const waiter of waiters) {
+    if (waiter.kind === kind) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(true);
+    } else {
+      leftover.push(waiter);
+    }
+  }
+  waiters = leftover;
+}
+
+function notifyBootFailed() {
+  bootFailed = true;
+  for (const waiter of waiters) {
+    clearTimeout(waiter.timer);
+    waiter.resolve(false);
+  }
+  waiters = [];
+}
+
+function waitUntilReady(kind, req) {
+  if (isAppReady(kind)) return Promise.resolve(true);
+  if (bootFailed) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      waiters = waiters.filter((w) => w !== entry);
+      resolve(false);
+    }, 90_000);
+    const entry = { kind, resolve, timer };
+    waiters.push(entry);
+    req.on("close", () => {
+      if (!waiters.includes(entry)) return;
+      waiters = waiters.filter((w) => w !== entry);
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
 }
 
 function sendHealth(res) {
@@ -156,11 +276,9 @@ function sendHealth(res) {
   );
 }
 
-let sfHandler = null;
-let adminHandler = null;
 const adminBuildReady = fs.existsSync(join(adminDir, ".next"));
 
-function routeRequest(req, res) {
+async function routeRequest(req, res) {
   const parsedUrl = parse(req.url ?? "/", true);
   const pathOnly = parsedUrl.pathname ?? "/";
 
@@ -182,27 +300,31 @@ function routeRequest(req, res) {
   if (isAdminPath(pathOnly)) {
     res.setHeader("x-guntan-app", "admin");
     if (!adminBuildReady) {
-      sendHtml(
+      sendUnavailable(
         res,
-        503,
-        `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>Admin hazır değil</title>
-<body style="font-family:system-ui;padding:2rem;max-width:40rem">
-<h1>Admin paneli derlenmemiş</h1>
-<p>Sunucuda <code>apps/admin/.next</code> yok. Hostinger build: kökte <code>pnpm build</code>.</p>
-</body></html>`,
+        "Admin hazır değil",
+        "Sunucuda <code>apps/admin/.next</code> yok. Hostinger build: kökte <code>pnpm build</code>.",
       );
       return;
     }
     if (!adminHandler) {
-      sendStarting(res);
-      return;
+      const ready = await waitUntilReady("admin", req);
+      if (res.writableEnded) return;
+      if (!ready || !adminHandler) {
+        sendUnavailable(res, "Admin kullanılamıyor", "Panel şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.");
+        return;
+      }
     }
     return adminHandler(req, res, parsedUrl);
   }
 
   if (!sfHandler) {
-    sendStarting(res);
-    return;
+    const ready = await waitUntilReady("sf", req);
+    if (res.writableEnded) return;
+    if (!ready || !sfHandler) {
+      sendUnavailable(res, "Site kullanılamıyor", "Sunucu şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.");
+      return;
+    }
   }
 
   res.setHeader("x-guntan-app", "storefront");
@@ -210,19 +332,39 @@ function routeRequest(req, res) {
   return sfHandler(req, res, parsedUrl);
 }
 
-const server = createServer(routeRequest);
+const server = createServer((req, res) => {
+  routeRequest(req, res).catch((err) => {
+    console.error("[hostinger] istek hatası:", err);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.end();
+    }
+  });
+});
+
+let listenAttempts = 0;
+function bindPort() {
+  listenAttempts += 1;
+  server.listen(port, hostname, () => {
+    console.log(`[hostinger] ${hostname}:${port} dinleniyor — Next hazırlanıyor (admin path ${adminBasePath})`);
+  });
+}
 
 server.on("error", (err) => {
+  if (err?.code === "EADDRINUSE" && listenAttempts < 12) {
+    console.warn(`[hostinger] ${port} dolu (${listenAttempts}), 400ms sonra yeniden denenecek`);
+    setTimeout(bindPort, 400);
+    return;
+  }
   console.error("[hostinger] sunucu hatası:", err);
   process.exit(1);
 });
 
 // Hostinger 3 sn kuralı: Next/prepare beklenmeden portu aç.
-server.listen(port, hostname, () => {
-  console.log(`[hostinger] ${hostname}:${port} dinleniyor — Next hazırlanıyor (admin path ${adminBasePath})`);
-});
+bindPort();
 
 async function bootNext() {
+  pinReactAndIoredis();
   const requireSf = createRequire(join(storefrontDir, "package.json"));
   const next = requireSf("next");
 
@@ -249,16 +391,19 @@ async function bootNext() {
 
   await storefront.prepare();
   sfHandler = storefront.getRequestHandler();
+  notifyReady("sf");
   console.log("[hostinger] vitrin hazır");
 
   if (admin) {
     try {
       await admin.prepare();
       adminHandler = admin.getRequestHandler();
+      notifyReady("admin");
       console.log(`[hostinger] admin hazır (path ${adminBasePath})`);
     } catch (err) {
       console.error("[hostinger] admin.prepare başarısız:", err);
       adminHandler = null;
+      notifyReady("admin");
     }
   }
 
@@ -271,5 +416,6 @@ try {
   await bootNext();
 } catch (err) {
   console.error("[hostinger] Next başlatılamadı:", err);
+  notifyBootFailed();
   process.exit(1);
 }

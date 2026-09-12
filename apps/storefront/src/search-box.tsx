@@ -53,7 +53,7 @@ export function SearchBox({ brands }: { brands: { slug: string; name: string }[]
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => q.trim().length >= 2 && setOpen(true)}
-        placeholder="Parça, OEM veya SKU"
+        placeholder="Parça, marka veya model"
       />
       <button type="submit" aria-label="Ara"><IconSearch /></button>
       {open && q.trim().length >= 2 && (
@@ -62,7 +62,7 @@ export function SearchBox({ brands }: { brands: { slug: string; name: string }[]
             <li key={h.id}>
               <Link href={`/urun/${h.slug}`} onClick={() => setOpen(false)}>
                 <span>{h.title}</span>
-                <small>{[h.manufacturer, h.sku].filter(Boolean).join(" · ")}</small>
+                {h.manufacturer ? <small>{h.manufacturer}</small> : null}
               </Link>
             </li>
           ))}

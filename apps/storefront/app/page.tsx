@@ -8,6 +8,7 @@ import { VehicleNav } from "../src/vehicle-nav";
 import { HomeSlider } from "../src/home-slider";
 import { sentenceCaseTr } from "../src/format";
 import { IconBox, IconShield, IconTag, IconTruck } from "../src/icons";
+import { LaunchNotice } from "../src/launch-notice";
 import {
   JsonLd,
   absoluteUrl,
@@ -156,7 +157,7 @@ export default async function HomePage() {
         {featured.map((p, i) => (
           <ProductCard
             key={p.id}
-            product={{ ...p, oem: null }}
+            product={p}
             placeholder={tenant.placeholderImageUrl}
             priority={i < 4}
           />
@@ -167,6 +168,7 @@ export default async function HomePage() {
         <h2>{tenant.siteName}</h2>
         <p>{seoBody}</p>
       </section>
+      <LaunchNotice whatsapp={tenant.whatsapp} phone={tenant.phone} />
     </div>
   );
 }

@@ -61,6 +61,9 @@ importers:
       '@guntan/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@ioredis/commands':
+        specifier: 1.10.0
+        version: 1.10.0
       bullmq:
         specifier: ^5.44.0
         version: 5.81.4
@@ -122,6 +125,9 @@ importers:
       '@guntan/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@ioredis/commands':
+        specifier: 1.10.0
+        version: 1.10.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(gel@2.2.0)(mysql2@3.24.4(@types/node@22.20.1))(postgres@3.4.9)
@@ -327,6 +333,9 @@ importers:
       '@guntan/types':
         specifier: workspace:*
         version: link:../types
+      '@ioredis/commands':
+        specifier: 1.10.0
+        version: 1.10.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(gel@2.2.0)(mysql2@3.24.4(@types/node@22.20.1))(postgres@3.4.9)

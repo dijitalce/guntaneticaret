@@ -16,6 +16,8 @@ type Product = {
   imageUrl?: string | null;
   oem?: string | null;
   stockStatus: string;
+  fitments?: { href: string; label: string }[];
+  fitmentExtra?: number;
 };
 
 type Facets = {

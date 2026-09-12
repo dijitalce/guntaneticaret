@@ -6,13 +6,22 @@ import type { NextConfig } from "next";
 const require = createRequire(__filename);
 const repoRoot = path.join(__dirname, "../..");
 
-function pkgDir(name: string) {
-  let dir = path.dirname(require.resolve(name));
+function pkgDir(name: string, from?: string) {
+  const req = from ? createRequire(from) : require;
+  let dir = path.dirname(req.resolve(name));
   while (dir !== path.dirname(dir)) {
     if (fs.existsSync(path.join(dir, "package.json"))) return dir;
     dir = path.dirname(dir);
   }
   return dir;
+}
+
+function optionalPkgDir(name: string, from?: string) {
+  try {
+    return pkgDir(name, from);
+  } catch {
+    return undefined;
+  }
 }
 
 const nextConfig: NextConfig = {
@@ -35,7 +44,9 @@ const nextConfig: NextConfig = {
     unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED !== "false",
     remotePatterns: [{ protocol: "http", hostname: "localhost" }, { protocol: "https", hostname: "**" }],
   },
-  serverExternalPackages: ["mysql2", "ioredis", "bullmq", "meilisearch", "saxes"],
+  // ioredis Hostinger'da apps/storefront/node_modules/ioredis olarak kopyalanıyor
+  // ama @ioredis/commands gelmiyor. Paketi bundle'la; native olanları dışarıda bırak.
+  serverExternalPackages: ["mysql2", "bullmq", "meilisearch", "saxes"],
   experimental: {
     staleTimes: {
       dynamic: 30,
@@ -48,13 +59,22 @@ const nextConfig: NextConfig = {
       path.join(__dirname, "node_modules"),
       ...(config.resolve.modules ?? ["node_modules"]),
     ];
+    const ioredisPkg = optionalPkgDir("ioredis");
+    const ioredisPkgJson = ioredisPkg ? path.join(ioredisPkg, "package.json") : undefined;
     config.resolve.alias = {
       ...config.resolve.alias,
       "drizzle-orm": pkgDir("drizzle-orm"),
       mysql2: pkgDir("mysql2"),
-      ioredis: pkgDir("ioredis"),
       zod: pkgDir("zod"),
+      ...(ioredisPkg ? { ioredis: ioredisPkg } : {}),
+      ...(ioredisPkgJson
+        ? { "@ioredis/commands": optionalPkgDir("@ioredis/commands", ioredisPkgJson) }
+        : {}),
     };
+    const alias = config.resolve.alias as Record<string, unknown>;
+    for (const [key, value] of Object.entries(alias)) {
+      if (!value) delete alias[key];
+    }
     return config;
   },
 };

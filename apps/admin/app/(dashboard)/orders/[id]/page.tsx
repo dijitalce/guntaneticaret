@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { db, tenants } from "@guntan/db";
+import { db, productOems, tenants } from "@guntan/db";
 import { getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
 import { withBase } from "@/src/paths";
 import { PageHeader, Panel, StatusBadge, formatTry, statusTone } from "@/src/ui";
@@ -20,7 +20,22 @@ export default async function OrderDetailPage({
   const detail = await getAdminOrder(id);
   if (!detail) notFound();
   const { order, items, payments, shipments } = detail;
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, order.tenantId)).limit(1);
+  const productIds = [...new Set(items.map((item) => item.productId))];
+  const [tenant, oemRows] = await Promise.all([
+    db.select().from(tenants).where(eq(tenants.id, order.tenantId)).limit(1).then((rows) => rows[0]),
+    productIds.length
+      ? db
+          .select({ productId: productOems.productId, raw: productOems.raw })
+          .from(productOems)
+          .where(inArray(productOems.productId, productIds))
+      : Promise.resolve([] as { productId: string; raw: string }[]),
+  ]);
+  const oemBy = new Map<string, string[]>();
+  for (const oem of oemRows) {
+    const list = oemBy.get(oem.productId) ?? [];
+    if (list.length < 4) list.push(oem.raw);
+    oemBy.set(oem.productId, list);
+  }
   const address = order.shippingAddress ?? {};
 
   return (
@@ -127,7 +142,7 @@ export default async function OrderDetailPage({
           <table className="table">
             <thead>
               <tr>
-                <th>SKU</th>
+                <th>SKU / OEM</th>
                 <th>Ürün</th>
                 <th>Adet</th>
                 <th>Birim</th>
@@ -139,6 +154,11 @@ export default async function OrderDetailPage({
                 <tr key={item.id}>
                   <td>
                     <code style={{ fontSize: "0.8rem" }}>{item.sku}</code>
+                    {oemBy.get(item.productId)?.length ? (
+                      <div style={{ fontSize: "0.78rem", color: "#6b7280", marginTop: "0.2rem" }}>
+                        OEM {oemBy.get(item.productId)!.join(", ")}
+                      </div>
+                    ) : null}
                   </td>
                   <td>{item.name}</td>
                   <td>{item.qty}</td>

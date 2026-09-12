@@ -1,21 +1,32 @@
 /**
- * Mevcut ürün fiyatlarına kademeli marj uygular.
+ * Mevcut ürünlerde kademeli marj.
  *
- * Varsayılan: dry-run (yazmaz).
- * Uygulamak için: APPLY_PRICE_TIERS=1 pnpm import:price-tiers
+ * Varsayılan: dry-run.
+ * APPLY_PRICE_TIERS=1 pnpm import:price-tiers
+ *   → satış zaten marjlı kabul edilir; sadece liste (compare_at) aynı yüzdeyle güncellenir.
  *
- * UYARI: İki kez çalıştırırsan marj üstüne marj biner.
- * Import (XML/Basbug) artık marjı kaynak fiyata uygular; bu script tek seferlik mevcut DB içindir.
+ * APPLY_PRICE_TIERS=1 pnpm import:price-tiers --from-cost
+ *   → price ve compare_at tedarikçi maliyeti/listesi gibi işlenir (marj henüz yoksa).
+ *
+ * UYARI: --from-cost iki kez çalışırsa marj üstüne marj biner.
  */
 import { eq } from "drizzle-orm";
 import { db, pool, products } from "@guntan/db";
-import { applyMarginToPrice, marginPercentForPrice } from "./price-tiers";
+import {
+  applyMarginToAmount,
+  applyMarginToPrice,
+  applyPercent,
+  marginPercentForPrice,
+  percentConsistentWithSale,
+} from "./price-tiers";
 
 const APPLY = process.env.APPLY_PRICE_TIERS === "1" || process.argv.includes("--apply");
+const FROM_COST = process.argv.includes("--from-cost") || process.env.PRICE_TIERS_FROM_COST === "1";
 const BATCH = Number(process.env.PRICE_TIER_BATCH || 500);
 
 async function main() {
   console.log(APPLY ? "APPLY mode — fiyatlar güncellenecek" : "DRY-RUN — değişiklik yazılmaz (APPLY_PRICE_TIERS=1 ile uygula)");
+  console.log(FROM_COST ? "Kaynak: tedarikçi maliyeti (--from-cost)" : "Kaynak: satış zaten marjlı; liste fiyatına aynı yüzde");
 
   const bands = new Map<number, { count: number; sampleOld: number; sampleNew: number }>();
   let scanned = 0;
@@ -28,6 +39,7 @@ async function main() {
         id: products.id,
         sku: products.sku,
         price: products.price,
+        compareAtPrice: products.compareAtPrice,
       })
       .from(products)
       .orderBy(products.id)
@@ -39,19 +51,37 @@ async function main() {
 
     for (const row of rows) {
       scanned++;
-      const old = Number(row.price);
-      if (!Number.isFinite(old) || old < 0) continue;
-      const pct = marginPercentForPrice(old);
-      const next = applyMarginToPrice(old);
-      const band = bands.get(pct) ?? { count: 0, sampleOld: old, sampleNew: next };
+      const oldSale = Number(row.price);
+      if (!Number.isFinite(oldSale) || oldSale < 0) continue;
+
+      let nextSale = oldSale;
+      let pct: number;
+      if (FROM_COST) {
+        pct = marginPercentForPrice(oldSale);
+        nextSale = applyMarginToPrice(oldSale);
+      } else {
+        pct = percentConsistentWithSale(oldSale);
+      }
+
+      const oldList = row.compareAtPrice != null && row.compareAtPrice !== "" ? Number(row.compareAtPrice) : Number.NaN;
+      let nextList: string | null = row.compareAtPrice;
+      if (Number.isFinite(oldList) && oldList > 0) {
+        const markedList = FROM_COST ? applyMarginToAmount(oldSale, oldList) : applyPercent(oldList, pct);
+        nextList = markedList > nextSale ? markedList.toFixed(2) : null;
+      }
+
+      const band = bands.get(pct) ?? { count: 0, sampleOld: oldSale, sampleNew: nextSale };
       band.count++;
       bands.set(pct, band);
 
-      if (APPLY && next !== old) {
+      const saleChanged = nextSale !== oldSale;
+      const listChanged = (nextList ?? null) !== (row.compareAtPrice ?? null);
+      if (APPLY && (saleChanged || listChanged)) {
         await db
           .update(products)
           .set({
-            price: next.toFixed(2),
+            price: nextSale.toFixed(2),
+            compareAtPrice: nextList,
             updatedAt: new Date(),
           })
           .where(eq(products.id, row.id));
@@ -62,7 +92,7 @@ async function main() {
     console.log(`… tarandı ${scanned}`);
   }
 
-  console.log("\nÖzet (marj → ürün adedi, örnek):");
+  console.log("\nÖzet (marj → ürün adedi, örnek satış):");
   for (const [pct, info] of [...bands.entries()].sort((a, b) => b[0] - a[0])) {
     console.log(
       `  %${pct}: ${info.count} ürün | örn. ${info.sampleOld.toFixed(2)} → ${info.sampleNew.toFixed(2)}`,

@@ -22,7 +22,7 @@ import {
   xmlFeeds,
 } from "@guntan/db";
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type XmlFieldMapping } from "@guntan/types";
-import { applyMarginToPriceString } from "./price-tiers";
+import { applyMarginToAmount, applyMarginToPrice } from "./price-tiers";
 
 export type MappedProduct = {
   externalId: string;
@@ -90,6 +90,18 @@ export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping): 
   const name = mapping.name ? getPath(raw, mapping.name) : undefined;
   const price = mapping.price ? getPath(raw, mapping.price) : undefined;
   if (!externalId || !sku || !name || !price) return null;
+  const costNum = Number(price);
+  if (!Number.isFinite(costNum) || costNum < 0) return null;
+  const sell = applyMarginToPrice(costNum);
+  let compareAt: string | undefined;
+  if (mapping.compareAtPrice) {
+    const rawList = getPath(raw, mapping.compareAtPrice);
+    const listNum = rawList != null && rawList !== "" ? Number(rawList) : Number.NaN;
+    if (Number.isFinite(listNum) && listNum > 0) {
+      const markedList = applyMarginToAmount(costNum, listNum);
+      if (markedList > sell) compareAt = markedList.toFixed(2);
+    }
+  }
   return {
     externalId,
     sku,
@@ -97,8 +109,8 @@ export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping): 
     description: mapping.description ? getPath(raw, mapping.description) : undefined,
     manufacturer: mapping.manufacturer ? getPath(raw, mapping.manufacturer) : undefined,
     category: mapping.category ? getPath(raw, mapping.category) : undefined,
-    price: applyMarginToPriceString(price),
-    compareAtPrice: mapping.compareAtPrice ? getPath(raw, mapping.compareAtPrice) : undefined,
+    price: sell.toFixed(2),
+    compareAtPrice: compareAt,
     stock: Number(stockValue(mapping.stock ? getPath(raw, mapping.stock) : undefined)),
     barcode: mapping.barcode ? getPath(raw, mapping.barcode) : undefined,
     oem: mapping.oem ? getPath(raw, mapping.oem) : undefined,
