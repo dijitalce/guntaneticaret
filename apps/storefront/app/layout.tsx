@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
+import { metadataBaseForHost } from "../src/seo";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
@@ -21,10 +22,12 @@ const font = DM_Sans({
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await tryGetTenant();
+  const metadataBase = metadataBaseForHost(tenant?.tenant.canonicalHost);
   if (!tenant) {
-    return { title: "Sayfa bulunamadı", robots: { index: false, follow: false } };
+    return { metadataBase, title: "Sayfa bulunamadı", robots: { index: false, follow: false } };
   }
   return {
+    metadataBase,
     title: tenant.defaultMetaTitle ?? tenant.siteName,
     description: tenant.defaultMetaDescription ?? undefined,
     icons: [

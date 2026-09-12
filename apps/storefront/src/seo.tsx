@@ -3,6 +3,38 @@ export function absoluteUrl(host: string, path: string) {
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+const FALLBACK_SITE = "https://guntanotoyedekparca.com";
+
+/** Next metadataBase: relative OG/Twitter görsellerini production origin ile çöz. */
+export function metadataBaseForHost(host?: string | null): URL {
+  const value = (host ?? "").trim();
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    try {
+      const url = new URL(value);
+      if (url.hostname && url.hostname !== "0.0.0.0") return url;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const hostname = (value.split(":")[0] ?? "").toLowerCase();
+  if (hostname && hostname !== "0.0.0.0" && hostname !== "127.0.0.1") {
+    if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+      return new URL(`http://${hostname}${value.includes(":") ? `:${value.split(":")[1]}` : ":3000"}`);
+    }
+    return new URL(`https://${hostname}`);
+  }
+
+  const envUrl = process.env.STOREFRONT_URL ?? FALLBACK_SITE;
+  try {
+    const url = new URL(envUrl);
+    if (url.hostname && url.hostname !== "0.0.0.0") return url;
+  } catch {
+    /* fall through */
+  }
+  return new URL(FALLBACK_SITE);
+}
+
 export function JsonLd({ data }: { data: Record<string, unknown> | Record<string, unknown>[] }) {
   return (
     <script

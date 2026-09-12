@@ -5,7 +5,7 @@ import { parse } from "node:url";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Hostinger startup: tek Node süreci.
+// Hostinger: listen() 3 sn içinde çağrılmalı. Next'i listen'den SONRA yükle.
 // - /yonetim/* → admin paneli (subdomain gerekmez)
 // - admin.* host → ana site /yonetim’e yönlendir
 // - diğer her şey → vitrin
@@ -13,9 +13,6 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storefrontDir = join(root, "apps/storefront");
 const adminDir = join(root, "apps/admin");
-
-const requireSf = createRequire(join(storefrontDir, "package.json"));
-const next = requireSf("next");
 
 const port = Number(process.env.PORT ?? "3000");
 const hostname = "0.0.0.0";
@@ -114,55 +111,63 @@ function enableSharedHtmlCache(req, res) {
   };
 }
 
-function sendHtml(res, status, html) {
+function sendHtml(res, status, html, extraHeaders) {
   res.statusCode = status;
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.setHeader("x-guntan-app", "gateway");
+  res.setHeader("x-guntan-app", extraHeaders?.["x-guntan-app"] ?? "gateway");
+  if (extraHeaders) {
+    for (const [key, value] of Object.entries(extraHeaders)) {
+      if (key === "x-guntan-app") continue;
+      res.setHeader(key, value);
+    }
+  }
   res.end(html);
 }
 
-const storefront = next({
-  dev: false,
-  dir: storefrontDir,
-  hostname,
-  port,
-});
-
-const adminNextDir = join(adminDir, ".next");
-const adminReady = fs.existsSync(adminNextDir);
-let admin = null;
-let adminHandler = null;
-
-if (!adminReady) {
-  console.warn(
-    `[hostinger] ${adminNextDir} yok — ${adminBasePath} 503 döner. Build: pnpm build (admin dahil).`,
+function sendStarting(res) {
+  sendHtml(
+    res,
+    503,
+    `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>Başlatılıyor</title>
+<body style="font-family:system-ui;padding:2rem;max-width:40rem">
+<h1>Uygulama başlatılıyor</h1>
+<p>Sunucu ayağa kalkıyor. Birkaç saniye içinde yenileyin.</p>
+</body></html>`,
+    {
+      "x-guntan-app": "starting",
+      "Retry-After": "2",
+      "Cache-Control": "no-store",
+      "CDN-Cache-Control": "no-store",
+    },
   );
-} else {
-  admin = next({
-    dev: false,
-    dir: adminDir,
-    hostname,
-    port,
-  });
 }
 
-const sfHandler = storefront.getRequestHandler();
-
-await storefront.prepare();
-if (admin) {
-  try {
-    await admin.prepare();
-    adminHandler = admin.getRequestHandler();
-    console.log(`[hostinger] admin hazır (path ${adminBasePath})`);
-  } catch (err) {
-    console.error("[hostinger] admin.prepare başarısız:", err);
-    adminHandler = null;
-  }
+function sendHealth(res) {
+  res.statusCode = 200;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("x-guntan-app", "health");
+  res.end(
+    JSON.stringify({
+      ok: true,
+      storefront: Boolean(sfHandler),
+      admin: Boolean(adminHandler),
+    }),
+  );
 }
 
-createServer((req, res) => {
+let sfHandler = null;
+let adminHandler = null;
+const adminBuildReady = fs.existsSync(join(adminDir, ".next"));
+
+function routeRequest(req, res) {
   const parsedUrl = parse(req.url ?? "/", true);
   const pathOnly = parsedUrl.pathname ?? "/";
+
+  if (pathOnly === "/api/health") {
+    sendHealth(res);
+    return;
+  }
 
   // Klasörlü subdomain Node’a gelmez; gelirse ana site paneline al.
   if (isAdminHost(req.headers.host) && !isAdminPath(pathOnly)) {
@@ -174,9 +179,9 @@ createServer((req, res) => {
     return;
   }
 
-  if (isAdminPath(pathOnly) || (isAdminHost(req.headers.host) && isAdminPath(pathOnly))) {
+  if (isAdminPath(pathOnly)) {
     res.setHeader("x-guntan-app", "admin");
-    if (!adminHandler) {
+    if (!adminBuildReady) {
       sendHtml(
         res,
         503,
@@ -188,14 +193,83 @@ createServer((req, res) => {
       );
       return;
     }
+    if (!adminHandler) {
+      sendStarting(res);
+      return;
+    }
     return adminHandler(req, res, parsedUrl);
+  }
+
+  if (!sfHandler) {
+    sendStarting(res);
+    return;
   }
 
   res.setHeader("x-guntan-app", "storefront");
   enableSharedHtmlCache(req, res);
   return sfHandler(req, res, parsedUrl);
-}).listen(port, hostname, () => {
+}
+
+const server = createServer(routeRequest);
+
+server.on("error", (err) => {
+  console.error("[hostinger] sunucu hatası:", err);
+  process.exit(1);
+});
+
+// Hostinger 3 sn kuralı: Next/prepare beklenmeden portu aç.
+server.listen(port, hostname, () => {
+  console.log(`[hostinger] ${hostname}:${port} dinleniyor — Next hazırlanıyor (admin path ${adminBasePath})`);
+});
+
+async function bootNext() {
+  const requireSf = createRequire(join(storefrontDir, "package.json"));
+  const next = requireSf("next");
+
+  const storefront = next({
+    dev: false,
+    dir: storefrontDir,
+    hostname,
+    port,
+  });
+
+  let admin = null;
+  if (adminBuildReady) {
+    admin = next({
+      dev: false,
+      dir: adminDir,
+      hostname,
+      port,
+    });
+  } else {
+    console.warn(
+      `[hostinger] ${join(adminDir, ".next")} yok — ${adminBasePath} 503 döner. Build: pnpm build (admin dahil).`,
+    );
+  }
+
+  await storefront.prepare();
+  sfHandler = storefront.getRequestHandler();
+  console.log("[hostinger] vitrin hazır");
+
+  if (admin) {
+    try {
+      await admin.prepare();
+      adminHandler = admin.getRequestHandler();
+      console.log(`[hostinger] admin hazır (path ${adminBasePath})`);
+    } catch (err) {
+      console.error("[hostinger] admin.prepare başarısız:", err);
+      adminHandler = null;
+    }
+  }
+
   console.log(
     `[hostinger] ${hostname}:${port} — vitrin + admin path ${adminBasePath} (adminHandler=${Boolean(adminHandler)})`,
   );
-});
+}
+
+try {
+  await bootNext();
+} catch (err) {
+  console.error("[hostinger] Next başlatılamadı:", err);
+  process.exit(1);
+}

@@ -44,9 +44,8 @@ function linkOrCopy(source, target) {
 }
 
 if (cmd === "start") {
-  // Tek süreç: Host’a göre admin veya storefront (hostinger-start.mjs).
+  // Tek süreç; listen() 3 sn kuralı için doğrudan start dosyası.
   await import(pathToFileURL(join(root, "scripts/hostinger-start.mjs")).href);
-  // hostinger-start kendi listen’ini açar; buradan çıkma.
 } else if (cmd === "build") {
   const sf = runNext("apps/storefront", ["build"]);
   if (sf !== 0) process.exit(sf);

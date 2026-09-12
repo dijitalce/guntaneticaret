@@ -6,7 +6,7 @@
     "dev": "turbo dev",
     "build": "node scripts/hostinger-next.mjs build",
     "build:all": "turbo build",
-    "start": "node scripts/hostinger-next.mjs start",
+    "start": "node scripts/hostinger-start.mjs",
     "lint": "turbo lint",
     "test": "turbo test",
     "test:e2e": "playwright test",

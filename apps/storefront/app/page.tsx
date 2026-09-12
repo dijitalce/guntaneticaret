@@ -12,6 +12,7 @@ import {
   JsonLd,
   absoluteUrl,
   itemListJsonLd,
+  metadataBaseForHost,
 } from "../src/seo";
 
 export const revalidate = 60;
@@ -23,6 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
     tenant.defaultMetaDescription ??
     `${tenant.siteName} — araç marka ve modeline uygun yedek parça. KDV dahil fiyat, stokta ürün, hızlı tedarik.`;
   return {
+    metadataBase: metadataBaseForHost(tenant.tenant.canonicalHost),
     title,
     description,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, "/") },
