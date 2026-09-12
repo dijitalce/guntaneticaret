@@ -169,11 +169,6 @@ function shutdown(signal) {
   console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — kapanıyor`);
   clearLock();
   try {
-    dummyServer?.close();
-  } catch {
-    /* */
-  }
-  try {
     httpServer?.close(() => process.exit(0));
   } catch {
     process.exit(0);
@@ -496,7 +491,6 @@ server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
 let parked = false;
-let dummyServer = null;
 
 function startNextAfterListen() {
   if (nextBooted) return;
@@ -510,36 +504,18 @@ function startNextAfterListen() {
 function parkDuplicate() {
   if (parked) return;
   parked = true;
-  dummyServer = createServer((_req, res) => {
-    res.statusCode = 204;
-    res.end();
-  });
-  // Hostinger 3 sn listen() kuralı: 3000'e binme, sadece syscall.
-  dummyServer.listen({ port: 0, host: "127.0.0.1" }, () => {
-    const addr = dummyServer?.address();
-    const dummyPort = addr && typeof addr === "object" ? addr.port : String(addr ?? "?");
-    console.warn(
-      `[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB dummy=127.0.0.1:${dummyPort} — Next yok`,
-    );
-  });
+  // LiteSpeed listen()'i extapp .sock'a çevirir; kopya listen() çağırırsa vitrin soketini çalar.
+  console.warn(`[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB — listen yok, Next yok`);
   setInterval(() => {
     if (shuttingDown) return;
     if (pidAlive(readLockPid())) return;
     console.log("[hostinger] birincil yok, kopya 3000 alıyor");
     parked = false;
-    const takeOver = () => {
-      dummyServer = null;
-      if (!claimPrimaryLock()) {
-        parked = true;
-        return;
-      }
-      bindPublicPort();
-    };
-    if (dummyServer) {
-      dummyServer.close(takeOver);
-    } else {
-      takeOver();
+    if (!claimPrimaryLock()) {
+      parked = true;
+      return;
     }
+    bindPublicPort();
   }, 3000);
 }
 
