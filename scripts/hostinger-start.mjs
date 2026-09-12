@@ -89,6 +89,7 @@ function redirectNextWritable(appDir, label) {
 
 const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
 let shuttingDown = false;
+let nextBooted = false;
 /** @type {import("node:http").Server | null} */
 let httpServer = null;
 
@@ -156,6 +157,13 @@ function claimPrimaryLock() {
 }
 
 function shutdown(signal) {
+  const holdPrimary = signal === "SIGTERM" && (nextBooted || server.listening);
+  if (holdPrimary) {
+    console.error(
+      `[hostinger] SIGTERM yok sayıldı birincil pid=${process.pid} rss=${rssMb()}MB (port ${port} açık)`,
+    );
+    return;
+  }
   if (shuttingDown) return;
   shuttingDown = true;
   console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — kapanıyor`);
@@ -487,7 +495,6 @@ httpServer = server;
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
-let nextBooted = false;
 let parked = false;
 let dummyServer = null;
 
@@ -508,9 +515,9 @@ function parkDuplicate() {
     res.end();
   });
   // Hostinger 3 sn listen() kuralı: 3000'e binme, sadece syscall.
-  dummyServer.listen(0, "127.0.0.1", () => {
-    const addr = dummyServer.address();
-    const dummyPort = addr && typeof addr === "object" ? addr.port : "?";
+  dummyServer.listen({ port: 0, host: "127.0.0.1" }, () => {
+    const addr = dummyServer?.address();
+    const dummyPort = addr && typeof addr === "object" ? addr.port : String(addr ?? "?");
     console.warn(
       `[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB dummy=127.0.0.1:${dummyPort} — Next yok`,
     );
