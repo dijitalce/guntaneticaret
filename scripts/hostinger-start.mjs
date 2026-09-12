@@ -504,19 +504,9 @@ function startNextAfterListen() {
 function parkDuplicate() {
   if (parked) return;
   parked = true;
-  // LiteSpeed listen()'i extapp .sock'a çevirir; kopya listen() çağırırsa vitrin soketini çalar.
   console.warn(`[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB — listen yok, Next yok`);
-  setInterval(() => {
-    if (shuttingDown) return;
-    if (pidAlive(readLockPid())) return;
-    console.log("[hostinger] birincil yok, kopya 3000 alıyor");
-    parked = false;
-    if (!claimPrimaryLock()) {
-      parked = true;
-      return;
-    }
-    bindPublicPort();
-  }, 3000);
+  // LiteSpeed 3 sn sonra bu kopyayı keser. Portu çalma — yeni worker start'ta kilidi alır.
+  setInterval(() => {}, 30_000);
 }
 
 function bindPublicPort() {
