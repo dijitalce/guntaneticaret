@@ -127,32 +127,32 @@ function pidAlive(pid) {
   }
 }
 
-function becomePrimaryOrExit() {
-  const lockPath = pidFile;
+function claimPrimaryLock() {
   for (let i = 0; i < 6; i++) {
     try {
-      const fd = fs.openSync(lockPath, "wx");
+      const fd = fs.openSync(pidFile, "wx");
       fs.writeFileSync(fd, String(process.pid));
       fs.closeSync(fd);
       console.log(`[hostinger] birincil kilit pid=${process.pid}`);
-      return;
+      return true;
     } catch (err) {
       if (err?.code !== "EEXIST") {
         console.warn("[hostinger] kilit atlandı:", err instanceof Error ? err.message : err);
-        return;
+        return true;
       }
       const prev = readLockPid();
       if (pidAlive(prev)) {
-        console.warn(`[hostinger] kopya pid=${process.pid} — birincil ${prev} duruyor, listen denenecek`);
-        return;
+        console.warn(`[hostinger] kopya pid=${process.pid} — birincil ${prev}; port 3000 alınmayacak`);
+        return false;
       }
       try {
-        fs.unlinkSync(lockPath);
+        fs.unlinkSync(pidFile);
       } catch {
         /* */
       }
     }
   }
+  return true;
 }
 
 function shutdown(signal) {
@@ -160,6 +160,11 @@ function shutdown(signal) {
   shuttingDown = true;
   console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — kapanıyor`);
   clearLock();
+  try {
+    dummyServer?.close();
+  } catch {
+    /* */
+  }
   try {
     httpServer?.close(() => process.exit(0));
   } catch {
@@ -482,9 +487,9 @@ httpServer = server;
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
-let listenAttempts = 0;
 let nextBooted = false;
 let parked = false;
+let dummyServer = null;
 
 function startNextAfterListen() {
   if (nextBooted) return;
@@ -498,20 +503,41 @@ function startNextAfterListen() {
 function parkDuplicate() {
   if (parked) return;
   parked = true;
-  console.warn(`[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB — Next yok, birincil bırakıldı`);
+  dummyServer = createServer((_req, res) => {
+    res.statusCode = 204;
+    res.end();
+  });
+  // Hostinger 3 sn listen() kuralı: 3000'e binme, sadece syscall.
+  dummyServer.listen(0, "127.0.0.1", () => {
+    const addr = dummyServer.address();
+    const dummyPort = addr && typeof addr === "object" ? addr.port : "?";
+    console.warn(
+      `[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB dummy=127.0.0.1:${dummyPort} — Next yok`,
+    );
+  });
   setInterval(() => {
-    if (shuttingDown || server.listening) return;
+    if (shuttingDown) return;
     if (pidAlive(readLockPid())) return;
+    console.log("[hostinger] birincil yok, kopya 3000 alıyor");
     parked = false;
-    listenAttempts = 0;
-    console.log("[hostinger] birincil yok, port tekrar alınıyor");
-    bindPort();
-  }, 4000);
+    const takeOver = () => {
+      dummyServer = null;
+      if (!claimPrimaryLock()) {
+        parked = true;
+        return;
+      }
+      bindPublicPort();
+    };
+    if (dummyServer) {
+      dummyServer.close(takeOver);
+    } else {
+      takeOver();
+    }
+  }, 3000);
 }
 
-function bindPort() {
+function bindPublicPort() {
   if (shuttingDown || server.listening) return;
-  listenAttempts += 1;
   server.listen({ port, host: hostname, exclusive: true }, () => {
     parked = false;
     writeLock();
@@ -524,13 +550,7 @@ function bindPort() {
 
 server.on("error", (err) => {
   if (err?.code === "EADDRINUSE") {
-    if (listenAttempts < 50) {
-      if (listenAttempts === 1 || listenAttempts % 10 === 0) {
-        console.warn(`[hostinger] ${port} dolu (${listenAttempts}), birincil kapanırsa devralınacak`);
-      }
-      setTimeout(bindPort, 200);
-      return;
-    }
+    console.warn(`[hostinger] ${port} dolu; bu süreç Next yüklemeden park`);
     parkDuplicate();
     return;
   }
@@ -538,9 +558,12 @@ server.on("error", (err) => {
   process.exit(1);
 });
 
-// Hostinger 3 sn kuralı: listen() hemen. Next yalnızca port bize ait olduktan sonra.
-becomePrimaryOrExit();
-bindPort();
+// Hostinger 3 sn: listen() hemen. 3000 yalnız kilit sahibinde; kopya dummy listen.
+if (claimPrimaryLock()) {
+  bindPublicPort();
+} else {
+  parkDuplicate();
+}
 
 function loadNext() {
   if (!nextFactory) {
