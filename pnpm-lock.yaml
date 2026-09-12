@@ -85,6 +85,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      sql-escaper:
+        specifier: ^1.5.1
+        version: 1.5.1
     devDependencies:
       '@types/react':
         specifier: ^19.0.12
@@ -149,6 +152,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      sql-escaper:
+        specifier: ^1.5.1
+        version: 1.5.1
       zod:
         specifier: ^3.24.2
         version: 3.25.76
@@ -235,6 +241,9 @@ importers:
       mysql2:
         specifier: ^3.14.0
         version: 3.24.4(@types/node@22.20.1)
+      sql-escaper:
+        specifier: ^1.5.1
+        version: 1.5.1
     devDependencies:
       drizzle-kit:
         specifier: ^0.31.4

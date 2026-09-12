@@ -198,6 +198,75 @@ function pinResolves(pinned) {
   };
 }
 
+/**
+ * Hostinger'ın pnpm hoisting'i bazı paketleri (ioredis, mysql2 gibi) düz bir
+ * kopya olarak apps/storefront/node_modules altına koyuyor ama o paketin alt
+ * bağımlılıklarını (sırasıyla @ioredis/commands, sql-escaper) getirmiyor —
+ * pnpm'in normalde .pnpm sanal deposu üzerinden kurduğu sembolik bağlar
+ * kayboluyor. hostPkg nereden çözülüyorsa depName'i önce oradan, olmazsa
+ * .pnpm deposundaki başka bir hostPkg kopyasından, o da olmazsa doğrudan
+ * .pnpm'deki depName paketinden bulup global pin haritasına ekler.
+ */
+function pinNestedDep(pinned, hostPkg, depName, fromSf) {
+  const candidates = [];
+  try {
+    candidates.push(fromSf.resolve(`${hostPkg}/package.json`));
+  } catch {
+    /* hostPkg storefront'tan hiç çözülmüyor, yapacak bir şey yok */
+    return;
+  }
+
+  try {
+    createRequire(candidates[0]).resolve(depName);
+    return; // zaten sorunsuz çözülüyor, dokunma
+  } catch {
+    /* devam, alternatif ara */
+  }
+
+  const pnpmDir = join(root, "node_modules/.pnpm");
+  if (fs.existsSync(pnpmDir)) {
+    for (const name of fs.readdirSync(pnpmDir)) {
+      if (!name.startsWith(`${hostPkg}@`)) continue;
+      const pkg = join(pnpmDir, name, `node_modules/${hostPkg}/package.json`);
+      if (fs.existsSync(pkg)) candidates.push(pkg);
+    }
+  }
+
+  for (const pkgJson of candidates) {
+    const fromHost = createRequire(pkgJson);
+    try {
+      const depPath = fromHost.resolve(depName);
+      pinned[hostPkg] = fromHost.resolve(hostPkg);
+      pinned[depName] = depPath;
+      console.log(`[hostinger] ${depName} → ${depPath} (${hostPkg} üzerinden pinlendi)`);
+      return;
+    } catch {
+      /* bu kopyada da yok */
+    }
+  }
+
+  // Son çare: depName'i doğrudan .pnpm mağazasından bul (self-reference
+  // gerektirmeden, package.json'daki "main"i elle çözerek).
+  if (fs.existsSync(pnpmDir)) {
+    for (const name of fs.readdirSync(pnpmDir)) {
+      if (!name.startsWith(`${depName}@`)) continue;
+      const depDir = join(pnpmDir, name, `node_modules/${depName}`);
+      const depPkgJson = join(depDir, "package.json");
+      if (!fs.existsSync(depPkgJson)) continue;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(depPkgJson, "utf8"));
+        const entry = join(depDir, pkg.main || "index.js");
+        pinned[depName] = entry;
+        console.log(`[hostinger] ${depName} → ${entry} (.pnpm mağazasından doğrudan pinlendi)`);
+      } catch {
+        /* olmuyorsa yok say */
+      }
+      return;
+    }
+  }
+  console.warn(`[hostinger] ${depName} hiçbir yerde bulunamadı (${hostPkg} bunu istiyor)`);
+}
+
 function pinReactAndIoredis() {
   const fromSf = createRequire(join(storefrontDir, "package.json"));
   const pinned = Object.create(null);
@@ -218,44 +287,8 @@ function pinReactAndIoredis() {
     }
   }
 
-  const ioredisPkgCandidates = [];
-  try {
-    ioredisPkgCandidates.push(fromSf.resolve("ioredis/package.json"));
-  } catch {
-    /* missing */
-  }
-  const first = ioredisPkgCandidates[0];
-  let commandsOk = false;
-  if (first) {
-    try {
-      createRequire(first).resolve("@ioredis/commands");
-      commandsOk = true;
-    } catch {
-      commandsOk = false;
-    }
-  }
-  if (!commandsOk) {
-    const pnpmDir = join(root, "node_modules/.pnpm");
-    if (fs.existsSync(pnpmDir)) {
-      for (const name of fs.readdirSync(pnpmDir)) {
-        if (!name.startsWith("ioredis@")) continue;
-        const pkg = join(pnpmDir, name, "node_modules/ioredis/package.json");
-        if (fs.existsSync(pkg)) ioredisPkgCandidates.push(pkg);
-      }
-    }
-  }
-
-  for (const pkgJson of ioredisPkgCandidates) {
-    const fromIoredis = createRequire(pkgJson);
-    try {
-      fromIoredis.resolve("@ioredis/commands");
-      pinned.ioredis = fromIoredis.resolve("ioredis");
-      pinned["@ioredis/commands"] = fromIoredis.resolve("@ioredis/commands");
-      break;
-    } catch {
-      /* nested Hostinger copy without commands */
-    }
-  }
+  pinNestedDep(pinned, "ioredis", "@ioredis/commands", fromSf);
+  pinNestedDep(pinned, "mysql2", "sql-escaper", fromSf);
 
   pinResolves(pinned);
 }

@@ -24,7 +24,8 @@
   "dependencies": {
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "mysql2": "^3.14.0"
+    "mysql2": "^3.14.0",
+    "sql-escaper": "^1.5.1"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",
