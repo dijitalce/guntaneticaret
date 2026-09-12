@@ -48,11 +48,21 @@ function isAdminPath(urlPath) {
   return path === adminBasePath || path.startsWith(`${adminBasePath}/`);
 }
 
+function rssMb() {
+  return Math.round(process.memoryUsage().rss / 1024 / 1024);
+}
+
 process.on("uncaughtException", (err) => {
   console.error("[hostinger] yakalanmamış hata (süreç açık kalıyor):", err);
 });
 process.on("unhandledRejection", (err) => {
   console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
+});
+process.on("SIGTERM", () => {
+  console.error(`[hostinger] SIGTERM pid=${process.pid} rss=${rssMb()}MB`);
+});
+process.on("SIGINT", () => {
+  console.error(`[hostinger] SIGINT pid=${process.pid} rss=${rssMb()}MB`);
 });
 
 function pinResolves(pinned) {
@@ -91,12 +101,24 @@ function pinReactAndIoredis() {
   } catch {
     /* missing */
   }
-  const pnpmDir = join(root, "node_modules/.pnpm");
-  if (fs.existsSync(pnpmDir)) {
-    for (const name of fs.readdirSync(pnpmDir)) {
-      if (!name.startsWith("ioredis@")) continue;
-      const pkg = join(pnpmDir, name, "node_modules/ioredis/package.json");
-      if (fs.existsSync(pkg)) ioredisPkgCandidates.push(pkg);
+  const first = ioredisPkgCandidates[0];
+  let commandsOk = false;
+  if (first) {
+    try {
+      createRequire(first).resolve("@ioredis/commands");
+      commandsOk = true;
+    } catch {
+      commandsOk = false;
+    }
+  }
+  if (!commandsOk) {
+    const pnpmDir = join(root, "node_modules/.pnpm");
+    if (fs.existsSync(pnpmDir)) {
+      for (const name of fs.readdirSync(pnpmDir)) {
+        if (!name.startsWith("ioredis@")) continue;
+        const pkg = join(pnpmDir, name, "node_modules/ioredis/package.json");
+        if (fs.existsSync(pkg)) ioredisPkgCandidates.push(pkg);
+      }
     }
   }
 
@@ -214,6 +236,9 @@ function sendUnavailable(res, title, body) {
 let sfHandler = null;
 let adminHandler = null;
 let bootFailed = false;
+/** @type {Promise<boolean> | null} */
+let adminPrepare = null;
+let nextFactory = null;
 /** @type {{ kind: "sf" | "admin", resolve: (ok: boolean) => void, timer: ReturnType<typeof setTimeout> }[]} */
 let waiters = [];
 
@@ -308,7 +333,7 @@ async function routeRequest(req, res) {
       return;
     }
     if (!adminHandler) {
-      const ready = await waitUntilReady("admin", req);
+      const ready = await ensureAdmin();
       if (res.writableEnded) return;
       if (!ready || !adminHandler) {
         sendUnavailable(res, "Admin kullanılamıyor", "Panel şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.");
@@ -341,12 +366,16 @@ const server = createServer((req, res) => {
     }
   });
 });
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 
 let listenAttempts = 0;
 function bindPort() {
   listenAttempts += 1;
   server.listen(port, hostname, () => {
-    console.log(`[hostinger] ${hostname}:${port} dinleniyor — Next hazırlanıyor (admin path ${adminBasePath})`);
+    console.log(
+      `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
+    );
   });
 }
 
@@ -363,11 +392,44 @@ server.on("error", (err) => {
 // Hostinger 3 sn kuralı: Next/prepare beklenmeden portu aç.
 bindPort();
 
-async function bootNext() {
-  pinReactAndIoredis();
-  const requireSf = createRequire(join(storefrontDir, "package.json"));
-  const next = requireSf("next");
+function loadNext() {
+  if (!nextFactory) {
+    pinReactAndIoredis();
+    const requireSf = createRequire(join(storefrontDir, "package.json"));
+    nextFactory = requireSf("next");
+  }
+  return nextFactory;
+}
 
+async function ensureAdmin() {
+  if (adminHandler) return true;
+  if (!adminBuildReady) return false;
+  if (adminPrepare) return adminPrepare;
+  adminPrepare = (async () => {
+    console.log(`[hostinger] admin yükleniyor (path ${adminBasePath}) rss=${rssMb()}MB`);
+    const next = loadNext();
+    const admin = next({
+      dev: false,
+      dir: adminDir,
+      hostname,
+      port,
+    });
+    await admin.prepare();
+    adminHandler = admin.getRequestHandler();
+    notifyReady("admin");
+    console.log(`[hostinger] admin hazır (path ${adminBasePath}) rss=${rssMb()}MB`);
+    return true;
+  })().catch((err) => {
+    adminPrepare = null;
+    adminHandler = null;
+    console.error("[hostinger] admin.prepare başarısız:", err);
+    return false;
+  });
+  return adminPrepare;
+}
+
+async function bootNext() {
+  const next = loadNext();
   const storefront = next({
     dev: false,
     dir: storefrontDir,
@@ -375,41 +437,18 @@ async function bootNext() {
     port,
   });
 
-  let admin = null;
-  if (adminBuildReady) {
-    admin = next({
-      dev: false,
-      dir: adminDir,
-      hostname,
-      port,
-    });
-  } else {
-    console.warn(
-      `[hostinger] ${join(adminDir, ".next")} yok — ${adminBasePath} 503 döner. Build: pnpm build (admin dahil).`,
-    );
-  }
-
   await storefront.prepare();
   sfHandler = storefront.getRequestHandler();
   notifyReady("sf");
-  console.log("[hostinger] vitrin hazır");
+  console.log(`[hostinger] vitrin hazır pid=${process.pid} rss=${rssMb()}MB`);
 
-  if (admin) {
-    try {
-      await admin.prepare();
-      adminHandler = admin.getRequestHandler();
-      notifyReady("admin");
-      console.log(`[hostinger] admin hazır (path ${adminBasePath})`);
-    } catch (err) {
-      console.error("[hostinger] admin.prepare başarısız:", err);
-      adminHandler = null;
-      notifyReady("admin");
-    }
+  if (!adminBuildReady) {
+    console.warn(
+      `[hostinger] ${join(adminDir, ".next")} yok — ${adminBasePath} 503 döner. Build: pnpm build (admin dahil).`,
+    );
+  } else {
+    console.log(`[hostinger] ${hostname}:${port} — vitrin hazır, admin ilk ${adminBasePath} isteğinde yüklenecek`);
   }
-
-  console.log(
-    `[hostinger] ${hostname}:${port} — vitrin + admin path ${adminBasePath} (adminHandler=${Boolean(adminHandler)})`,
-  );
 }
 
 try {
@@ -417,5 +456,5 @@ try {
 } catch (err) {
   console.error("[hostinger] Next başlatılamadı:", err);
   notifyBootFailed();
-  process.exit(1);
+  // Listen zaten açık; exit Hostinger'ı sonsuz restart döngüsüne sokar.
 }
