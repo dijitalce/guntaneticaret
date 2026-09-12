@@ -87,18 +87,67 @@ function redirectNextWritable(appDir, label) {
   }
 }
 
+const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
+let shuttingDown = false;
+/** @type {import("node:http").Server | null} */
+let httpServer = null;
+
+function readLockPid() {
+  try {
+    const n = Number(fs.readFileSync(pidFile, "utf8").trim());
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLock() {
+  try {
+    fs.writeFileSync(pidFile, String(process.pid));
+  } catch {
+    /* tmp yazılamazsa devam */
+  }
+}
+
+function clearLock() {
+  try {
+    if (readLockPid() === process.pid) fs.unlinkSync(pidFile);
+  } catch {
+    /* */
+  }
+}
+
+function stopPid(pid) {
+  if (!pid || pid === process.pid) return;
+  try {
+    process.kill(pid, "SIGTERM");
+    console.warn(`[hostinger] eski süreç ${pid} durduruluyor`);
+  } catch {
+    /* zaten yok */
+  }
+}
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — kapanıyor`);
+  clearLock();
+  try {
+    httpServer?.close(() => process.exit(0));
+  } catch {
+    process.exit(0);
+  }
+  setTimeout(() => process.exit(0), 1500);
+}
+
 process.on("uncaughtException", (err) => {
   console.error("[hostinger] yakalanmamış hata (süreç açık kalıyor):", err);
 });
 process.on("unhandledRejection", (err) => {
   console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
 });
-process.on("SIGTERM", () => {
-  console.error(`[hostinger] SIGTERM yoksayıldı pid=${process.pid} rss=${rssMb()}MB (süreç açık)`);
-});
-process.on("SIGINT", () => {
-  console.error(`[hostinger] SIGINT yoksayıldı pid=${process.pid} rss=${rssMb()}MB (süreç açık)`);
-});
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 function pinResolves(pinned) {
   const orig = NodeModule._resolveFilename;
@@ -401,13 +450,15 @@ const server = createServer((req, res) => {
     }
   });
 });
+httpServer = server;
 server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
 let listenAttempts = 0;
 function bindPort() {
   listenAttempts += 1;
-  server.listen(port, hostname, () => {
+  server.listen({ port, host: hostname, exclusive: true }, () => {
+    writeLock();
     console.log(
       `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
     );
@@ -415,13 +466,14 @@ function bindPort() {
 }
 
 server.on("error", (err) => {
-  if (err?.code === "EADDRINUSE" && listenAttempts < 8) {
-    console.warn(`[hostinger] ${port} dolu (${listenAttempts}) — başka kopya çalışıyor olabilir, 500ms sonra...`);
-    setTimeout(bindPort, 500);
+  if (err?.code === "EADDRINUSE" && listenAttempts < 10) {
+    stopPid(readLockPid());
+    console.warn(`[hostinger] ${port} dolu (${listenAttempts}), eski kopya kapatılıp 200ms sonra yeniden`);
+    setTimeout(bindPort, 200);
     return;
   }
   if (err?.code === "EADDRINUSE") {
-    console.warn(`[hostinger] ${port} hâlâ dolu; bu kopya çıkıyor (çalışan süreç korunur)`);
+    console.warn(`[hostinger] ${port} hâlâ dolu; bu kopya çıkıyor`);
     process.exit(0);
     return;
   }
