@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import { parse } from "node:url";
 import { dirname, join } from "node:path";
@@ -157,23 +159,24 @@ function claimPrimaryLock() {
 }
 
 function shutdown(signal) {
-  const holdPrimary = signal === "SIGTERM" && (nextBooted || server.listening);
-  if (holdPrimary) {
-    console.error(
-      `[hostinger] SIGTERM yok sayıldı birincil pid=${process.pid} rss=${rssMb()}MB (port ${port} açık)`,
-    );
-    return;
-  }
+  // Hostinger Node.js hosting "on-demand" çalışır: trafik yoksa süreci durdurur,
+  // sonraki istek yenisini başlatır. SIGTERM'i görmezden gelmek bu devri bozup
+  // yeni süreci kilit yüzünden park ettiriyor ve istekler askıda kalıyordu.
+  // Bu yüzden SIGTERM'i HER ZAMAN nazikçe kabul ediyoruz — kilidi hemen bırakıp
+  // bekleyen kopyanın 3 sn içinde devralmasına izin veriyoruz.
   if (shuttingDown) return;
   shuttingDown = true;
-  console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — kapanıyor`);
+  console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — nazikçe kapanıyor`);
   clearLock();
   try {
-    httpServer?.close(() => process.exit(0));
+    httpServer?.close(() => {
+      console.error(`[hostinger] ${signal} sonrası soket kapandı pid=${process.pid}`);
+      process.exit(0);
+    });
   } catch {
     process.exit(0);
   }
-  setTimeout(() => process.exit(0), 1500);
+  setTimeout(() => process.exit(0), 2000);
 }
 
 process.on("uncaughtException", (err) => {
@@ -504,9 +507,29 @@ function startNextAfterListen() {
 function parkDuplicate() {
   if (parked) return;
   parked = true;
-  console.warn(`[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB — listen yok, Next yok`);
-  // LiteSpeed 3 sn sonra bu kopyayı keser. Portu çalma — yeni worker start'ta kilidi alır.
-  setInterval(() => {}, 30_000);
+  console.warn(`[hostinger] kopya pid=${process.pid} rss=${rssMb()}MB — birincil boşalırsa devralmayı deneyecek`);
+  // Hostinger "on-demand" modelinde birincil, doğal SIGTERM ile boşalabilir
+  // (idle/recycle). Kilidi bırakır bırakmaz bu kopya hemen devralsın ki
+  // Hostinger'ın "3 sn içinde listen()" beklentisi karşılansın ve istekler
+  // askıda kalmasın. ~2.5 sn içinde devralamazsa pasif beklemeye geçer —
+  // birincil zaten canlıysa bu kopya muhtemelen gereksiz bir spawn'dır.
+  const deadline = Date.now() + 2500;
+  const tryTakeover = () => {
+    if (shuttingDown || server.listening) return;
+    if (Date.now() > deadline) {
+      console.warn(`[hostinger] kopya pid=${process.pid} devralamadı — pasif bekleme, listen yok`);
+      setInterval(() => {}, 30_000);
+      return;
+    }
+    if (claimPrimaryLock()) {
+      console.log(`[hostinger] kopya pid=${process.pid} birincilliği devraldı`);
+      parked = false;
+      bindPublicPort();
+      return;
+    }
+    setTimeout(tryTakeover, 200);
+  };
+  setTimeout(tryTakeover, 200);
 }
 
 function bindPublicPort() {
@@ -601,4 +624,26 @@ async function bootNext() {
   setInterval(() => {
     console.log(`[hostinger] canlı pid=${process.pid} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)}`);
   }, 120_000).unref();
+
+  // Hostinger "on-demand" modelinde trafiksiz kalan süreç durduruluyor.
+  // Gerçek trafik varken sorun yok; sessiz saatlerde soğuk başlangıçları
+  // azaltmak için kendimize hafif bir sağlık isteği gönderiyoruz.
+  setInterval(selfPing, 4 * 60_000).unref();
+}
+
+function selfPing() {
+  if (shuttingDown || !server.listening) return;
+  try {
+    const url = new URL(`${publicStoreUrl}/api/health`);
+    const client = url.protocol === "https:" ? https : http;
+    const req = client.get(url, { timeout: 8000 }, (res) => {
+      res.resume();
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => {
+      /* self-ping başarısızlığı önemsiz */
+    });
+  } catch {
+    /* url geçersizse yok say */
+  }
 }
