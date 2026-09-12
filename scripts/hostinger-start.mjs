@@ -143,8 +143,8 @@ function becomePrimaryOrExit() {
       }
       const prev = readLockPid();
       if (pidAlive(prev)) {
-        console.warn(`[hostinger] kopya çıkıyor — birincil pid=${prev} zaten çalışıyor`);
-        process.exit(0);
+        console.warn(`[hostinger] kopya pid=${process.pid} — birincil ${prev} duruyor, listen denenecek`);
+        return;
       }
       try {
         fs.unlinkSync(lockPath);
@@ -483,30 +483,62 @@ server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 
 let listenAttempts = 0;
+let nextBooted = false;
+let parked = false;
+
+function startNextAfterListen() {
+  if (nextBooted) return;
+  nextBooted = true;
+  bootNext().catch((err) => {
+    console.error("[hostinger] Next başlatılamadı:", err);
+    notifyBootFailed();
+  });
+}
+
+function parkDuplicate() {
+  if (parked) return;
+  parked = true;
+  console.warn(`[hostinger] kopya park pid=${process.pid} rss=${rssMb()}MB — Next yok, birincil bırakıldı`);
+  setInterval(() => {
+    if (shuttingDown || server.listening) return;
+    if (pidAlive(readLockPid())) return;
+    parked = false;
+    listenAttempts = 0;
+    console.log("[hostinger] birincil yok, port tekrar alınıyor");
+    bindPort();
+  }, 4000);
+}
+
 function bindPort() {
+  if (shuttingDown || server.listening) return;
   listenAttempts += 1;
   server.listen({ port, host: hostname, exclusive: true }, () => {
+    parked = false;
     writeLock();
     console.log(
       `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
     );
+    startNextAfterListen();
   });
 }
 
 server.on("error", (err) => {
   if (err?.code === "EADDRINUSE") {
-    const owner = readLockPid();
-    console.warn(
-      `[hostinger] ${port} dolu (pid ${owner ?? "?"}); bu kopya Next yüklemeden çıkıyor`,
-    );
-    process.exit(0);
+    if (listenAttempts < 50) {
+      if (listenAttempts === 1 || listenAttempts % 10 === 0) {
+        console.warn(`[hostinger] ${port} dolu (${listenAttempts}), birincil kapanırsa devralınacak`);
+      }
+      setTimeout(bindPort, 200);
+      return;
+    }
+    parkDuplicate();
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
   process.exit(1);
 });
 
-// Hostinger 3 sn kuralı: Next/prepare beklenmeden portu aç.
+// Hostinger 3 sn kuralı: listen() hemen. Next yalnızca port bize ait olduktan sonra.
 becomePrimaryOrExit();
 bindPort();
 
@@ -573,12 +605,4 @@ async function bootNext() {
   setInterval(() => {
     console.log(`[hostinger] canlı pid=${process.pid} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)}`);
   }, 120_000).unref();
-}
-
-try {
-  await bootNext();
-} catch (err) {
-  console.error("[hostinger] Next başlatılamadı:", err);
-  notifyBootFailed();
-  // Listen zaten açık; exit Hostinger'ı sonsuz restart döngüsüne sokar.
 }
