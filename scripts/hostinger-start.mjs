@@ -272,6 +272,31 @@ function pinNestedDep(pinned, hostPkg, depName, fromSf) {
   console.warn(`[hostinger] ${depName} hiçbir yerde bulunamadı (${hostPkg} bunu istiyor)`);
 }
 
+/**
+ * hostPkg'ın TÜM runtime bağımlılıklarını (package.json "dependencies")
+ * tek tek pinNestedDep ile kontrol eder. sql-escaper, lru.min gibi
+ * eksikleri birer birer yamalamak yerine — mysql2/ioredis hangi alt
+ * paketi eksik getirirse getirsin otomatik yakalanır.
+ */
+function pinAllDeps(pinned, hostPkg, fromSf) {
+  let pkgJsonPath;
+  try {
+    pkgJsonPath = fromSf.resolve(`${hostPkg}/package.json`);
+  } catch {
+    return; // hostPkg storefront'tan hiç çözülmüyor
+  }
+  let deps;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+    deps = Object.keys(pkg.dependencies ?? {});
+  } catch {
+    return;
+  }
+  for (const depName of deps) {
+    pinNestedDep(pinned, hostPkg, depName, fromSf);
+  }
+}
+
 function pinReactAndIoredis() {
   const fromSf = createRequire(join(storefrontDir, "package.json"));
   const pinned = Object.create(null);
@@ -292,8 +317,8 @@ function pinReactAndIoredis() {
     }
   }
 
-  pinNestedDep(pinned, "ioredis", "@ioredis/commands", fromSf);
-  pinNestedDep(pinned, "mysql2", "sql-escaper", fromSf);
+  pinAllDeps(pinned, "ioredis", fromSf);
+  pinAllDeps(pinned, "mysql2", fromSf);
 
   pinResolves(pinned);
 }
