@@ -629,6 +629,28 @@ async function bootNext() {
   // Gerçek trafik varken sorun yok; sessiz saatlerde soğuk başlangıçları
   // azaltmak için kendimize hafif bir sağlık isteği gönderiyoruz.
   setInterval(selfPing, 4 * 60_000).unref();
+
+  // Son loglarda rss ~225-226MB'a değince Hostinger'ın kendisi süreci
+  // durduruyordu (bazen SIGTERM ile, bazen hiç log bırakmadan doğrudan
+  // SIGKILL ile — muhtemelen bu Node app slotu için ayrılan bellek
+  // tavanına (cgroup limiti) çok yaklaşınca). Platform bize fırsat
+  // vermeden kesmeden ÖNCE, kendi kontrolümüzde, temiz bir şekilde
+  // kilidi bırakıp çıkalım ki Hostinger'ın "3 sn içinde listen()"
+  // beklentisini bozan ani/sessiz ölümler yerine öngörülebilir,
+  // loglanan bir devir teslim olsun.
+  setInterval(checkMemoryCeiling, 15_000).unref();
+}
+
+const memoryCeilingMb = Number(process.env.HOSTINGER_MEM_CEILING_MB ?? "200");
+
+function checkMemoryCeiling() {
+  if (shuttingDown) return;
+  const rss = rssMb();
+  if (rss < memoryCeilingMb) return;
+  console.warn(
+    `[hostinger] bellek tavanına yaklaşıldı rss=${rss}MB (sınır ${memoryCeilingMb}MB) pid=${process.pid} — kontrollü devir teslim`,
+  );
+  shutdown("BELLEK_TAVANI");
 }
 
 function selfPing() {
