@@ -585,23 +585,43 @@ function parkDuplicate() {
   // Hostinger "on-demand" modelinde birincil, doğal SIGTERM ile boşalabilir
   // (idle/recycle). Kilidi bırakır bırakmaz bu kopya hemen devralsın ki
   // Hostinger'ın "3 sn içinde listen()" beklentisi karşılansın ve istekler
-  // askıda kalmasın. ~2.5 sn içinde devralamazsa pasif beklemeye geçer —
-  // birincil zaten canlıysa bu kopya muhtemelen gereksiz bir spawn'dır.
-  const deadline = Date.now() + 2500;
+  // askıda kalmasın. ~2.5 sn içinde devralamazsa YAVAŞ (5 sn'de bir) izlemeye
+  // geçer — birincil zaten canlıysa bu kopya muhtemelen gereksiz bir
+  // spawn'dır, ama birincil sonradan ölürse yeni bir süreç beklemek yerine
+  // bu hazır kopya hemen devralabilsin diye bir süre daha dinlemeye devam
+  // ediyoruz.
+  //
+  // ÖNEMLİ: Hostinger'ın kendi "on-demand" denetleyicisi bazen -ihtiyaç
+  // olmadığı hâlde- art arda yeni kopya süreçler başlatıyor. Bunlar asla
+  // devralamıyorsa ve sonsuza dek boşta (ölü bir setInterval ile) yaşamaya
+  // devam ederlerse hesaptaki süreç/RAM kotası zamanla dolup TÜM siteyi ara
+  // ara kitleyebiliyor. Bu yüzden makul bir süre (10 dk) sonra hâlâ
+  // devralamamışsa temizce çıkıyoruz — birincil gerçekten ölürse zaten bir
+  // SONRAKİ istek yeni (ve bu kez başarılı olacak) bir süreç başlatacaktır.
+  const fastDeadline = Date.now() + 2500;
+  const hardDeadline = Date.now() + 10 * 60_000;
+  let announcedPassive = false;
   const tryTakeover = () => {
     if (shuttingDown || server.listening) return;
-    if (Date.now() > deadline) {
-      console.warn(`[hostinger] kopya pid=${process.pid} devralamadı — pasif bekleme, listen yok`);
-      setInterval(() => {}, 30_000);
-      return;
-    }
     if (claimPrimaryLock()) {
       console.log(`[hostinger] kopya pid=${process.pid} birincilliği devraldı`);
       parked = false;
       bindPublicPort();
       return;
     }
-    setTimeout(tryTakeover, 200);
+    const now = Date.now();
+    if (now > hardDeadline) {
+      console.warn(
+        `[hostinger] kopya pid=${process.pid} uzun süre devralamadı — kaynak tasarrufu için temizce çıkılıyor`,
+      );
+      process.exit(0);
+      return;
+    }
+    if (!announcedPassive && now > fastDeadline) {
+      announcedPassive = true;
+      console.warn(`[hostinger] kopya pid=${process.pid} devralamadı — pasif izlemeye geçiyor (yavaş kontrol)`);
+    }
+    setTimeout(tryTakeover, now <= fastDeadline ? 200 : 5_000);
   };
   setTimeout(tryTakeover, 200);
 }
