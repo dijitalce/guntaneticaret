@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import {
   featuredProducts,
@@ -21,7 +22,7 @@ import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
 const LISTING_CACHE_TTL_SECONDS = 90;
 const PRODUCT_CACHE_TTL_SECONDS = 300;
 
-export async function cachedVisibleBrands(tenantId: string) {
+export const cachedVisibleBrands = cache(async (tenantId: string) => {
   const rows = await unstable_cache(
     () => listVisibleBrands(tenantId),
     ["nav-brands", tenantId, "v2"],
@@ -30,15 +31,15 @@ export async function cachedVisibleBrands(tenantId: string) {
   // Tenant sync sırasında boş sonuç gelirse cache’i zehirleme.
   if (rows.length === 0) return listVisibleBrands(tenantId);
   return rows;
-}
+});
 
-export function cachedPopularCategories(limit = 8) {
+export const cachedPopularCategories = cache((limit = 8) => {
   return unstable_cache(
     () => listPopularCategories(limit),
     ["nav-categories", String(limit)],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
-}
+});
 
 export function cachedModelsForBrand(tenantId: string, brandId: string) {
   return unstable_cache(
@@ -125,13 +126,13 @@ export function cachedListingFacetsForCategory(tenantId: string, categoryId: str
   )();
 }
 
-export function cachedFeaturedProducts(tenantId: string, limit = 8) {
+export const cachedFeaturedProducts = cache((tenantId: string, limit = 8) => {
   return unstable_cache(
     () => featuredProducts(tenantId, limit),
     ["featured-fitv1", tenantId, String(limit)],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
-}
+});
 
 export function cachedProductBySlug(tenantId: string, slug: string) {
   return unstable_cache(

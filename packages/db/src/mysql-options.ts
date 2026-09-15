@@ -47,6 +47,8 @@ export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: 
     // Hostinger shared MySQL process/connection caps — keep the pool tiny.
     connectionLimit: overrides.connectionLimit ?? (isLocal ? 10 : 5),
     waitForConnections: true,
+    // 0 = sınırsız bekleme. Uzak MySQL yavaşken kuyruk şişer, sayfa asılı kalır.
+    queueLimit: isLocal ? 0 : 25,
     enableKeepAlive: true,
     ssl: wantSsl ? { rejectUnauthorized: false } : undefined,
     timezone: "Z",
