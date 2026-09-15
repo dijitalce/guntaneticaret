@@ -94,10 +94,7 @@ let shuttingDown = false;
 let nextBooted = false;
 /** @type {import("node:http").Server | null} */
 let httpServer = null;
-/** Hostinger 3sn kuralı için kopyanın geçici dinleyicisi (port 3000 değil). */
-/** @type {import("node:http").Server | null} */
-let dummyServer = null;
-let lockMissLogged = false;
+let bindAttempts = 0;
 
 function warnBadEnv() {
   const db = process.env.DATABASE_URL ?? "";
@@ -168,10 +165,7 @@ function claimPrimaryLock() {
       }
       const prev = readLockPid();
       if (pidAlive(prev)) {
-        if (!lockMissLogged) {
-          lockMissLogged = true;
-          console.warn(`[hostinger] kopya pid=${process.pid} — birincil ${prev}; port ${port} alınmayacak`);
-        }
+        console.warn(`[hostinger] kilit dolu pid=${prev} — bu süreç yerini alacak`);
         return false;
       }
       try {
@@ -184,6 +178,24 @@ function claimPrimaryLock() {
   return true;
 }
 
+function requestPreviousToYield() {
+  const prev = readLockPid();
+  if (!pidAlive(prev)) {
+    try {
+      if (prev) fs.unlinkSync(pidFile);
+    } catch {
+      /* */
+    }
+    return;
+  }
+  console.warn(`[hostinger] pid=${process.pid} birincil ${prev} yerini alıyor`);
+  try {
+    process.kill(prev, "SIGTERM");
+  } catch {
+    /* */
+  }
+}
+
 function shutdown(signal) {
   // Hostinger Node.js hosting "on-demand" çalışır: trafik yoksa süreci durdurur,
   // sonraki istek yenisini başlatır. SIGTERM'i görmezden gelmek bu devri bozup
@@ -193,7 +205,6 @@ function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — nazikçe kapanıyor`);
-  closeDummy();
   clearLock();
   try {
     httpServer?.close(() => {
@@ -433,13 +444,14 @@ function sendUnavailable(res, title, body) {
     res,
     503,
     `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>${title}</title>
+<meta http-equiv="refresh" content="2"/>
 <body style="font-family:system-ui;padding:2rem;max-width:40rem">
 <h1>${title}</h1>
 <p>${body}</p>
 </body></html>`,
     {
       "x-guntan-app": "unavailable",
-      "Retry-After": "5",
+      "Retry-After": "2",
       "Cache-Control": "no-store",
       "CDN-Cache-Control": "no-store",
     },
@@ -571,7 +583,7 @@ async function routeRequest(req, res) {
     const ready = await waitUntilReady("sf", req);
     if (res.writableEnded) return;
     if (!ready || !sfHandler) {
-      sendUnavailable(res, "Site kullanılamıyor", "Sunucu şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.");
+        sendUnavailable(res, "Site açılıyor", "Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.");
       return;
     }
   }
@@ -605,116 +617,10 @@ function startNextAfterListen() {
   });
 }
 
-function closeDummy() {
-  if (!dummyServer) return;
-  const extra = dummyServer;
-  dummyServer = null;
-  try {
-    extra.close();
-  } catch {
-    /* */
-  }
-}
-
-function proxyToPrimary(req, res) {
-  const proxy = http.request(
-    {
-      hostname: "127.0.0.1",
-      port,
-      path: req.url,
-      method: req.method,
-      headers: req.headers,
-      timeout: 20_000,
-    },
-    (up) => {
-      res.writeHead(up.statusCode ?? 502, up.headers);
-      up.pipe(res);
-    },
-  );
-  proxy.on("error", () => {
-    if (res.headersSent) {
-      res.end();
-      return;
-    }
-    sendUnavailable(res, "Site açılıyor", "Sunucu hazırlanıyor. Birkaç saniye sonra yenileyin.");
-  });
-  proxy.on("timeout", () => proxy.destroy());
-  req.pipe(proxy);
-}
-
-/** Hostinger listen() çağrıldı mı diye bakıyor; port 3000 doluysa rastgele port yeterli. */
-function satisfyListenRequirement() {
-  if (server.listening || dummyServer?.listening) return;
-  dummyServer = createServer(proxyToPrimary);
-  dummyServer.listen({ port: 0, host: hostname }, () => {
-    const addr = dummyServer?.address();
-    const dummyPort = typeof addr === "object" && addr ? addr.port : "?";
-    console.log(
-      `[hostinger] kopya pid=${process.pid} geçici listen :${dummyPort} (asıl ${port} birincilde)`,
-    );
-  });
-}
-
-function primaryHealthy() {
-  return new Promise((resolve) => {
-    const req = http.get({ hostname: "127.0.0.1", port, path: "/api/health", timeout: 800 }, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-function parkDuplicate() {
-  if (parked) return;
-  parked = true;
-  // Hostinger bu süreci bir istek için açmış olabilir. listen() yoksa 3 sn
-  // sonra "did not call listen" deyip isteği düşürüyor — kullanıcı asılı kalır,
-  // arkadaşının isteği mevcut 3000 birinciline gider. Geçici listen + vekil
-  // bunu keser. Birincil sağlıklıysa RAM yememesi için kısa süre sonra çıkarız.
-  satisfyListenRequirement();
-  console.warn(`[hostinger] kopya pid=${process.pid} rss=${rssMb()}MB — birincil boşalırsa devralmayı deneyecek`);
-
-  const fastDeadline = Date.now() + 2500;
-  const hardDeadline = Date.now() + 15_000;
-
-  const tryTakeover = () => {
-    if (shuttingDown || server.listening) return;
-    if (claimPrimaryLock()) {
-      console.log(`[hostinger] kopya pid=${process.pid} birincilliği devraldı`);
-      parked = false;
-      closeDummy();
-      bindPublicPort();
-      return;
-    }
-    const now = Date.now();
-    if (now > hardDeadline) {
-      console.warn(`[hostinger] kopya pid=${process.pid} devralamadı — kaynak tasarrufu için çıkılıyor`);
-      process.exit(0);
-      return;
-    }
-    if (now > fastDeadline) {
-      primaryHealthy().then((ok) => {
-        if (shuttingDown || server.listening) return;
-        if (ok) {
-          console.warn(`[hostinger] kopya pid=${process.pid} birincil sağlıklı — çıkılıyor`);
-          process.exit(0);
-        }
-      });
-    }
-    setTimeout(tryTakeover, now <= fastDeadline ? 200 : 1_000);
-  };
-  setTimeout(tryTakeover, 200);
-}
-
 function bindPublicPort() {
   if (shuttingDown || server.listening) return;
-  closeDummy();
   server.listen({ port, host: hostname, exclusive: true }, () => {
+    bindAttempts = 0;
     parked = false;
     writeLock();
     console.log(
@@ -726,21 +632,29 @@ function bindPublicPort() {
 
 server.on("error", (err) => {
   if (err?.code === "EADDRINUSE") {
-    console.warn(`[hostinger] ${port} dolu; bu süreç Next yüklemeden park`);
-    parkDuplicate();
+    bindAttempts += 1;
+    console.warn(`[hostinger] ${port} dolu (deneme ${bindAttempts}) — eski süreç sonlandırılıyor`);
+    requestPreviousToYield();
+    if (bindAttempts > 20) {
+      console.error(`[hostinger] ${port} alınamadı pid=${process.pid}`);
+      process.exit(1);
+    }
+    setTimeout(bindPublicPort, 150);
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
   process.exit(1);
 });
 
-// Hostinger 3 sn: listen() hemen. 3000 yalnız kilit sahibinde; kopya geçici listen.
+// Hostinger reverse-proxy, listen() yapılan porta bağlanır. Rastgele porta
+// dummy listen yapmak "Site açılıyor" sayfasında kilitlenmeye yol açtı.
+// Bu süreç Hostinger'ın başlattığı süreçse PORT'u almak zorunda.
 warnBadEnv();
-if (claimPrimaryLock()) {
-  bindPublicPort();
-} else {
-  parkDuplicate();
+if (!claimPrimaryLock()) {
+  requestPreviousToYield();
+  writeLock();
 }
+bindPublicPort();
 
 function loadNext() {
   if (!nextFactory) {
