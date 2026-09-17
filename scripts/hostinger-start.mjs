@@ -2,7 +2,6 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import http from "node:http";
-import https from "node:https";
 import os from "node:os";
 import { parse } from "node:url";
 import { dirname, join } from "node:path";
@@ -165,7 +164,7 @@ function claimPrimaryLock() {
       }
       const prev = readLockPid();
       if (pidAlive(prev)) {
-        console.warn(`[hostinger] kilit dolu pid=${prev} — bu süreç yerini alacak`);
+        console.warn(`[hostinger] kilit dolu pid=${prev} — birincil ayakta, bu süreç yedek`);
         return false;
       }
       try {
@@ -250,7 +249,48 @@ function pinResolves(pinned) {
  * .pnpm deposundaki başka bir hostPkg kopyasından, o da olmazsa doğrudan
  * .pnpm'deki depName paketinden bulup global pin haritasına ekler.
  */
+function tryResolveFrom(pkgJsonPath, depName) {
+  try {
+    return createRequire(pkgJsonPath).resolve(depName);
+  } catch {
+    return null;
+  }
+}
+
+function pnpmFolderPrefix(pkgName) {
+  return pkgName.startsWith("@") ? `${pkgName.replace("/", "+")}@` : `${pkgName}@`;
+}
+
+function findInPnpmStore(depName) {
+  const pnpmDir = join(root, "node_modules/.pnpm");
+  if (!fs.existsSync(pnpmDir)) return null;
+  const needle = pnpmFolderPrefix(depName);
+  let names;
+  try {
+    names = fs.readdirSync(pnpmDir);
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    if (!name.startsWith(needle)) continue;
+    const depDir = join(pnpmDir, name, "node_modules", depName);
+    const depPkgJson = join(depDir, "package.json");
+    if (!fs.existsSync(depPkgJson)) continue;
+    const resolved = tryResolveFrom(depPkgJson, depName);
+    if (resolved) return resolved;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(depPkgJson, "utf8"));
+      return join(depDir, pkg.main || "index.js");
+    } catch {
+      /* bu kopya bozuk */
+    }
+  }
+  return null;
+}
+
 function pinNestedDep(pinned, hostPkg, depName, fromSf) {
+  if (Object.prototype.hasOwnProperty.call(pinned, depName)) return;
+
   const candidates = [];
   try {
     candidates.push(fromSf.resolve(`${hostPkg}/package.json`));
@@ -259,19 +299,25 @@ function pinNestedDep(pinned, hostPkg, depName, fromSf) {
     return;
   }
 
-  try {
-    createRequire(candidates[0]).resolve(depName);
-    return; // zaten sorunsuz çözülüyor, dokunma
-  } catch {
-    /* devam, alternatif ara */
+  const already = tryResolveFrom(candidates[0], depName);
+  if (already) {
+    // Şimdi çözülse bile Next require-hook sonra aynı require'ı
+    // izole edip kaçırabiliyor (safer-buffer tam olarak böyle kayboldu).
+    pinned[depName] = already;
+    return;
   }
 
   const pnpmDir = join(root, "node_modules/.pnpm");
   if (fs.existsSync(pnpmDir)) {
-    for (const name of fs.readdirSync(pnpmDir)) {
-      if (!name.startsWith(`${hostPkg}@`)) continue;
-      const pkg = join(pnpmDir, name, `node_modules/${hostPkg}/package.json`);
-      if (fs.existsSync(pkg)) candidates.push(pkg);
+    const hostNeedle = pnpmFolderPrefix(hostPkg);
+    try {
+      for (const name of fs.readdirSync(pnpmDir)) {
+        if (!name.startsWith(hostNeedle)) continue;
+        const pkg = join(pnpmDir, name, "node_modules", hostPkg, "package.json");
+        if (fs.existsSync(pkg)) candidates.push(pkg);
+      }
+    } catch {
+      /* */
     }
   }
 
@@ -288,24 +334,21 @@ function pinNestedDep(pinned, hostPkg, depName, fromSf) {
     }
   }
 
-  // Son çare: depName'i doğrudan .pnpm mağazasından bul (self-reference
-  // gerektirmeden, package.json'daki "main"i elle çözerek).
-  if (fs.existsSync(pnpmDir)) {
-    for (const name of fs.readdirSync(pnpmDir)) {
-      if (!name.startsWith(`${depName}@`)) continue;
-      const depDir = join(pnpmDir, name, `node_modules/${depName}`);
-      const depPkgJson = join(depDir, "package.json");
-      if (!fs.existsSync(depPkgJson)) continue;
-      try {
-        const pkg = JSON.parse(fs.readFileSync(depPkgJson, "utf8"));
-        const entry = join(depDir, pkg.main || "index.js");
-        pinned[depName] = entry;
-        console.log(`[hostinger] ${depName} → ${entry} (.pnpm mağazasından doğrudan pinlendi)`);
-      } catch {
-        /* olmuyorsa yok say */
-      }
+  for (const dir of [storefrontDir, adminDir, root]) {
+    const pkgJson = join(dir, "node_modules", depName, "package.json");
+    const resolved = fs.existsSync(pkgJson) ? tryResolveFrom(pkgJson, depName) : null;
+    if (resolved) {
+      pinned[depName] = resolved;
+      console.log(`[hostinger] ${depName} → ${resolved} (${dir} node_modules)`);
       return;
     }
+  }
+
+  const fromPnpm = findInPnpmStore(depName);
+  if (fromPnpm) {
+    pinned[depName] = fromPnpm;
+    console.log(`[hostinger] ${depName} → ${fromPnpm} (.pnpm mağazasından doğrudan pinlendi)`);
+    return;
   }
   console.warn(`[hostinger] ${depName} hiçbir yerde bulunamadı (${hostPkg} bunu istiyor)`);
 }
@@ -316,7 +359,9 @@ function pinNestedDep(pinned, hostPkg, depName, fromSf) {
  * eksikleri birer birer yamalamak yerine — mysql2/ioredis hangi alt
  * paketi eksik getirirse getirsin otomatik yakalanır.
  */
-function pinAllDeps(pinned, hostPkg, fromSf) {
+function pinAllDeps(pinned, hostPkg, fromSf, seen = new Set()) {
+  if (seen.has(hostPkg)) return;
+  seen.add(hostPkg);
   let pkgJsonPath;
   try {
     pkgJsonPath = fromSf.resolve(`${hostPkg}/package.json`);
@@ -332,6 +377,9 @@ function pinAllDeps(pinned, hostPkg, fromSf) {
   }
   for (const depName of deps) {
     pinNestedDep(pinned, hostPkg, depName, fromSf);
+    // mysql2 → iconv-lite çözülür ama iconv-lite → safer-buffer Hostinger
+    // kopyasında kayboluyor. Bir seviye derine inmeden pin kaçıyor.
+    pinAllDeps(pinned, depName, fromSf, seen);
   }
 }
 
@@ -357,6 +405,22 @@ function pinReactAndIoredis() {
 
   pinAllDeps(pinned, "ioredis", fromSf);
   pinAllDeps(pinned, "mysql2", fromSf);
+  pinAllDeps(pinned, "iconv-lite", fromSf);
+
+  for (const extra of ["safer-buffer", "sql-escaper", "lru.min", "@ioredis/commands"]) {
+    if (Object.prototype.hasOwnProperty.call(pinned, extra)) continue;
+    try {
+      pinned[extra] = fromSf.resolve(extra);
+    } catch {
+      const found = findInPnpmStore(extra);
+      if (found) {
+        pinned[extra] = found;
+        console.log(`[hostinger] ${extra} → ${found} (yedek tarama)`);
+      } else {
+        console.warn(`[hostinger] ${extra} pinlenemedi`);
+      }
+    }
+  }
 
   pinResolves(pinned);
 }
@@ -439,10 +503,10 @@ function sendHtml(res, status, html, extraHeaders) {
   res.end(html);
 }
 
-function sendUnavailable(res, title, body) {
+function sendUnavailable(res, title, body, status = 503) {
   sendHtml(
     res,
-    503,
+    status,
     `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>${title}</title>
 <meta http-equiv="refresh" content="2"/>
 <body style="font-family:system-ui;padding:2rem;max-width:40rem">
@@ -450,7 +514,7 @@ function sendUnavailable(res, title, body) {
 <p>${body}</p>
 </body></html>`,
     {
-      "x-guntan-app": "unavailable",
+      "x-guntan-app": status === 200 ? "booting" : "unavailable",
       "Retry-After": "2",
       "Cache-Control": "no-store",
       "CDN-Cache-Control": "no-store",
@@ -583,7 +647,14 @@ async function routeRequest(req, res) {
     const ready = await waitUntilReady("sf", req);
     if (res.writableEnded) return;
     if (!ready || !sfHandler) {
-        sendUnavailable(res, "Site açılıyor", "Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.");
+      // 503 Hostinger/LiteSpeed sağlık kontrolünü "uygulama öldü" sanıp
+      // yeni süreç başlatıyordu; o da birincili öldürüp döngüye giriyordu.
+      sendUnavailable(
+        res,
+        "Site açılıyor",
+        "Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.",
+        200,
+      );
       return;
     }
   }
@@ -617,6 +688,23 @@ function startNextAfterListen() {
   });
 }
 
+function probeLocalHealth() {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { hostname: "127.0.0.1", port, path: "/api/health", timeout: 800 },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200 || res.statusCode === 503);
+      },
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 function bindPublicPort() {
   if (shuttingDown || server.listening) return;
   server.listen({ port, host: hostname, exclusive: true }, () => {
@@ -633,13 +721,34 @@ function bindPublicPort() {
 server.on("error", (err) => {
   if (err?.code === "EADDRINUSE") {
     bindAttempts += 1;
-    console.warn(`[hostinger] ${port} dolu (deneme ${bindAttempts}) — eski süreç sonlandırılıyor`);
-    requestPreviousToYield();
-    if (bindAttempts > 20) {
-      console.error(`[hostinger] ${port} alınamadı pid=${process.pid}`);
-      process.exit(1);
+    // Hostinger bazen eski sürece SIGTERM ile yeni start'ı aynı anda yollar.
+    // 400ms bekleyip tekrar dinlemek, kapanmakta olan birincilin portu
+    // bırakmasına izin verir — hemen çıkmak portu boş bırakırdı.
+    if (bindAttempts === 1) {
+      setTimeout(bindPublicPort, 400);
+      return;
     }
-    setTimeout(bindPublicPort, 150);
+    probeLocalHealth().then((healthy) => {
+      if (shuttingDown) return;
+      if (healthy) {
+        // Hostinger sık sık ikinci bir start süreci açıyor. Eski kod bunu
+        // görünce sağlıklı birincili SIGTERM ile öldürüyordu — kullanıcıya
+        // "site çalışmıyor" olarak yansıyan sürekli soğuk başlangıç.
+        console.warn(
+          `[hostinger] ${port} yanıt veriyor — yedek pid=${process.pid} çıkıyor (birincil ayakta)`,
+        );
+        process.exit(0);
+      }
+      if (bindAttempts > 20) {
+        console.error(`[hostinger] ${port} alınamadı pid=${process.pid}`);
+        process.exit(1);
+      }
+      console.warn(
+        `[hostinger] ${port} dolu ama yanıtsız (deneme ${bindAttempts}) — eski süreç sonlandırılıyor`,
+      );
+      requestPreviousToYield();
+      setTimeout(bindPublicPort, 150);
+    });
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
@@ -651,8 +760,9 @@ server.on("error", (err) => {
 // Bu süreç Hostinger'ın başlattığı süreçse PORT'u almak zorunda.
 warnBadEnv();
 if (!claimPrimaryLock()) {
-  requestPreviousToYield();
-  writeLock();
+  console.warn(
+    `[hostinger] pid=${process.pid} yedek — sağlıklı birincili öldürmeden porta bağlanmayı deneyecek`,
+  );
 }
 bindPublicPort();
 
@@ -764,17 +874,14 @@ function checkMemoryCeiling() {
 
 function selfPing() {
   if (shuttingDown || !server.listening) return;
-  try {
-    const url = new URL(`${publicStoreUrl}/api/health`);
-    const client = url.protocol === "https:" ? https : http;
-    const req = client.get(url, { timeout: 8000 }, (res) => {
+  const req = http.get(
+    { hostname: "127.0.0.1", port, path: "/api/health", timeout: 8000 },
+    (res) => {
       res.resume();
-    });
-    req.on("timeout", () => req.destroy());
-    req.on("error", () => {
-      /* self-ping başarısızlığı önemsiz */
-    });
-  } catch {
-    /* url geçersizse yok say */
-  }
+    },
+  );
+  req.on("timeout", () => req.destroy());
+  req.on("error", () => {
+    /* self-ping başarısızlığı önemsiz */
+  });
 }

@@ -103,6 +103,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      safer-buffer:
+        specifier: ^2.1.2
+        version: 2.1.2
       sql-escaper:
         specifier: ^1.5.1
         version: 1.5.1
@@ -188,6 +191,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      safer-buffer:
+        specifier: ^2.1.2
+        version: 2.1.2
       sql-escaper:
         specifier: ^1.5.1
         version: 1.5.1
@@ -295,6 +301,9 @@ importers:
       named-placeholders:
         specifier: ^1.1.6
         version: 1.1.6
+      safer-buffer:
+        specifier: ^2.1.2
+        version: 2.1.2
       sql-escaper:
         specifier: ^1.5.1
         version: 1.5.1
