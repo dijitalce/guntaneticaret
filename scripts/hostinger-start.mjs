@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import { parse } from "node:url";
 import { dirname, join } from "node:path";
@@ -859,9 +860,12 @@ async function bootNext() {
   }, 120_000).unref();
 
   // Hostinger "on-demand" modelinde trafiksiz kalan süreç durduruluyor.
-  // Gerçek trafik varken sorun yok; sessiz saatlerde soğuk başlangıçları
-  // azaltmak için kendimize hafif bir sağlık isteği gönderiyoruz.
-  setInterval(selfPing, 4 * 60_000).unref();
+  // 127.0.0.1'e atılan ping Hostinger'ın ön-vekilinden (LiteSpeed) hiç
+  // GEÇMEDİĞİ için platformun "boşta kaldı" sayacını sıfırlamıyor —
+  // loglar süreçlerin ~10-20 sn'de bir komple yeniden başladığını
+  // gösterdi. Bu yüzden genel adrese (gerçek dış istek gibi LiteSpeed
+  // üzerinden geçer) ve çok daha sık aralıkla ping atıyoruz.
+  setInterval(selfPing, 45_000).unref();
 
   // Son loglarda rss ~225-226MB'a değince Hostinger'ın kendisi süreci
   // durduruyordu (bazen SIGTERM ile, bazen hiç log bırakmadan doğrudan
@@ -900,16 +904,21 @@ function checkMemoryCeiling() {
   shutdown("BELLEK_TAVANI");
 }
 
+let publicHealthUrl = null;
+try {
+  publicHealthUrl = new URL(`${publicStoreUrl}/api/health`);
+} catch {
+  /* geçersiz STOREFRONT_URL — self-ping devre dışı kalır */
+}
+
 function selfPing() {
-  if (shuttingDown || !server.listening) return;
-  const req = http.get(
-    { hostname: "127.0.0.1", port, path: "/api/health", timeout: 8000 },
-    (res) => {
-      res.resume();
-    },
-  );
+  if (shuttingDown || !server.listening || !publicHealthUrl) return;
+  const client = publicHealthUrl.protocol === "https:" ? https : http;
+  const req = client.get(publicHealthUrl, { timeout: 8000 }, (res) => {
+    res.resume();
+  });
   req.on("timeout", () => req.destroy());
   req.on("error", () => {
-    /* self-ping başarısızlığı önemsiz */
+    /* self-ping başarısızlığı önemsiz — DNS/ağ dalgalanması olabilir */
   });
 }
