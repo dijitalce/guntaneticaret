@@ -705,6 +705,33 @@ function probeLocalHealth() {
   });
 }
 
+let primaryWatchStarted = false;
+
+/**
+ * Hostinger'da bazı ortamlarda listen() ÇAKIŞMADAN (EADDRINUSE hiç
+ * görünmeden) hep başarılı oluyor — muhtemelen her yeni süreç kendi
+ * yalıtılmış ağ görünümünde portu boş görüyor. Bu durumda eski süreç
+ * gerçekte hâlâ ayakta ve trafik almıyor olsa bile kimse ona SIGTERM
+ * göndermiyor; sadece kilit dosyasını izleyip "ben artık kilidin
+ * sahibi değilim ve kilidin gerçek sahibi hayatta" olduğunu fark eden
+ * bu bekçi, süreci düzgünce kapatıp biriken "hayalet" kopyaları temizler.
+ */
+function watchPrimaryLock() {
+  if (primaryWatchStarted) return;
+  primaryWatchStarted = true;
+  setInterval(() => {
+    if (shuttingDown) return;
+    const current = readLockPid();
+    if (current === process.pid || current == null) return;
+    if (pidAlive(current)) {
+      console.warn(
+        `[hostinger] pid=${process.pid} kilit artık pid=${current}'e ait ve o süreç hayatta — bu süreç fazlalık, kapanıyor`,
+      );
+      shutdown("FAZLALIK_SÜREÇ");
+    }
+  }, 20_000).unref();
+}
+
 function bindPublicPort() {
   if (shuttingDown || server.listening) return;
   server.listen({ port, host: hostname, exclusive: true }, () => {
@@ -714,6 +741,7 @@ function bindPublicPort() {
     console.log(
       `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
     );
+    watchPrimaryLock();
     startNextAfterListen();
   });
 }
