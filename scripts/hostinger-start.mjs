@@ -13,6 +13,22 @@ process.env.NEXT_MANUAL_SIG_HANDLE ??= "1";
 process.env.NEXT_TELEMETRY_DISABLED ??= "1";
 process.env.UV_THREADPOOL_SIZE ??= "2";
 
+// Hostinger'ın "on-demand" modeli süreci ~10-20 sn'de bir yeniden başlatıyor;
+// her devir-teslim döngüsü kendi içinde beklenen/rutin birkaç log satırı
+// üretiyor (kilit dolu, yedek çıkış, redundant "hazır" bildirimi vb.). Bunlar
+// tek başına bir sorun değil ama gün boyunca on binlerce satır biriktirip
+// log kotasını/okumasını zorlaştırıyor. Varsayılan olarak sadece ANLAMLI
+// olayları (yeni birincil, vitrin hazır, fazlalık temizliği, gerçek hatalar)
+// logluyoruz. Ayrıntılı hata ayıklama gerekirse HOSTINGER_VERBOSE_LOGS=1 ile
+// eski davranışa dönülebilir.
+const VERBOSE = process.env.HOSTINGER_VERBOSE_LOGS === "1";
+function vlog(...args) {
+  if (VERBOSE) console.log(...args);
+}
+function vwarn(...args) {
+  if (VERBOSE) console.warn(...args);
+}
+
 const NodeModule = createRequire(import.meta.url)("module");
 
 // Hostinger: listen() 3 sn içinde çağrılmalı. Next'i listen'den SONRA yükle.
@@ -165,7 +181,7 @@ function claimPrimaryLock() {
       }
       const prev = readLockPid();
       if (pidAlive(prev)) {
-        console.warn(`[hostinger] kilit dolu pid=${prev} — birincil ayakta, bu süreç yedek`);
+        vwarn(`[hostinger] kilit dolu pid=${prev} — birincil ayakta, bu süreç yedek`);
         return false;
       }
       try {
@@ -208,7 +224,7 @@ function shutdown(signal) {
   clearLock();
   try {
     httpServer?.close(() => {
-      console.error(`[hostinger] ${signal} sonrası soket kapandı pid=${process.pid}`);
+      vlog(`[hostinger] ${signal} sonrası soket kapandı pid=${process.pid}`);
       process.exit(0);
     });
   } catch {
@@ -763,7 +779,7 @@ server.on("error", (err) => {
         // Hostinger sık sık ikinci bir start süreci açıyor. Eski kod bunu
         // görünce sağlıklı birincili SIGTERM ile öldürüyordu — kullanıcıya
         // "site çalışmıyor" olarak yansıyan sürekli soğuk başlangıç.
-        console.warn(
+        vwarn(
           `[hostinger] ${port} yanıt veriyor — yedek pid=${process.pid} çıkıyor (birincil ayakta)`,
         );
         process.exit(0);
@@ -789,7 +805,7 @@ server.on("error", (err) => {
 // Bu süreç Hostinger'ın başlattığı süreçse PORT'u almak zorunda.
 warnBadEnv();
 if (!claimPrimaryLock()) {
-  console.warn(
+  vwarn(
     `[hostinger] pid=${process.pid} yedek — sağlıklı birincili öldürmeden porta bağlanmayı deneyecek`,
   );
 }
@@ -852,7 +868,7 @@ async function bootNext() {
       `[hostinger] ${join(adminDir, ".next")} yok — ${adminBasePath} 503 döner. Build: pnpm build (admin dahil).`,
     );
   } else {
-    console.log(`[hostinger] ${hostname}:${port} — vitrin hazır, admin ilk ${adminBasePath} isteğinde yüklenecek`);
+    vlog(`[hostinger] ${hostname}:${port} — vitrin hazır, admin ilk ${adminBasePath} isteğinde yüklenecek`);
   }
 
   setInterval(() => {
