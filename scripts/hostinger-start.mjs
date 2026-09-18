@@ -235,7 +235,27 @@ function shutdown(signal) {
   // yarıda kesilmeden bitmesi için tanınan ek tolerans. 2sn bazı yavaş
   // isteklerin ortasında kesilmesine (504/bağlantı sıfırlama gibi görünen
   // hatalara) yol açabiliyordu.
-  setTimeout(() => process.exit(0), 5000);
+  //
+  // Loglarda bazı süreçlerin "vitrin hazır" olmadan (Next.js prepare()
+  // bitmeden) SIGTERM aldığı görüldü. O anda o sürece denk gelmiş bir istek
+  // varsa, cevabı sfHandler'ın hazır olmasına bağlı — sabit 5sn bazen
+  // prepare()'in bitmesine yetmeyip isteği bağlantı-sıfırlama ile
+  // kesebiliyordu. Bu yüzden prepare() hâlâ bitmemişse, hazır olur olmaz
+  // (waiters'a cevap gitsin diye) biraz daha bekleyip çıkıyoruz; normal
+  // durumda (zaten hazırsa) eski 5sn tolerans değişmiyor.
+  if (!sfHandler && !bootFailed) {
+    const deadline = Date.now() + 10_000;
+    const poll = setInterval(() => {
+      if (sfHandler || bootFailed || Date.now() >= deadline) {
+        clearInterval(poll);
+        // sfHandler artık hazırsa bekleyen isteklerin cevabı gitmesi için
+        // bir sonraki tick'e kadar tanı, sonra kapan.
+        setTimeout(() => process.exit(0), sfHandler ? 250 : 0);
+      }
+    }, 200).unref();
+  } else {
+    setTimeout(() => process.exit(0), 5000);
+  }
 }
 
 process.on("uncaughtException", (err) => {
