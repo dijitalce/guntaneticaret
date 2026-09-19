@@ -62,6 +62,22 @@ const adminBasePath = (process.env.ADMIN_BASE_PATH ?? "/yonetim").replace(/\/$/,
 const publicStoreUrl = (
   process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com"
 ).replace(/\/$/, "");
+const canonicalHost = (() => {
+  try {
+    return new URL(publicStoreUrl).hostname.toLowerCase();
+  } catch {
+    return "guntanotoyedekparca.com";
+  }
+})();
+/** Ana + www + ALLOWED_HOSTS (virgülle). Grup domainleri buraya eklenmeli. */
+const allowedHosts = (() => {
+  const set = new Set([canonicalHost, `www.${canonicalHost}`]);
+  for (const part of String(process.env.ALLOWED_HOSTS ?? "").split(",")) {
+    const h = part.trim().toLowerCase().split(":")[0];
+    if (h) set.add(h);
+  }
+  return set;
+})();
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
 const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
@@ -106,6 +122,26 @@ function isAdminHost(hostHeader) {
 function isAdminPath(urlPath) {
   const path = String(urlPath ?? "/").split("?")[0];
   return path === adminBasePath || path.startsWith(`${adminBasePath}/`);
+}
+
+function normalizeRequestHost(hostHeader) {
+  return String(hostHeader ?? "")
+    .split(":")[0]
+    .toLowerCase();
+}
+
+/** İzin verilmeyen Host → ana siteye 301. admin.* ve /yonetim dokunulmaz. */
+function maybeHostRedirect(req, res, pathOnly) {
+  if (isAdminHost(req.headers.host) || isAdminPath(pathOnly)) return false;
+  const host = normalizeRequestHost(req.headers.host);
+  if (allowedHosts.has(host)) return false;
+  const dest = `${publicStoreUrl}${req.url ?? "/"}`;
+  res.statusCode = 301;
+  res.setHeader("location", dest);
+  res.setHeader("cache-control", "public, max-age=3600");
+  res.setHeader("x-guntan-app", "host-redirect");
+  res.end();
+  return true;
 }
 
 function rssMb() {
@@ -1002,6 +1038,9 @@ async function routeRequest(req, res) {
     sendHealth(res);
     return;
   }
+
+  // Yedek/birincil fark etmez — Next yüklemeden; yedek hemen çıkabilir.
+  if (maybeHostRedirect(req, res, pathOnly)) return;
 
   // Yedek süreç Next yüklemez; bağlantıyı sıfırlama — "Site açılıyor" 200.
   if (isStandbyMode) {
