@@ -249,21 +249,18 @@ function requestPreviousToYield() {
 function shutdown(signal) {
   if (shuttingDown) return;
 
-  // Hostinger sağlıklı birincili (rss~210-230MB) sık SIGTERM ile kesiyor;
-  // kabul etmek = sürekli soğuk başlangıç. Hazır kilit sahibiysen yok say:
-  // gerçek yerine geçmede yeni süreç kilidi çalar → FAZLALIK ile çıkarız.
-  // (Eski "SIGTERM'i hep kabul et" modeli, platformun idle/recycle
-  // SIGTERM'iyle birleşince siteyi ayakta tutamıyordu.)
-  if (
-    signal === "SIGTERM" &&
-    sfHandler &&
-    !bootFailed &&
-    readLockPid() === process.pid
-  ) {
-    console.warn(
-      `[hostinger] SIGTERM yok sayıldı (hazır birincil) pid=${process.pid} rss=${rssMb()}MB`,
-    );
-    return;
+  // Tipik Hostinger yarışı: önce soğuk kopya kilidi çalar, sonra eskiye
+  // SIGTERM gelir. Kilit bizde değilken hazır vitrini öldürme — geri al.
+  // Kilit hâlâ bizdeyse (temiz deploy/idle stop) nazikçe kabul et.
+  if (signal === "SIGTERM" && sfHandler && !bootFailed) {
+    const lockPid = readLockPid();
+    if (lockPid !== process.pid) {
+      writeLock(true);
+      console.warn(
+        `[hostinger] SIGTERM yok sayıldı (kilit yarışı, geri alındı) pid=${process.pid} rss=${rssMb()}MB`,
+      );
+      return;
+    }
   }
 
   shuttingDown = true;
