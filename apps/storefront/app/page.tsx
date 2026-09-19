@@ -154,12 +154,11 @@ export default async function HomePage() {
         </div>
       </div>
       <div className="product-grid">
-        {featured.map((p, i) => (
+        {featured.map((p) => (
           <ProductCard
             key={p.id}
             product={p}
             placeholder={tenant.placeholderImageUrl}
-            priority={i < 4}
           />
         ))}
       </div>

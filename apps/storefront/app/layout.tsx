@@ -18,6 +18,9 @@ import { TENANT_STATUS } from "@guntan/types";
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
   weight: ["400", "600", "700"],
+  // Çoklu weight/subset preload'u kullanılmayan woff2 uyarısı üretiyor;
+  // font CSS ile yine yüklenir, sadece link rel=preload kalkar.
+  preload: false,
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -89,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="container header-inner">
             <Link className="logo" href="/" aria-label={tenant.siteName}>
               <span className="logo-badge">
-                <Image src={logoSrc} alt="" width={320} height={157} priority />
+                <Image src={logoSrc} alt="" width={320} height={157} loading="eager" />
               </span>
             </Link>
             <SearchBox brands={brands} />

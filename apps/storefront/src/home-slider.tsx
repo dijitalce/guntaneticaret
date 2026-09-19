@@ -39,7 +39,9 @@ export function HomeSlider({ slides }: { slides: Slide[] }) {
           width={1200}
           height={480}
           sizes="(max-width: 960px) 100vw, 70vw"
-          priority={i === 0}
+          // priority → Next otomatik preload ekler; unoptimized + srcset uyumsuzluğu
+          // veya hızlı slide değişiminde "preloaded but not used" uyarısı verir.
+          loading={i === 0 ? "eager" : "lazy"}
         />
       </Link>
       <div className="home-slider-nav">

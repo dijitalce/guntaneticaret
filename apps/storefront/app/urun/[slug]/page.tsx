@@ -37,6 +37,7 @@ export default async function ProductPage({
   if (!data) notFound();
   const { product } = data;
   const img = productImageUrl(data.images[0]?.url, tenant.placeholderImageUrl);
+  const hasRealImage = Boolean(data.images[0]?.url);
   const disc = discountPercent(product.price, product.compareAtPrice);
   const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
   const fit = data.fitments[0];
@@ -78,7 +79,8 @@ export default async function ProductPage({
             width={800}
             height={800}
             sizes="(max-width: 768px) 100vw, 50vw"
-            priority
+            priority={hasRealImage}
+            loading={hasRealImage ? undefined : "eager"}
           />
         </div>
         <div className="pdp-info">

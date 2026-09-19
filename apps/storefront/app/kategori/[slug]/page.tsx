@@ -195,12 +195,11 @@ export default async function CategoryPage({
           )}
 
           <div className="product-grid">
-            {result.items.map((p, i) => (
+            {result.items.map((p) => (
               <ProductCard
                 key={p.id}
                 product={p}
                 placeholder={tenant.placeholderImageUrl}
-                priority={i < 4}
               />
             ))}
           </div>
