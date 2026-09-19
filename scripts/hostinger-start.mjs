@@ -239,19 +239,33 @@ function requestPreviousToYield() {
   }
   console.warn(`[hostinger] pid=${process.pid} birincil ${prev} yerini alıyor`);
   try {
-    process.kill(prev, "SIGTERM");
+    // Hazır birincil SIGTERM'i yok sayabiliyor; zorla çıkar.
+    process.kill(prev, "SIGKILL");
   } catch {
     /* */
   }
 }
 
 function shutdown(signal) {
-  // Hostinger Node.js hosting "on-demand" çalışır: trafik yoksa süreci durdurur,
-  // sonraki istek yenisini başlatır. SIGTERM'i görmezden gelmek bu devri bozup
-  // yeni süreci kilit yüzünden park ettiriyor ve istekler askıda kalıyordu.
-  // Bu yüzden SIGTERM'i HER ZAMAN nazikçe kabul ediyoruz — kilidi hemen bırakıp
-  // bekleyen kopyanın 3 sn içinde devralmasına izin veriyoruz.
   if (shuttingDown) return;
+
+  // Hostinger sağlıklı birincili (rss~210-230MB) sık SIGTERM ile kesiyor;
+  // kabul etmek = sürekli soğuk başlangıç. Hazır kilit sahibiysen yok say:
+  // gerçek yerine geçmede yeni süreç kilidi çalar → FAZLALIK ile çıkarız.
+  // (Eski "SIGTERM'i hep kabul et" modeli, platformun idle/recycle
+  // SIGTERM'iyle birleşince siteyi ayakta tutamıyordu.)
+  if (
+    signal === "SIGTERM" &&
+    sfHandler &&
+    !bootFailed &&
+    readLockPid() === process.pid
+  ) {
+    console.warn(
+      `[hostinger] SIGTERM yok sayıldı (hazır birincil) pid=${process.pid} rss=${rssMb()}MB`,
+    );
+    return;
+  }
+
   shuttingDown = true;
   console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — nazikçe kapanıyor`);
   clearLock();
@@ -815,7 +829,6 @@ function watchPrimaryLock() {
     if (shuttingDown) return;
     const current = readLockState();
     if (!current) {
-      // Kilit silinmiş — hazırsek geri al.
       if (sfHandler) writeLock(true);
       return;
     }
@@ -827,7 +840,19 @@ function watchPrimaryLock() {
       );
       return;
     }
-    // Yenisi henüz prepare bitirmediyse hazır vitrini öldürme.
+
+    // Hazır birincil: soğuk kopyanın kilidi çalmasına izin verme — geri al.
+    // Yeni süreç debounce/prepare sonunda kilidi kaybedince kendi çıkar.
+    // Hostinger'ın gereksiz start'ları böylece hazır vitrini öldüremez.
+    if (sfHandler) {
+      writeLock(true);
+      console.warn(
+        `[hostinger] pid=${process.pid} hazır birincil kilidi geri aldı (yarışan pid=${current.pid} ready=${current.ready})`,
+      );
+      return;
+    }
+
+    // Ben henüz hazır değilim; başkası kilitte ve hayatta → fazlalık.
     const age = Date.now() - (current.t || 0);
     if (!current.ready && age < bootStuckMs) {
       vlog(
@@ -839,7 +864,7 @@ function watchPrimaryLock() {
       `[hostinger] pid=${process.pid} kilit artık pid=${current.pid}'e ait ve o süreç hayatta — bu süreç fazlalık, kapanıyor`,
     );
     shutdown("FAZLALIK_SÜREÇ");
-  }, 5_000).unref();
+  }, 2_000).unref();
 }
 
 function bindPublicPort() {
