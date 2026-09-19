@@ -249,18 +249,23 @@ function requestPreviousToYield() {
 function shutdown(signal) {
   if (shuttingDown) return;
 
-  // Tipik Hostinger yarışı: önce soğuk kopya kilidi çalar, sonra eskiye
-  // SIGTERM gelir. Kilit bizde değilken hazır vitrini öldürme — geri al.
-  // Kilit hâlâ bizdeyse (temiz deploy/idle stop) nazikçe kabul et.
-  if (signal === "SIGTERM" && sfHandler && !bootFailed) {
-    const lockPid = readLockPid();
-    if (lockPid !== process.pid) {
-      writeLock(true);
-      console.warn(
-        `[hostinger] SIGTERM yok sayıldı (kilit yarışı, geri alındı) pid=${process.pid} rss=${rssMb()}MB`,
-      );
-      return;
-    }
+  // Idle recycle: Hostinger hazır birincile tek başına SIGTERM atıyor.
+  // Kilit hâlâ bizdeyse yok say — süreç ayakta kalsın, sonraki istek
+  // soğuk start açmasın.
+  //
+  // Yerine geçme: önce yeni süreç kilidi çalar, sonra SIGTERM gelir →
+  // kilidi kaybetmişsek kabul et (yeni Hostinger işçisi odur; eskiyi
+  // zorla ayakta tutup yeniyi FAZLALIK ile öldürmek spawn fırtınası yaptı).
+  if (
+    signal === "SIGTERM" &&
+    sfHandler &&
+    !bootFailed &&
+    readLockPid() === process.pid
+  ) {
+    console.warn(
+      `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} rss=${rssMb()}MB`,
+    );
+    return;
   }
 
   shuttingDown = true;
@@ -838,18 +843,10 @@ function watchPrimaryLock() {
       return;
     }
 
-    // Hazır birincil: soğuk kopyanın kilidi çalmasına izin verme — geri al.
-    // Yeni süreç debounce/prepare sonunda kilidi kaybedince kendi çıkar.
-    // Hostinger'ın gereksiz start'ları böylece hazır vitrini öldüremez.
-    if (sfHandler) {
-      writeLock(true);
-      console.warn(
-        `[hostinger] pid=${process.pid} hazır birincil kilidi geri aldı (yarışan pid=${current.pid} ready=${current.ready})`,
-      );
-      return;
-    }
-
-    // Ben henüz hazır değilim; başkası kilitte ve hayatta → fazlalık.
+    // Başka süreç kilitte ve hayatta = Hostinger'ın yeni işçisi.
+    // Kilidi GERİ ALMA — yeniyi FAZLALIK ile öldürmek spawn fırtınası
+    // yaratıyordu (Hostinger sürekli yeni süreç açıp biz çıkarıyorduk).
+    // Yenisi hazır olunca (veya takılı kalırsa) eski/fazla süreç çıksın.
     const age = Date.now() - (current.t || 0);
     if (!current.ready && age < bootStuckMs) {
       vlog(
