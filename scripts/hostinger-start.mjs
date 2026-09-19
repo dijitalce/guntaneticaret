@@ -5,7 +5,7 @@ import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 import { parse } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Next, SIGTERM'de process.exit yapmasın — Hostinger bazen sağlıklı süreci yeniler.
@@ -64,14 +64,20 @@ const publicStoreUrl = (
 ).replace(/\/$/, "");
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
 const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
+const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
 let sigtermCount = 0;
+let sigintCount = 0;
 let firstSigtermAt = null;
 let sigtermIgnoredLogged = false;
 let lastSeenPpid = process.ppid;
 let cgroupMissingLogged = false;
+/** Yedek bekliyor (Next yok) — HTTP "Site açılıyor" döner */
+let isStandbyMode = false;
+let exitReason = "unknown";
+let isPrimaryProcess = false;
 
 const adminHost = (
   process.env.ADMIN_HOST ??
@@ -131,6 +137,7 @@ function redirectNextWritable(appDir, label) {
 }
 
 const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
+const standbyFile = join(os.tmpdir(), "guntan-standby.json");
 // Public self-ping LiteSpeed üzerinden yeni Node start tetikleyebiliyor. Varsayılan KAPALI.
 const selfPingMs = Number(process.env.HOSTINGER_SELF_PING_MS ?? "0");
 let shuttingDown = false;
@@ -160,7 +167,7 @@ function warnBadEnv() {
   }
 }
 
-/** @returns {{ pid: number, ready: boolean, t: number, standby: number | null } | null} */
+/** @returns {{ pid: number, ready: boolean, t: number } | null} */
 function readLockState() {
   try {
     const raw = fs.readFileSync(pidFile, "utf8").trim();
@@ -169,17 +176,11 @@ function readLockState() {
       const j = JSON.parse(raw);
       const pid = Number(j.pid);
       if (!Number.isInteger(pid) || pid <= 0) return null;
-      const standby = Number(j.standby);
-      return {
-        pid,
-        ready: Boolean(j.ready),
-        t: Number(j.t) || 0,
-        standby: Number.isInteger(standby) && standby > 0 ? standby : null,
-      };
+      return { pid, ready: Boolean(j.ready), t: Number(j.t) || 0 };
     }
     const pid = Number(raw);
     if (!Number.isInteger(pid) || pid <= 0) return null;
-    return { pid, ready: true, t: 0, standby: null };
+    return { pid, ready: true, t: 0 };
   } catch {
     return null;
   }
@@ -192,19 +193,9 @@ function readLockPid() {
 function writeLock(ready = false) {
   lockReady = Boolean(ready);
   try {
-    const prev = readLockState();
-    const standby =
-      prev?.standby && pidAlive(prev.standby) && prev.standby !== process.pid
-        ? prev.standby
-        : null;
     fs.writeFileSync(
       pidFile,
-      JSON.stringify({
-        pid: process.pid,
-        ready: lockReady,
-        t: Date.now(),
-        standby,
-      }),
+      JSON.stringify({ pid: process.pid, ready: lockReady, t: Date.now() }),
     );
   } catch (err) {
     console.warn(
@@ -214,55 +205,16 @@ function writeLock(ready = false) {
   }
 }
 
-function patchLockStandby(standbyPid) {
-  try {
-    const lock = readLockState();
-    if (!lock) return false;
-    fs.writeFileSync(
-      pidFile,
-      JSON.stringify({
-        pid: lock.pid,
-        ready: lock.ready,
-        t: lock.t,
-        standby: standbyPid,
-      }),
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** @returns {boolean} bu süreç tek yedek slotunu aldı mı */
-function claimStandbySlot() {
-  const lock = readLockState();
-  if (!lock || !pidAlive(lock.pid)) return false;
-  if (lock.standby && lock.standby !== process.pid && pidAlive(lock.standby)) {
-    console.warn(
-      `[hostinger] yedek slot dolu standby=${lock.standby} — hemen çıkılıyor (biz=${process.pid})`,
-    );
-    return false;
-  }
-  return patchLockStandby(process.pid);
-}
-
-function clearStandbyIfUs() {
-  const lock = readLockState();
-  if (!lock || lock.standby !== process.pid) return;
-  patchLockStandby(null);
-}
-
 function clearLock() {
   try {
     if (readLockPid() === process.pid) {
       fs.unlinkSync(pidFile);
       console.log(`[hostinger] kilit bırakıldı pid=${process.pid}`);
-    } else {
-      clearStandbyIfUs();
     }
   } catch {
     /* */
   }
+  removeStandbyPid(process.pid);
 }
 
 function pidAlive(pid) {
@@ -272,6 +224,63 @@ function pidAlive(pid) {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** @returns {number[]} */
+function readStandbyPids() {
+  try {
+    const raw = fs.readFileSync(standbyFile, "utf8").trim();
+    if (!raw) return [];
+    const j = JSON.parse(raw);
+    const pids = Array.isArray(j.pids) ? j.pids : [];
+    return pids.map(Number).filter((p) => Number.isInteger(p) && p > 0);
+  } catch {
+    return [];
+  }
+}
+
+function writeStandbyPids(pids) {
+  try {
+    fs.writeFileSync(standbyFile, JSON.stringify({ pids }));
+  } catch (err) {
+    console.warn(
+      `[hostinger] standby yazılamadı:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+function pruneStandbyPids() {
+  const alive = readStandbyPids().filter((p) => p === process.pid || pidAlive(p));
+  writeStandbyPids(alive);
+  return alive;
+}
+
+/** @returns {boolean} slot alındı mı */
+function claimStandbySlot() {
+  const alive = pruneStandbyPids();
+  if (alive.includes(process.pid)) return true;
+  if (alive.length >= standbyMax) {
+    console.warn(
+      `[hostinger] yedek slot dolu max=${standbyMax} pids=${alive.join(",")} — hemen çıkılıyor (biz=${process.pid})`,
+    );
+    return false;
+  }
+  writeStandbyPids([...alive, process.pid]);
+  return true;
+}
+
+function removeStandbyPid(pid) {
+  const next = readStandbyPids().filter((p) => p !== pid);
+  if (next.length === 0) {
+    try {
+      fs.unlinkSync(standbyFile);
+    } catch {
+      writeStandbyPids([]);
+    }
+  } else {
+    writeStandbyPids(next);
   }
 }
 
@@ -302,16 +311,18 @@ function claimPrimaryLock() {
       const fd = fs.openSync(pidFile, "wx");
       fs.writeFileSync(
         fd,
-        JSON.stringify({ pid: process.pid, ready: false, t: Date.now(), standby: null }),
+        JSON.stringify({ pid: process.pid, ready: false, t: Date.now() }),
       );
       fs.closeSync(fd);
       console.log(
         `[hostinger] birincil kilit alındı pid=${process.pid} port=${port} rss=${rssMb()}MB`,
       );
+      isPrimaryProcess = true;
       return true;
     } catch (err) {
       if (err?.code !== "EEXIST") {
         console.warn("[hostinger] kilit hatası:", err instanceof Error ? err.message : err);
+        isPrimaryProcess = true;
         return true;
       }
     }
@@ -329,10 +340,12 @@ function tryAdoptLockOnListen() {
   const existing = readLockState();
   if (!existing) {
     writeLock(false);
+    isPrimaryProcess = true;
     return true;
   }
   if (existing.pid === process.pid) {
     writeLock(Boolean(sfHandler));
+    isPrimaryProcess = true;
     return true;
   }
   if (!pidAlive(existing.pid)) {
@@ -340,6 +353,7 @@ function tryAdoptLockOnListen() {
       `[hostinger] listen: ölü sahip pid=${existing.pid} — kilit alınıyor pid=${process.pid}`,
     );
     writeLock(false);
+    isPrimaryProcess = true;
     return true;
   }
   if (existing.ready) {
@@ -354,12 +368,29 @@ function tryAdoptLockOnListen() {
       `[hostinger] listen: bootStuck birincil pid=${existing.pid} ageMs=${age} — kilit devralınıyor (biz=${process.pid})`,
     );
     writeLock(false);
+    isPrimaryProcess = true;
     return true;
   }
   console.warn(
     `[hostinger] listen: soğuk birincil pid=${existing.pid} ageMs=${age} — kilit ezilmedi (biz=${process.pid})`,
   );
   return false;
+}
+
+function resolveEnvPath(p) {
+  if (!p) return null;
+  return isAbsolute(p) ? p : resolve(process.cwd(), p);
+}
+
+function describePathSize(envPath) {
+  if (envPath == null || envPath === "") return "(yok)";
+  const abs = resolveEnvPath(envPath);
+  try {
+    const st = fs.statSync(abs);
+    return `${abs} size=${st.size}`;
+  } catch {
+    return `${abs} (yok)`;
+  }
 }
 
 function readProcCmdline(pid) {
@@ -436,8 +467,10 @@ function logStartupProbe() {
   const ppid = process.ppid;
   const parentCmd = ppid ? readProcCmdline(ppid) : null;
   console.log(
-    `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version}`,
+    `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version} primary=${isPrimaryProcess}`,
   );
+  // Env satırları sadece birincilde — yedek spawn fırtınasında console.log şişmesin.
+  if (!isPrimaryProcess) return;
   console.log(
     `[hostinger] teşhis-env-adları ${platformEnvNames().join(",") || "(yok)"}`,
   );
@@ -447,20 +480,26 @@ function logStartupProbe() {
     "LSAPI_PPID_NO_CHECK",
     "LSNODE_GUARD_PPID",
     "LSNODE_CONSOLE_LOG",
+    "LSNODE_SOCKET",
+    "LSNODE_STARTUP_FILE",
   ]) {
     const val = process.env[key];
     console.log(
       `[hostinger] teşhis-env ${key}=${val === undefined ? "(yok)" : val}`,
     );
   }
+  console.log(
+    `[hostinger] teşhis-lsnode-console ${describePathSize(process.env.LSNODE_CONSOLE_LOG)}`,
+  );
 }
 
 function logLifecycleSnapshot(tag) {
   const lock = readLockState();
   const cg = readCgroupMemory();
   const uptimeMs = Date.now() - startedAt;
+  const standbyPids = readStandbyPids();
   console.log(
-    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} standby=${lock?.standby ?? "-"} rssMB=${rssMb()} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
+    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} standbyPids=${standbyPids.join(",") || "-"} rssMB=${rssMb()} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
   );
 }
 
@@ -475,6 +514,14 @@ function startPpidWatch() {
   }, 2_000).unref();
 }
 
+function logPrimarySignal(signal, n) {
+  if (!isPrimaryProcess) return;
+  const now = Date.now();
+  console.warn(
+    `[hostinger] teşhis-sinyal ${signal} n=${n} ageMs=${now - startedAt} pid=${process.pid} ppid=${process.ppid} ppidAlive=${pidAlive(process.ppid)} rss=${rssMb()}MB standby=${isStandbyMode}`,
+  );
+}
+
 function onSigterm() {
   sigtermCount += 1;
   const now = Date.now();
@@ -482,7 +529,17 @@ function onSigterm() {
   console.warn(
     `[hostinger] SIGTERM alındı #${sigtermCount} ageMs=${now - startedAt} sinceFirstMs=${now - firstSigtermAt} pid=${process.pid}`,
   );
+  logPrimarySignal("SIGTERM", sigtermCount);
   shutdown("SIGTERM");
+}
+
+function onSigint() {
+  sigintCount += 1;
+  console.warn(
+    `[hostinger] SIGINT alındı #${sigintCount} ageMs=${Date.now() - startedAt} pid=${process.pid}`,
+  );
+  logPrimarySignal("SIGINT", sigintCount);
+  shutdown("SIGINT");
 }
 
 function shutdown(signal) {
@@ -505,9 +562,10 @@ function shutdown(signal) {
   }
 
   shuttingDown = true;
+  exitReason = signal;
   const ageMs = Date.now() - startedAt;
   console.error(
-    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount}`,
+    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
   );
   logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
   clearLock();
@@ -539,7 +597,13 @@ process.on("unhandledRejection", (err) => {
   console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
 });
 process.on("SIGTERM", onSigterm);
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGINT", onSigint);
+process.on("exit", (code) => {
+  // sync only — async I/O güvenilmez
+  console.error(
+    `[hostinger] exit code=${code} reason=${exitReason} ageMs=${Date.now() - startedAt} pid=${process.pid} ppid=${process.ppid} primary=${isPrimaryProcess} standby=${isStandbyMode} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
+  );
+});
 
 function pinResolves(pinned) {
   const orig = NodeModule._resolveFilename;
@@ -930,6 +994,17 @@ async function routeRequest(req, res) {
     return;
   }
 
+  // Yedek süreç Next yüklemez; bağlantıyı sıfırlama — "Site açılıyor" 200.
+  if (isStandbyMode) {
+    sendUnavailable(
+      res,
+      "Site açılıyor",
+      "Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.",
+      200,
+    );
+    return;
+  }
+
   // Klasörlü subdomain Node’a gelmez; gelirse ana site paneline al.
   if (isAdminHost(req.headers.host) && !isAdminPath(pathOnly)) {
     const dest = `${publicStoreUrl}${adminBasePath}${pathOnly === "/" ? "" : pathOnly}${parsedUrl.search ?? ""}`;
@@ -1050,6 +1125,9 @@ function startDiagHeartbeat() {
 }
 
 function becomePrimaryFromStandby() {
+  isStandbyMode = false;
+  isPrimaryProcess = true;
+  removeStandbyPid(process.pid);
   console.warn(
     `[hostinger] yedek birincili devralıyor pid=${process.pid} (önceki birincil öldü)`,
   );
@@ -1063,18 +1141,22 @@ function runAsStandby() {
   startDiagHeartbeat();
   if (!Number.isFinite(standbyKeepMs) || standbyKeepMs <= 0) {
     logLifecycleSnapshot("teşhis-yedek-çıkış");
+    exitReason = "yedek-hemen";
     setTimeout(() => process.exit(0), 400).unref();
     return;
   }
   if (!claimStandbySlot()) {
     logLifecycleSnapshot("teşhis-yedek-fazla");
+    exitReason = "yedek-fazla";
     process.exit(0);
     return;
   }
+  isStandbyMode = true;
   console.log(
-    `[hostinger] yedek bekliyor pid=${process.pid} keepMs=${standbyKeepMs}`,
+    `[hostinger] yedek bekliyor pid=${process.pid} keepMs=${standbyKeepMs} max=${standbyMax}`,
   );
   const deadline = Date.now() + standbyKeepMs;
+  // unref YOK — event loop açık kalsın (HOSTINGER_STANDBY_KEEP_MS > 0).
   const poll = setInterval(() => {
     if (shuttingDown) {
       clearInterval(poll);
@@ -1083,18 +1165,18 @@ function runAsStandby() {
     const lock = readLockState();
     if (!lock || !pidAlive(lock.pid)) {
       clearInterval(poll);
-      clearStandbyIfUs();
       becomePrimaryFromStandby();
       return;
     }
     if (Date.now() >= deadline) {
       clearInterval(poll);
-      clearStandbyIfUs();
+      removeStandbyPid(process.pid);
+      isStandbyMode = false;
       logLifecycleSnapshot("teşhis-yedek-çıkış");
+      exitReason = "yedek-süre-doldu";
       process.exit(0);
     }
   }, 500);
-  poll.unref();
 }
 
 /** Kilit bizde mi diye bak; başkası yaşayan sahipse fazlalığız. */
@@ -1177,16 +1259,17 @@ server.on("error", (err) => {
 
 // Akış: kilit dene → HER ZAMAN listen (3 sn) → kilit bizdeyse Next.
 warnBadEnv();
+isPrimaryProcess = claimPrimaryLock();
+if (!isPrimaryProcess) {
+  console.warn(
+    `[hostinger] yedek pid=${process.pid} — listen edilecek, yaşayan birincil kilidi ezilmeyecek`,
+  );
+}
 logStartupProbe();
 startPpidWatch();
 console.log(
   `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version}`,
 );
-if (!claimPrimaryLock()) {
-  console.warn(
-    `[hostinger] yedek pid=${process.pid} — listen edilecek, yaşayan birincil kilidi ezilmeyecek`,
-  );
-}
 bindPublicPort();
 
 function loadNext() {
