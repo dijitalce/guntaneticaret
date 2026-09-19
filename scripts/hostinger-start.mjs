@@ -107,8 +107,9 @@ const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
 const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
 /**
  * Lazy: proxy→fail→kendi Next; slot tavanı (MAX) + idle çıkış.
- * Hazır birincil + kilit bizde → SIGTERM yok say (Hostinger recycle).
- * Yedekler SIGTERM/idle/max ile çıkar. IDLE yoksa KEEP>0 → KEEP; yoksa 60s.
+ * SIGTERM: hazır birincil nazikçe kilidi bırakır (yok saymaz — Hostinger
+ * ignore sonrası SIGKILL ediyordu). Yedekler SIGTERM/idle/max ile çıkar.
+ * IDLE yoksa KEEP>0 → KEEP; yoksa 60s.
  */
 const lazyStandby = process.env.HOSTINGER_LAZY_STANDBY === "1";
 const useStandbyProxy = standbyProxy || lazyStandby;
@@ -664,42 +665,41 @@ function onSigint() {
 function shutdown(signal) {
   if (shuttingDown) return;
 
-  // Hazır birincil + kilit bizde → Hostinger idle/recycle SIGTERM'ini yok say.
-  // (Lazy yedekler hâlâ çıkar; gerçek deploy’da kilit el değiştirince FAZLALIK yolu çalışır.)
-  if (
+  // SIGTERM yok sayma YOK. Hostinger ignore edilen birincili SIGKILL ile
+  // öldürüyordu → ölü kilit + soğuk boot. Kilidi hemen bırak; yedek devralsın.
+  const yieldingPrimary =
     signal === "SIGTERM" &&
-    sfHandler &&
+    Boolean(sfHandler) &&
     !bootFailed &&
-    readLockPid() === process.pid
-  ) {
-    if (!sigtermIgnoredLogged) {
-      sigtermIgnoredLogged = true;
-      console.warn(
-        `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} n=${sigtermCount} firstAgeMs=${firstSigtermAt ? firstSigtermAt - startedAt : "-"} ageMs=${Date.now() - startedAt} rss=${rssMb()}MB reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
-      );
-    }
-    return;
-  }
+    readLockPid() === process.pid;
 
   shuttingDown = true;
-  exitReason = signal;
+  exitReason = yieldingPrimary ? "birincil-devretme" : signal;
   const ageMs = Date.now() - startedAt;
-  console.error(
-    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
-  );
-  logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
+  if (yieldingPrimary) {
+    console.warn(
+      `[hostinger] birincil nazikçe devrediyor pid=${process.pid} ageMs=${ageMs} rss=${rssMb()}MB reqTotal=${requestsTotal} inFlight=${requestsInFlight} — kilit bırakılıyor`,
+    );
+  } else {
+    console.error(
+      `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
+    );
+  }
+  logLifecycleSnapshot(`teşhis-kapanış-${exitReason}`);
 
-  const graceMs = signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
+  // Önce kilit + primary sock — yedek 1 sn poll içinde devralsın
+  clearLock();
+  closePrimarySock();
+
+  const graceMs = yieldingPrimary ? 1200 : signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
 
   try {
     httpServer?.close(() => {
-      console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${signal}`);
+      console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${exitReason}`);
     });
   } catch {
     /* */
   }
-  closePrimarySock();
-  clearLock();
 
   const graceStart = Date.now();
   const deadline = graceStart + graceMs;
@@ -2121,7 +2121,7 @@ function becomePrimaryFromStandby() {
   isPrimaryProcess = true;
   removeStandbyPid(process.pid);
   console.warn(
-    `[hostinger] yedek birincili devralıyor pid=${process.pid} (önceki birincil öldü)`,
+    `[hostinger] yedek birincili devralıyor pid=${process.pid} (önceki birincil yok/kilit boş)`,
   );
   writeLock(Boolean(sfHandler));
   watchPrimaryLock();
