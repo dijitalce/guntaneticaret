@@ -133,6 +133,7 @@ let requestsTotal = 0;
 let requestsInFlight = 0;
 let loggedEarlyRequests = 0;
 let loggedProxyAttempts = 0;
+let loggedProxyOk = 0;
 let loggedPlaceholders = 0;
 /** @type {number | null} */
 let lastRequestAt = null;
@@ -407,7 +408,7 @@ function claimPrimaryLock() {
   for (let i = 0; i < 8; i++) {
     const existing = readLockState();
     if (existing && pidAlive(existing.pid)) {
-      console.warn(
+      vwarn(
         `[hostinger] kilit dolu — yaşayan birincil pid=${existing.pid} ready=${existing.ready} ageMs=${existing.t ? Date.now() - existing.t : "?"} — yedek olacağız (pid=${process.pid} port=${port})`,
       );
       return false;
@@ -472,7 +473,7 @@ function tryAdoptLockOnListen() {
     return true;
   }
   if (existing.ready) {
-    console.warn(
+    vwarn(
       `[hostinger] listen: yaşayan ready birincil pid=${existing.pid} — kilit ezilmedi (biz=${process.pid})`,
     );
     return false;
@@ -581,9 +582,9 @@ function readCgroupMemory() {
 function logStartupProbe() {
   const ppid = process.ppid;
   const parentCmd = ppid ? readProcCmdline(ppid) : null;
-  console.log(
-    `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version} primary=${isPrimaryProcess}`,
-  );
+  const line = `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version} primary=${isPrimaryProcess}`;
+  if (isPrimaryProcess) console.log(line);
+  else vlog(line);
   // Env satırları sadece birincilde + VERBOSE — log hacmini düşür.
   if (!isPrimaryProcess || !VERBOSE) return;
   console.log(
@@ -613,9 +614,17 @@ function logLifecycleSnapshot(tag) {
   const cg = readCgroupMemory();
   const uptimeMs = Date.now() - startedAt;
   const standbyPids = readStandbyPids();
-  console.log(
-    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} standbyPids=${standbyPids.join(",") || "-"} rssMB=${rssMb()} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
-  );
+  const line = `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} standbyPids=${standbyPids.join(",") || "-"} rssMB=${rssMb()} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`;
+  if (tag === "teşhis-30s") {
+    if (isPrimaryProcess) console.log(line);
+    else vlog(line);
+    return;
+  }
+  if (tag === "teşhis-kapanış-SIGTERM") {
+    vlog(line);
+    return;
+  }
+  console.log(line);
 }
 
 function startPpidWatch() {
@@ -646,7 +655,7 @@ function onSigterm() {
   console.warn(
     `[hostinger] SIGTERM alındı #${sigtermCount} ageMs=${now - startedAt} sinceFirstMs=${now - firstSigtermAt} pid=${process.pid}`,
   );
-  console.warn(
+  vwarn(
     `[hostinger] teşhis-sigterm-anında pid=${process.pid} role=${role} sinceLastReqMs=${sinceLastReqMs} inFlight=${requestsInFlight} primary=${isPrimaryProcess} standby=${isStandbyMode}`,
   );
   logPrimarySignal("SIGTERM", sigtermCount);
@@ -697,7 +706,9 @@ function shutdown(signal) {
 
   try {
     httpServer?.close(() => {
-      console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${exitReason}`);
+      const msg = `[hostinger] soket kapandı pid=${process.pid} neden=${exitReason}`;
+      if (exitReason === "SIGTERM") vlog(msg);
+      else console.log(msg);
     });
   } catch {
     /* */
@@ -710,9 +721,9 @@ function shutdown(signal) {
       clearInterval(poll);
       const ms = Date.now() - graceStart;
       const sonuç = requestsInFlight <= 0 ? "tamam" : "zaman-aşımı";
-      console.log(
-        `[hostinger] graceful-bekleme inFlight=${requestsInFlight} sonuç=${sonuç} ms=${ms}`,
-      );
+      const msg = `[hostinger] graceful-bekleme inFlight=${requestsInFlight} sonuç=${sonuç} ms=${ms}`;
+      if (sonuç === "zaman-aşımı") console.log(msg);
+      else vlog(msg);
       process.exit(0);
     }
   }, 50);
@@ -736,9 +747,14 @@ process.on("SIGTERM", onSigterm);
 process.on("SIGINT", onSigint);
 process.on("exit", (code) => {
   // sync only — async I/O güvenilmez
-  console.error(
-    `[hostinger] exit code=${code} reason=${exitReason} ageMs=${Date.now() - startedAt} pid=${process.pid} ppid=${process.ppid} primary=${isPrimaryProcess} standby=${isStandbyMode} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
-  );
+  const line = `[hostinger] exit code=${code} reason=${exitReason} ageMs=${Date.now() - startedAt} pid=${process.pid} ppid=${process.ppid} primary=${isPrimaryProcess} standby=${isStandbyMode} sigtermN=${sigtermCount} sigintN=${sigintCount}`;
+  if (
+    exitReason === "unknown" ||
+    exitReason === "FAZLALIK_SÜREÇ" ||
+    VERBOSE
+  ) {
+    console.error(line);
+  }
 });
 
 function pinResolves(pinned) {
@@ -1269,7 +1285,7 @@ function startPrimarySock() {
   const onConnection = (socket) => {
     primarySockEventLogs += 1;
     if (primarySockEventLogs <= 10) {
-      console.log(`[hostinger] primary-sock bağlantı n=${primarySockEventLogs}`);
+      vlog(`[hostinger] primary-sock bağlantı n=${primarySockEventLogs}`);
     }
     socket.on("error", (err) => {
       if (primarySockEventLogs <= 10) {
@@ -1279,8 +1295,10 @@ function startPrimarySock() {
       }
     });
     socket.on("close", (hadError) => {
-      if (primarySockEventLogs <= 10) {
-        console.warn(`[hostinger] primary-sock soket-kapandı hadError=${hadError}`);
+      if (hadError) {
+        console.warn(`[hostinger] primary-sock soket-kapandı hadError=true`);
+      } else {
+        vwarn(`[hostinger] primary-sock soket-kapandı hadError=false`);
       }
     });
     // Ana server'a ver — sayaç/tracking doğru çalışır.
@@ -1519,9 +1537,9 @@ function proxyToPrimary(req, res) {
     const doneOk = () => {
       if (settled) return;
       settled = true;
-      console.log(
-        `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${viaUsed} url=${pathOnly} host=${req.headers.host ?? "-"} ms=${Date.now() - proxyT0}`,
-      );
+      loggedProxyOk += 1;
+      const msg = `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${viaUsed} url=${pathOnly} host=${req.headers.host ?? "-"} ms=${Date.now() - proxyT0}`;
+      if (loggedProxyOk <= 3 || VERBOSE) console.log(msg);
       resolve(true);
     };
 
@@ -1584,7 +1602,7 @@ function proxyToPrimary(req, res) {
     const startUnix = () => {
       viaUsed = "unix";
       loggedProxyAttempts += 1;
-      console.log(
+      vlog(
         `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} via=unix method=${method} url=${pathOnly} host=${req.headers.host ?? "-"}`,
       );
       const sockPath = ep.path || ep.sockPath || primarySockPath;
@@ -1611,7 +1629,7 @@ function proxyToPrimary(req, res) {
       tcpTried = true;
       viaUsed = "tcp";
       loggedProxyAttempts += 1;
-      console.log(
+      vlog(
         `[hostinger] proxy-tcp-deneme #${loggedProxyAttempts} via=tcp pid=${process.pid} → primary=${lock.pid} after=${afterCode || "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
       );
       pipeUpstream({
@@ -2273,7 +2291,7 @@ function runAsStandby() {
       return;
     }
     isStandbyMode = true;
-    console.log(
+    vlog(
       `[hostinger] lazy-yedek dinliyor pid=${process.pid} — max=${standbyMax} idleMs=${standbyIdleMs} istekte proxy/self-boot`,
     );
     setInterval(() => {
@@ -2442,7 +2460,7 @@ warnBadEnv();
 touchAlive();
 isPrimaryProcess = claimPrimaryLock();
 if (!isPrimaryProcess) {
-  console.warn(
+  vwarn(
     `[hostinger] yedek pid=${process.pid} — listen edilecek, yaşayan birincil kilidi ezilmeyecek`,
   );
 }
