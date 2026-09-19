@@ -211,11 +211,14 @@ let httpServer = null;
 /** LiteSpeed http.Server.listen'ı yamadığı için net.Server ile dinleriz */
 /** @type {import("node:net").Server | null} */
 let primaryNetServer = null;
+/** @type {import("node:net").Server | null} */
+let primaryTcpServer = null;
 /** listen ÇAĞRILMAZ — sadece connection emit */
 /** @type {import("node:http").Server | null} */
 let primaryHttpBridge = null;
 /** @type {{ kind: "unix", path: string } | { kind: "tcp", host: string, port: number } | null} */
 let primaryEndpoint = null;
+let primarySockEventLogs = 0;
 let bindAttempts = 0;
 
 function warnBadEnv() {
@@ -664,7 +667,7 @@ function shutdown(signal) {
   );
   logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
 
-  const graceMs = lazyStandby && signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
+  const graceMs = signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
 
   try {
     httpServer?.close(() => {
@@ -676,15 +679,27 @@ function shutdown(signal) {
   closePrimarySock();
   clearLock();
 
-  const deadline = Date.now() + graceMs;
+  const graceStart = Date.now();
+  const deadline = graceStart + graceMs;
   const poll = setInterval(() => {
     if (requestsInFlight <= 0 || Date.now() >= deadline) {
       clearInterval(poll);
+      const ms = Date.now() - graceStart;
+      const sonuç = requestsInFlight <= 0 ? "tamam" : "zaman-aşımı";
+      console.log(
+        `[hostinger] graceful-bekleme inFlight=${requestsInFlight} sonuç=${sonuç} ms=${ms}`,
+      );
       process.exit(0);
     }
   }, 50);
-  if (!(lazyStandby && signal === "SIGTERM")) poll.unref?.();
-  setTimeout(() => process.exit(0), graceMs + 200).unref();
+  // SIGTERM'de event loop açık kalsın (unref yok)
+  if (signal !== "SIGTERM") poll.unref?.();
+  setTimeout(() => {
+    console.log(
+      `[hostinger] graceful-bekleme inFlight=${requestsInFlight} sonuç=zaman-aşımı ms=${Date.now() - graceStart}`,
+    );
+    process.exit(0);
+  }, graceMs + 200).unref();
 }
 
 process.on("uncaughtException", (err) => {
@@ -1030,12 +1045,15 @@ function wantsHtml(req) {
 
 function closePrimarySock() {
   const netSrv = primaryNetServer;
+  const tcpSrv = primaryTcpServer;
   primaryNetServer = null;
+  primaryTcpServer = null;
   primaryHttpBridge = null;
   primaryEndpoint = null;
-  if (netSrv) {
+  for (const s of [netSrv, tcpSrv]) {
+    if (!s) continue;
     try {
-      netSrv.close();
+      s.close();
     } catch {
       /* */
     }
@@ -1060,16 +1078,26 @@ function closePrimarySock() {
 
 function writePrimaryEndpoint(ep) {
   primaryEndpoint = ep;
+  const payload = {
+    pid: process.pid,
+    t: Date.now(),
+    sockPath: primarySockPath,
+    ...ep,
+  };
+  const tmp = `${primaryEndpointFile}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(
-      primaryEndpointFile,
-      JSON.stringify({ pid: process.pid, t: Date.now(), ...ep }),
-    );
+    fs.writeFileSync(tmp, JSON.stringify(payload));
+    fs.renameSync(tmp, primaryEndpointFile);
   } catch (err) {
     console.warn(
       `[hostinger] primary-endpoint yazılamadı:`,
       err instanceof Error ? err.message : err,
     );
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* */
+    }
   }
 }
 
@@ -1155,31 +1183,76 @@ function logAliveSnapshot(tag) {
   );
 }
 
+
+function selfTestPrimaryUnix() {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        socketPath: primarySockPath,
+        path: "/api/health",
+        method: "GET",
+        headers: { host: canonicalHost },
+        timeout: 2000,
+      },
+      (res) => {
+        res.resume();
+        console.log(
+          `[hostinger] primary-sock self-test ok status=${res.statusCode} pid=${process.pid}`,
+        );
+        resolve(true);
+      },
+    );
+    req.on("error", (err) => {
+      console.warn(
+        `[hostinger] primary-sock self-test FAIL code=${err?.code ?? "-"} message=${err instanceof Error ? err.message : err}`,
+      );
+      resolve(false);
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      console.warn(`[hostinger] primary-sock self-test FAIL code=timeout`);
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
 /**
  * LiteSpeed http.Server.prototype.listen'ı yamadığı için ikinci listen ignore olur.
  * Bu yüzden net.createServer dinler; http bridge'e connection emit edilir (listen YOK).
  */
 function startPrimarySock() {
-  if (!useStandbyProxy || shuttingDown || !sfHandler) return;
+  if (!useStandbyProxy || shuttingDown) return;
   if (readLockPid() !== process.pid) return;
   if (primaryNetServer?.listening) return;
 
   closePrimarySock();
 
-  const bridge = createServer((req, res) => {
-    routeRequest(req, res).catch((err) => {
-      console.error("[hostinger] primary-sock istek hatası:", err);
-      if (!res.headersSent) {
-        res.statusCode = 500;
-        res.end();
-      }
-    });
-  });
-  // ÖNEMLİ: bridge.listen() ÇAĞRILMAZ
-  primaryHttpBridge = bridge;
+  primaryHttpBridge = null;
 
   const onConnection = (socket) => {
-    bridge.emit("connection", socket);
+    primarySockEventLogs += 1;
+    if (primarySockEventLogs <= 10) {
+      console.log(`[hostinger] primary-sock bağlantı n=${primarySockEventLogs}`);
+    }
+    socket.on("error", (err) => {
+      if (primarySockEventLogs <= 10) {
+        console.warn(
+          `[hostinger] primary-sock soket-hata code=${err?.code ?? "-"} syscall=${err?.syscall ?? "-"} message=${err instanceof Error ? err.message : err}`,
+        );
+      }
+    });
+    socket.on("close", (hadError) => {
+      if (primarySockEventLogs <= 10) {
+        console.warn(`[hostinger] primary-sock soket-kapandı hadError=${hadError}`);
+      }
+    });
+    // Ana server'a ver — sayaç/tracking doğru çalışır.
+    if (httpServer) httpServer.emit("connection", socket);
+    else {
+      console.warn("[hostinger] primary-sock: httpServer yok");
+      socket.destroy();
+    }
   };
 
   const listenUnix = () =>
@@ -1253,21 +1326,58 @@ function startPrimarySock() {
 
   (async () => {
     const unix = await listenUnix();
+    let unixOk = false;
     if (unix) {
       primaryNetServer = unix;
-      writePrimaryEndpoint({ kind: "unix", path: primarySockPath });
+      unixOk = await selfTestPrimaryUnix();
+      if (!unixOk) {
+        console.warn(
+          `[hostinger] primary-sock self-test başarısız — TCP yedeğe geçiliyor`,
+        );
+        try {
+          unix.close();
+        } catch {
+          /* */
+        }
+        primaryNetServer = null;
+        try {
+          fs.unlinkSync(primarySockPath);
+        } catch {
+          /* */
+        }
+      }
+    } else {
+      console.warn(`[hostinger] primary-sock unix açılamadı`);
+    }
+
+    // TCP her zaman aç (unix OK olsa bile GET retry için)
+    const tcp = await listenTcp();
+    let tcpPort = null;
+    if (tcp) {
+      // unix dinliyorsa tcp ayrı server — primaryNetServer unix'te kalsın
+      if (!primaryNetServer) primaryNetServer = tcp.server;
+      else primaryTcpServer = tcp.server;
+      tcpPort = tcp.port;
+    }
+
+    if (unixOk) {
+      writePrimaryEndpoint({
+        kind: "unix",
+        path: primarySockPath,
+        sockPath: primarySockPath,
+        tcpPort,
+        host: "127.0.0.1",
+        port: tcpPort,
+      });
       return;
     }
-    console.warn(
-      `[hostinger] primary-sock unix açılamadı — TCP 127.0.0.1:0 fallback`,
-    );
-    const tcp = await listenTcp();
     if (tcp) {
-      primaryNetServer = tcp.server;
       writePrimaryEndpoint({
         kind: "tcp",
         host: "127.0.0.1",
         port: tcp.port,
+        sockPath: null,
+        tcpPort: tcp.port,
       });
       return;
     }
@@ -1277,24 +1387,28 @@ function startPrimarySock() {
   })();
 }
 
-function probePrimaryConnect(ep) {
+function probePrimaryConnect(ep, timeoutMs = 500) {
   return new Promise((resolve) => {
-    const sock =
-      ep.kind === "unix"
-        ? net.connect({ path: ep.path })
-        : net.connect({ host: ep.host, port: ep.port });
+    const pathOrHost =
+      ep.kind === "unix" || ep.path || ep.sockPath
+        ? { path: ep.path || ep.sockPath }
+        : { host: ep.host || "127.0.0.1", port: Number(ep.port || ep.tcpPort) };
+    const sock = pathOrHost.path
+      ? net.connect({ path: pathOrHost.path })
+      : net.connect({ host: pathOrHost.host, port: pathOrHost.port });
     const timer = setTimeout(() => {
       sock.destroy();
-      resolve(false);
-    }, 200);
+      resolve({ ok: false, reason: "timeout" });
+    }, timeoutMs);
     sock.once("connect", () => {
       clearTimeout(timer);
       sock.end();
-      resolve(true);
+      resolve({ ok: true, reason: null });
     });
-    sock.once("error", () => {
+    sock.once("error", (err) => {
       clearTimeout(timer);
-      resolve(false);
+      const code = err?.code || "error";
+      resolve({ ok: false, reason: code });
     });
   });
 }
@@ -1320,7 +1434,8 @@ function logPlaceholder(kind, req, pathOnly) {
 function proxyToPrimary(req, res) {
   return new Promise((resolve) => {
     const lock = readLockState();
-    if (!lock?.ready || lock.pid === process.pid || !pidAlive(lock.pid)) {
+    // ready=false iken de erken sock için denenebilir (çağıran kontrol eder).
+    if (!lock || lock.pid === process.pid || !pidAlive(lock.pid)) {
       resolve(false);
       return;
     }
@@ -1332,11 +1447,26 @@ function proxyToPrimary(req, res) {
       return;
     }
 
-    probePrimaryConnect(ep).then((okProbe) => {
+    if (ep.pid && Number(ep.pid) !== lock.pid) {
+      console.warn(
+        `[hostinger] proxy-atlandı reason=stale-pid jsonPid=${ep.pid} lockPid=${lock.pid}`,
+      );
+      resolve(false);
+      return;
+    }
+
+    // Unix: probe yok (false-negative). TCP: 500ms probe.
+    const maybeProbe =
+      ep.kind === "unix"
+        ? Promise.resolve({ ok: true, reason: null })
+        : probePrimaryConnect(ep, 500);
+
+    maybeProbe.then((probeResult) => {
+      const okProbe = probeResult === true || probeResult?.ok === true;
       if (!okProbe) {
         logProxyError(
           "connect-probe-fail",
-          ep.kind === "unix" ? ep.path : `${ep.host}:${ep.port}`,
+          `reason=${probeResult?.reason ?? "fail"} ${ep.kind === "unix" ? ep.path : `${ep.host}:${ep.port}`}`,
         );
         resolve(false);
         return;
@@ -1358,23 +1488,98 @@ function proxyToPrimary(req, res) {
         : remote;
 
       const pathOnly = String(req.url ?? "/").split("?")[0];
+      const proxyT0 = Date.now();
       loggedProxyAttempts += 1;
       console.log(
         `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} via=${ep.kind} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
       );
 
       let settled = false;
-      const finish = (ok, reason) => {
+      let headersWritten = false;
+      let viaUsed = ep.kind === "tcp" ? "tcp" : "unix";
+      const finish = (ok, reason, errCode) => {
         if (settled) return;
-        settled = true;
+        const ms = Date.now() - proxyT0;
         if (ok) {
+          settled = true;
           console.log(
-            `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${ep.kind} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+            `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${viaUsed} url=${pathOnly} host=${req.headers.host ?? "-"} ms=${ms}`,
           );
-        } else if (reason) {
-          logProxyError(reason);
+          resolve(true);
+          return;
         }
-        resolve(ok);
+        const code = errCode || (typeof reason === "string" && reason.includes("ECONNRESET") ? "ECONNRESET" : null);
+        const canRetryTcp =
+          !headersWritten &&
+          !res.headersSent &&
+          viaUsed === "unix" &&
+          (req.method === "GET" || req.method === "HEAD") &&
+          (code === "ECONNRESET" || code === "ECONNREFUSED" || String(reason).includes("ECONNRESET") || String(reason).includes("ECONNREFUSED")) &&
+          (ep.tcpPort || ep.port);
+
+        if (canRetryTcp) {
+          console.log(`[hostinger] proxy-retry via=tcp after=${code || reason}`);
+          viaUsed = "tcp";
+          // yeniden dene: yeni request (settled henüz true değil)
+          const tcpOpts = {
+            host: "127.0.0.1",
+            port: Number(ep.tcpPort || ep.port),
+            path: req.url ?? "/",
+            method: req.method,
+            headers,
+            timeout: 20_000,
+          };
+          const upstream2 = http.request(tcpOpts, (upRes) => {
+            headersWritten = true;
+            res.statusCode = upRes.statusCode ?? 502;
+            for (const [key, value] of Object.entries(upRes.headers)) {
+              if (value == null) continue;
+              if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) continue;
+              if (key.toLowerCase() === "x-guntan-app") continue;
+              res.setHeader(key, value);
+            }
+            res.setHeader("x-guntan-app", "proxied-standby");
+            upRes.pipe(res);
+            upRes.on("error", (err) => {
+              settled = true;
+              logProxyError(
+                err?.code || "upstream-res",
+                `syscall=${err?.syscall ?? "-"} message=${err instanceof Error ? err.message : err} headersWritten=${headersWritten} ms=${Date.now() - proxyT0} via=tcp`,
+              );
+              resolve(false);
+            });
+            res.on("finish", () => {
+              settled = true;
+              console.log(
+                `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=tcp url=${pathOnly} host=${req.headers.host ?? "-"} ms=${Date.now() - proxyT0}`,
+              );
+              resolve(true);
+            });
+          });
+          upstream2.on("error", (err) => {
+            settled = true;
+            logProxyError(
+              err?.code || "connect",
+              `syscall=${err?.syscall ?? "-"} message=${err instanceof Error ? err.message : err} headersWritten=false ms=${Date.now() - proxyT0} via=tcp`,
+            );
+            resolve(false);
+          });
+          upstream2.on("timeout", () => {
+            upstream2.destroy();
+            settled = true;
+            logProxyError("timeout", `headersWritten=false ms=${Date.now() - proxyT0} via=tcp`);
+            resolve(false);
+          });
+          // GET: gövde yok — end yeterli (pipe zaten bitti olabilir)
+          upstream2.end();
+          return;
+        }
+
+        settled = true;
+        if (reason) {
+          logProxyError(reason, `headersWritten=${headersWritten} ms=${ms} via=${viaUsed}`);
+        }
+        resolve(false);
       };
 
       const requestOpts =
@@ -1396,6 +1601,7 @@ function proxyToPrimary(req, res) {
             };
 
       const upstream = http.request(requestOpts, (upRes) => {
+        headersWritten = true;
         res.statusCode = upRes.statusCode ?? 502;
         for (const [key, value] of Object.entries(upRes.headers)) {
           if (value == null) continue;
@@ -1412,32 +1618,32 @@ function proxyToPrimary(req, res) {
           );
         });
         res.on("finish", () => finish(true));
-        res.on("close", () => finish(true));
       });
 
       upstream.on("timeout", () => {
         upstream.destroy();
-        finish(false, "timeout");
+        finish(false, "timeout", "timeout");
       });
       upstream.on("error", (err) => {
-        const code =
-          err && typeof err === "object" && "code" in err ? err.code : "";
+        const code = err?.code ?? "";
+        const syscall = err?.syscall ?? "-";
         finish(
           false,
-          `connect:${code || (err instanceof Error ? err.message : String(err))}`,
+          `connect code=${code || (err instanceof Error ? err.message : String(err))} syscall=${syscall}`,
+          code,
         );
       });
 
-      const abortUpstream = () => {
-        try {
-          upstream.destroy();
-        } catch {
-          /* */
+      // GET'te req.close gövde bitince hemen gelir — upstream'i öldürme.
+      // İstemci kopmasını res üzerinden izle.
+      res.on("close", () => {
+        if (!res.writableFinished) {
+          try {
+            upstream.destroy();
+          } catch {
+            /* */
+          }
         }
-      };
-      req.on("aborted", abortUpstream);
-      req.on("close", () => {
-        if (!res.writableEnded) abortUpstream();
       });
 
       req.pipe(upstream);
@@ -1602,12 +1808,14 @@ async function routeRequest(req, res) {
   // Proxy / lazy self-boot (Next henüz yokken).
   if (useStandbyProxy && !sfHandler) {
     const lock = readLockState();
-    const primaryReady =
-      Boolean(lock?.ready) &&
+    const primaryAlive =
+      lock &&
       lock.pid !== process.pid &&
       pidAlive(lock.pid);
+    // ready olmasa da erken sock için bir kez dene
+    const shouldProxy = primaryAlive && (lock.ready || lazyStandby);
 
-    if (primaryReady) {
+    if (shouldProxy) {
       const ok = await proxyToPrimary(req, res);
       if (ok || res.headersSent || res.writableEnded) return;
       if (!lazyStandby) {
@@ -1720,7 +1928,10 @@ const server = createServer((req, res) => {
   const shouldLogEarly = loggedEarlyRequests < 3;
   const earlyN = shouldLogEarly ? ++loggedEarlyRequests : 0;
   let earlyLogged = false;
+  let counted = true;
   const done = () => {
+    if (!counted) return;
+    counted = false;
     requestsInFlight = Math.max(0, requestsInFlight - 1);
   };
   const logEarlyRequest = () => {
@@ -1751,6 +1962,13 @@ const server = createServer((req, res) => {
 });
 httpServer = server;
 server.keepAliveTimeout = 65_000;
+server.on("clientError", (err) => {
+  if (primarySockEventLogs < 10) {
+    console.warn(
+      `[hostinger] primary-sock clientError code=${err?.code ?? "-"} message=${err instanceof Error ? err.message : err}`,
+    );
+  }
+});
 server.headersTimeout = 66_000;
 
 let parked = false;
@@ -2051,6 +2269,8 @@ function bindPublicPort() {
     startDiagHeartbeat();
     watchPrimaryLock();
     startSelfPing();
+    // Next hazır olmadan sock aç — boşluğu kapat; istekler waitUntilReady bekler
+    startPrimarySock();
     startNextAfterListen();
   });
 }
