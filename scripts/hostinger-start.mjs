@@ -82,10 +82,13 @@ const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
 const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
 const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
+const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
+const primarySockPath = join(os.tmpdir(), "guntan-primary.sock");
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
 let loggedEarlyRequests = 0;
+let loggedProxyAttempts = 0;
 /** @type {number | null} */
 let lastRequestAt = null;
 let sigtermCount = 0;
@@ -186,6 +189,8 @@ let selfPingStarted = false;
 let lockReady = false;
 /** @type {import("node:http").Server | null} */
 let httpServer = null;
+/** @type {import("node:http").Server | null} */
+let primarySockServer = null;
 let bindAttempts = 0;
 
 function warnBadEnv() {
@@ -246,8 +251,9 @@ function writeLock(ready = false) {
 }
 
 function clearLock() {
+  const owned = readLockPid() === process.pid;
   try {
-    if (readLockPid() === process.pid) {
+    if (owned) {
       fs.unlinkSync(pidFile);
       console.log(`[hostinger] kilit bırakıldı pid=${process.pid}`);
     }
@@ -255,6 +261,7 @@ function clearLock() {
     /* */
   }
   removeStandbyPid(process.pid);
+  if (owned) closePrimarySock();
 }
 
 function pidAlive(pid) {
@@ -262,8 +269,20 @@ function pidAlive(pid) {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // EPERM: süreç var ama sinyal hakkımız yok — yaşıyor say.
+    return err?.code === "EPERM";
+  }
+}
+
+/** ppid için: kendimiz değil; EPERM = canlı */
+function ppidAlive(ppid) {
+  if (!ppid) return false;
+  try {
+    process.kill(ppid, 0);
+    return true;
+  } catch (err) {
+    return err?.code === "EPERM";
   }
 }
 
@@ -274,7 +293,10 @@ function readStandbyPids() {
     if (!raw) return [];
     const j = JSON.parse(raw);
     const pids = Array.isArray(j.pids) ? j.pids : [];
-    return pids.map(Number).filter((p) => Number.isInteger(p) && p > 0);
+    const parsed = pids.map(Number).filter((p) => Number.isInteger(p) && p > 0);
+    const alive = parsed.filter((p) => p === process.pid || pidAlive(p));
+    if (alive.length !== parsed.length) writeStandbyPids(alive);
+    return alive;
   } catch {
     return [];
   }
@@ -509,8 +531,8 @@ function logStartupProbe() {
   console.log(
     `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version} primary=${isPrimaryProcess}`,
   );
-  // Env satırları sadece birincilde — yedek spawn fırtınasında console.log şişmesin.
-  if (!isPrimaryProcess) return;
+  // Env satırları sadece birincilde + VERBOSE — log hacmini düşür.
+  if (!isPrimaryProcess || !VERBOSE) return;
   console.log(
     `[hostinger] teşhis-env-adları ${platformEnvNames().join(",") || "(yok)"}`,
   );
@@ -558,7 +580,7 @@ function logPrimarySignal(signal, n) {
   if (!isPrimaryProcess) return;
   const now = Date.now();
   console.warn(
-    `[hostinger] teşhis-sinyal ${signal} n=${n} ageMs=${now - startedAt} pid=${process.pid} ppid=${process.ppid} ppidAlive=${pidAlive(process.ppid)} rss=${rssMb()}MB standby=${isStandbyMode}`,
+    `[hostinger] teşhis-sinyal ${signal} n=${n} ageMs=${now - startedAt} pid=${process.pid} ppid=${process.ppid} ppidAlive=${ppidAlive(process.ppid)} rss=${rssMb()}MB standby=${isStandbyMode}`,
   );
 }
 
@@ -608,6 +630,7 @@ function shutdown(signal) {
 
   shuttingDown = true;
   exitReason = signal;
+  closePrimarySock();
   const ageMs = Date.now() - startedAt;
   console.error(
     `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
@@ -949,6 +972,218 @@ ${bootPoll}
   );
 }
 
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "trailers",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function isStaticAssetPath(pathOnly) {
+  const p = String(pathOnly ?? "");
+  if (p.startsWith("/_next/") || p.startsWith("/brands/") || p.startsWith("/slider/")) {
+    return true;
+  }
+  return /\.(?:js|css|mjs|map|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|eot|mp4|webm|pdf)$/i.test(
+    p,
+  );
+}
+
+function wantsHtml(req) {
+  return String(req.headers.accept ?? "").includes("text/html");
+}
+
+function closePrimarySock() {
+  const server = primarySockServer;
+  primarySockServer = null;
+  if (server) {
+    try {
+      server.close();
+    } catch {
+      /* */
+    }
+  }
+  try {
+    fs.unlinkSync(primarySockPath);
+  } catch {
+    /* */
+  }
+}
+
+function startPrimarySock() {
+  if (!standbyProxy || shuttingDown || !sfHandler) return;
+  if (primarySockServer?.listening) return;
+  closePrimarySock();
+  try {
+    fs.unlinkSync(primarySockPath);
+  } catch {
+    /* */
+  }
+  const sockServer = createServer((req, res) => {
+    routeRequest(req, res).catch((err) => {
+      console.error("[hostinger] primary-sock istek hatası:", err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end();
+      }
+    });
+  });
+  primarySockServer = sockServer;
+  sockServer.on("error", (err) => {
+    console.warn(
+      `[hostinger] primary-sock hata pid=${process.pid}:`,
+      err instanceof Error ? err.message : err,
+    );
+  });
+  sockServer.listen(primarySockPath, () => {
+    try {
+      fs.chmodSync(primarySockPath, 0o600);
+    } catch (err) {
+      console.warn(
+        `[hostinger] primary-sock chmod:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+    console.log(
+      `[hostinger] primary-sock dinleniyor path=${primarySockPath} pid=${process.pid}`,
+    );
+  });
+}
+
+function logProxyError(reason, detail) {
+  console.warn(
+    `[hostinger] proxy-hata pid=${process.pid} reason=${reason}${detail ? ` detail=${detail}` : ""}`,
+  );
+}
+
+/**
+ * Yedekten birincile unix soket üzerinden aktar.
+ * @returns {Promise<boolean>} başarılı stream
+ */
+function proxyToPrimary(req, res) {
+  return new Promise((resolve) => {
+    const lock = readLockState();
+    if (!lock?.ready || lock.pid === process.pid || !pidAlive(lock.pid)) {
+      resolve(false);
+      return;
+    }
+
+    /** @type {Record<string, string | string[] | undefined>} */
+    const headers = { ...req.headers };
+    for (const key of Object.keys(headers)) {
+      if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
+    }
+    headers["x-forwarded-host"] = String(req.headers.host ?? "");
+    headers["x-forwarded-proto"] = String(
+      req.headers["x-forwarded-proto"] ?? "https",
+    );
+    const priorFor = req.headers["x-forwarded-for"];
+    const remote = req.socket?.remoteAddress ?? "";
+    headers["x-forwarded-for"] = priorFor
+      ? `${priorFor}, ${remote}`
+      : remote;
+
+    if (loggedProxyAttempts < 3) {
+      loggedProxyAttempts += 1;
+      const pathOnly = String(req.url ?? "/").split("?")[0];
+      console.log(
+        `[hostinger] teşhis-proxy #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+      );
+    }
+
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+
+    const upstream = http.request(
+      {
+        socketPath: primarySockPath,
+        path: req.url ?? "/",
+        method: req.method,
+        headers,
+        timeout: 20_000,
+      },
+      (upRes) => {
+        res.statusCode = upRes.statusCode ?? 502;
+        for (const [key, value] of Object.entries(upRes.headers)) {
+          if (value == null) continue;
+          if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) continue;
+          if (key.toLowerCase() === "x-guntan-app") continue;
+          res.setHeader(key, value);
+        }
+        res.setHeader("x-guntan-app", "proxied-standby");
+        upRes.pipe(res);
+        upRes.on("error", (err) => {
+          logProxyError("upstream-res", err instanceof Error ? err.message : String(err));
+          finish(false);
+        });
+        res.on("finish", () => finish(true));
+        res.on("close", () => finish(true));
+      },
+    );
+
+    upstream.on("timeout", () => {
+      logProxyError("timeout", "20s");
+      upstream.destroy();
+      finish(false);
+    });
+    upstream.on("error", (err) => {
+      logProxyError("connect", err instanceof Error ? err.message : String(err));
+      finish(false);
+    });
+
+    const abortUpstream = () => {
+      try {
+        upstream.destroy();
+      } catch {
+        /* */
+      }
+    };
+    req.on("aborted", abortUpstream);
+    req.on("close", () => {
+      if (!res.writableEnded) abortUpstream();
+    });
+
+    req.pipe(upstream);
+  });
+}
+
+function sendProxyFailure(req, res, pathOnly) {
+  if (isStaticAssetPath(pathOnly) || !wantsHtml(req)) {
+    res.statusCode = 503;
+    res.setHeader("retry-after", "5");
+    res.setHeader("cache-control", "no-store");
+    res.setHeader("x-guntan-app", "proxied-standby");
+    res.end();
+    return;
+  }
+  sendHtml(
+    res,
+    503,
+    `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>Site açılıyor</title>
+<meta http-equiv="refresh" content="5"/>
+<body style="font-family:system-ui;padding:2rem;max-width:40rem">
+<h1>Site açılıyor</h1>
+<p>Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.</p>
+</body></html>`,
+    {
+      "x-guntan-app": "proxied-standby",
+      "Retry-After": "5",
+      "Cache-Control": "no-store",
+      "CDN-Cache-Control": "no-store",
+    },
+  );
+}
+
 let sfHandler = null;
 let adminHandler = null;
 let bootFailed = false;
@@ -1042,6 +1277,17 @@ async function routeRequest(req, res) {
   // Yedek/birincil fark etmez — Next yüklemeden; yedek hemen çıkabilir.
   if (maybeHostRedirect(req, res, pathOnly)) return;
 
+  // Yedek → hazır birincile unix proxy (HOSTINGER_STANDBY_PROXY=1).
+  if (standbyProxy && !sfHandler) {
+    const lock = readLockState();
+    if (lock?.ready && lock.pid !== process.pid && pidAlive(lock.pid)) {
+      const ok = await proxyToPrimary(req, res);
+      if (ok || res.headersSent || res.writableEnded) return;
+      sendProxyFailure(req, res, pathOnly);
+      return;
+    }
+  }
+
   // Yedek süreç Next yüklemez; bağlantıyı sıfırlama — "Site açılıyor" 200.
   if (isStandbyMode) {
     sendUnavailable(
@@ -1128,7 +1374,7 @@ const server = createServer((req, res) => {
     requestsInFlight = Math.max(0, requestsInFlight - 1);
   };
   const logEarlyRequest = () => {
-    if (!shouldLogEarly || earlyLogged) return;
+    if (!VERBOSE || !shouldLogEarly || earlyLogged) return;
     earlyLogged = true;
     const pathOnly = String(req.url ?? "/").split("?")[0];
     const role = isStandbyMode ? "standby" : isPrimaryProcess ? "primary" : "yedek";
@@ -1282,6 +1528,7 @@ function watchPrimaryLock() {
     console.warn(
       `[hostinger] kilit başkasında pid=${current.pid} (biz=${process.pid}) — FAZLALIK, kapanıyor`,
     );
+    closePrimarySock();
     shutdown("FAZLALIK_SÜREÇ");
   }, 5_000).unref();
 }
@@ -1411,6 +1658,7 @@ async function bootNext() {
   sfHandler = storefront.getRequestHandler();
   writeLock(true);
   notifyReady("sf");
+  startPrimarySock();
   console.log(
     `[hostinger] vitrin hazır pid=${process.pid} port=${port} rss=${rssMb()}MB`,
   );
