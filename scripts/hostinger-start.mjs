@@ -106,8 +106,17 @@ function redirectNextWritable(appDir, label) {
 }
 
 const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
+// Hostinger sık sık paralel start açıyor. Listen hemen kilidi çalınca hazır
+// vitrin süreci, henüz soğuk olan yenisi yüzünden FAZLALIK diye ölüyordu.
+// Kilit artık {pid, ready, t} — eski hazır süreç, yenisi ready olana kadar
+// ayakta kalır; ara süreçler debounce ile Next yüklemeden çıkar.
+const bootDebounceMs = Number(process.env.HOSTINGER_BOOT_DEBOUNCE_MS ?? "2000");
+const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
+const selfPingMs = Number(process.env.HOSTINGER_SELF_PING_MS ?? "8000");
 let shuttingDown = false;
 let nextBooted = false;
+let selfPingStarted = false;
+let lockReady = false;
 /** @type {import("node:http").Server | null} */
 let httpServer = null;
 let bindAttempts = 0;
@@ -131,18 +140,37 @@ function warnBadEnv() {
   }
 }
 
-function readLockPid() {
+/** @returns {{ pid: number, ready: boolean, t: number } | null} */
+function readLockState() {
   try {
-    const n = Number(fs.readFileSync(pidFile, "utf8").trim());
-    return Number.isInteger(n) && n > 0 ? n : null;
+    const raw = fs.readFileSync(pidFile, "utf8").trim();
+    if (!raw) return null;
+    if (raw.startsWith("{")) {
+      const j = JSON.parse(raw);
+      const pid = Number(j.pid);
+      if (!Number.isInteger(pid) || pid <= 0) return null;
+      return { pid, ready: Boolean(j.ready), t: Number(j.t) || 0 };
+    }
+    const pid = Number(raw);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    // Eski düz-pid formatı: hazır kabul et (geriye dönük).
+    return { pid, ready: true, t: 0 };
   } catch {
     return null;
   }
 }
 
-function writeLock() {
+function readLockPid() {
+  return readLockState()?.pid ?? null;
+}
+
+function writeLock(ready = false) {
+  lockReady = Boolean(ready);
   try {
-    fs.writeFileSync(pidFile, String(process.pid));
+    fs.writeFileSync(
+      pidFile,
+      JSON.stringify({ pid: process.pid, ready: lockReady, t: Date.now() }),
+    );
   } catch {
     /* tmp yazılamazsa devam */
   }
@@ -170,7 +198,10 @@ function claimPrimaryLock() {
   for (let i = 0; i < 6; i++) {
     try {
       const fd = fs.openSync(pidFile, "wx");
-      fs.writeFileSync(fd, String(process.pid));
+      fs.writeFileSync(
+        fd,
+        JSON.stringify({ pid: process.pid, ready: false, t: Date.now() }),
+      );
       fs.closeSync(fd);
       console.log(`[hostinger] birincil kilit pid=${process.pid}`);
       return true;
@@ -541,18 +572,25 @@ function sendHtml(res, status, html, extraHeaders) {
 }
 
 function sendUnavailable(res, title, body, status = 503) {
+  // meta refresh=2, soğuk başlangıçta saniyede onlarca istek üreterek
+  // Hostinger'ın paralel süreç fırtınasını büyütüyordu. Health storefront
+  // hazır olana kadar bekle; ancak o zaman yenile.
+  const bootPoll =
+    status === 200
+      ? `<script>(async()=>{for(let i=0;i<45;i++){await new Promise(r=>setTimeout(r,2000));try{const j=await(await fetch("/api/health",{cache:"no-store"})).json();if(j&&j.storefront){location.reload();return}}catch{}}location.reload()})()</script>`
+      : `<meta http-equiv="refresh" content="5"/>`;
   sendHtml(
     res,
     status,
     `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>${title}</title>
-<meta http-equiv="refresh" content="2"/>
+${bootPoll}
 <body style="font-family:system-ui;padding:2rem;max-width:40rem">
 <h1>${title}</h1>
 <p>${body}</p>
 </body></html>`,
     {
       "x-guntan-app": status === 200 ? "booting" : "unavailable",
-      "Retry-After": "2",
+      "Retry-After": status === 200 ? "5" : "2",
       "Cache-Control": "no-store",
       "CDN-Cache-Control": "no-store",
     },
@@ -719,10 +757,25 @@ let parked = false;
 function startNextAfterListen() {
   if (nextBooted) return;
   nextBooted = true;
-  bootNext().catch((err) => {
-    console.error("[hostinger] Next başlatılamadı:", err);
-    notifyBootFailed();
-  });
+  // Paralel start'larda son yazan kilit sahibi kalır; ara süreçler
+  // pahalı prepare()'e girmeden çıksın.
+  const bootTimer = setTimeout(() => {
+    if (shuttingDown) return;
+    const lock = readLockState();
+    if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) {
+      console.warn(
+        `[hostinger] pid=${process.pid} boot iptal — kilit pid=${lock.pid}'de (Next yüklenmeden çıkılıyor)`,
+      );
+      shutdown("FAZLALIK_SÜREÇ");
+      return;
+    }
+    if (!lock || lock.pid !== process.pid) writeLock(false);
+    bootNext().catch((err) => {
+      console.error("[hostinger] Next başlatılamadı:", err);
+      notifyBootFailed();
+    });
+  }, bootDebounceMs);
+  bootTimer.unref();
 }
 
 function probeLocalHealth() {
@@ -758,15 +811,33 @@ function watchPrimaryLock() {
   primaryWatchStarted = true;
   setInterval(() => {
     if (shuttingDown) return;
-    const current = readLockPid();
-    if (current === process.pid || current == null) return;
-    if (pidAlive(current)) {
-      console.warn(
-        `[hostinger] pid=${process.pid} kilit artık pid=${current}'e ait ve o süreç hayatta — bu süreç fazlalık, kapanıyor`,
-      );
-      shutdown("FAZLALIK_SÜREÇ");
+    const current = readLockState();
+    if (!current) {
+      // Kilit silinmiş — hazırsek geri al.
+      if (sfHandler) writeLock(true);
+      return;
     }
-  }, 20_000).unref();
+    if (current.pid === process.pid) return;
+    if (!pidAlive(current.pid)) {
+      writeLock(Boolean(sfHandler));
+      console.log(
+        `[hostinger] pid=${process.pid} kilit geri alındı (eski pid=${current.pid} öldü) ready=${Boolean(sfHandler)}`,
+      );
+      return;
+    }
+    // Yenisi henüz prepare bitirmediyse hazır vitrini öldürme.
+    const age = Date.now() - (current.t || 0);
+    if (!current.ready && age < bootStuckMs) {
+      vlog(
+        `[hostinger] pid=${process.pid} yeni birincil pid=${current.pid} hazır değil — bekleniyor`,
+      );
+      return;
+    }
+    console.warn(
+      `[hostinger] pid=${process.pid} kilit artık pid=${current.pid}'e ait ve o süreç hayatta — bu süreç fazlalık, kapanıyor`,
+    );
+    shutdown("FAZLALIK_SÜREÇ");
+  }, 5_000).unref();
 }
 
 function bindPublicPort() {
@@ -774,11 +845,12 @@ function bindPublicPort() {
   server.listen({ port, host: hostname, exclusive: true }, () => {
     bindAttempts = 0;
     parked = false;
-    writeLock();
+    writeLock(false);
     console.log(
       `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
     );
     watchPrimaryLock();
+    startSelfPing();
     startNextAfterListen();
   });
 }
@@ -879,7 +951,18 @@ async function bootNext() {
   });
 
   await storefront.prepare();
+  // Debounce sırasında daha yeni bir süreç kilidi almış olabilir.
+  const lock = readLockState();
+  if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) {
+    console.warn(
+      `[hostinger] pid=${process.pid} prepare bitti ama kilit pid=${lock.pid}'de — fazlalık, kapanıyor`,
+    );
+    sfHandler = null;
+    shutdown("FAZLALIK_SÜREÇ");
+    return;
+  }
   sfHandler = storefront.getRequestHandler();
+  writeLock(true);
   notifyReady("sf");
   console.log(`[hostinger] vitrin hazır pid=${process.pid} rss=${rssMb()}MB`);
 
@@ -894,14 +977,6 @@ async function bootNext() {
   setInterval(() => {
     console.log(`[hostinger] canlı pid=${process.pid} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)}`);
   }, 120_000).unref();
-
-  // Hostinger "on-demand" modelinde trafiksiz kalan süreç durduruluyor.
-  // 127.0.0.1'e atılan ping Hostinger'ın ön-vekilinden (LiteSpeed) hiç
-  // GEÇMEDİĞİ için platformun "boşta kaldı" sayacını sıfırlamıyor —
-  // loglar süreçlerin ~10-20 sn'de bir komple yeniden başladığını
-  // gösterdi. Bu yüzden genel adrese (gerçek dış istek gibi LiteSpeed
-  // üzerinden geçer) ve çok daha sık aralıkla ping atıyoruz.
-  setInterval(selfPing, 45_000).unref();
 
   // Son loglarda rss ~225-226MB'a değince Hostinger'ın kendisi süreci
   // durduruyordu (bazen SIGTERM ile, bazen hiç log bırakmadan doğrudan
@@ -949,6 +1024,10 @@ try {
 
 function selfPing() {
   if (shuttingDown || !server.listening || !publicHealthUrl) return;
+  // Sadece kilit sahibi (veya henüz kimse ready değilken dinleyen süreç)
+  // dış ping atsın — aksi halde her hayalet kopya yeni start tetikler.
+  const lock = readLockState();
+  if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) return;
   const client = publicHealthUrl.protocol === "https:" ? https : http;
   const req = client.get(publicHealthUrl, { timeout: 8000 }, (res) => {
     res.resume();
@@ -957,4 +1036,13 @@ function selfPing() {
   req.on("error", () => {
     /* self-ping başarısızlığı önemsiz — DNS/ağ dalgalanması olabilir */
   });
+}
+
+function startSelfPing() {
+  if (selfPingStarted) return;
+  selfPingStarted = true;
+  // Hostinger idle ~10-20 sn; 45 sn'lik ping süreci unutturuyordu.
+  // Listen anından itibaren sık ping — prepare sırasında da kayıt canlı kalsın.
+  selfPing();
+  setInterval(selfPing, selfPingMs).unref();
 }
