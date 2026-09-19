@@ -29,6 +29,21 @@ function vwarn(...args) {
   if (VERBOSE) console.warn(...args);
 }
 
+// [hostinger] satırlarına ISO zaman damgası
+(function stampHostingerLogs() {
+  function wrap(fn) {
+    return (...args) => {
+      if (typeof args[0] === "string" && args[0].startsWith("[hostinger]")) {
+        args[0] = `${new Date().toISOString()} ${args[0]}`;
+      }
+      return fn(...args);
+    };
+  }
+  console.log = wrap(console.log.bind(console));
+  console.warn = wrap(console.warn.bind(console));
+  console.error = wrap(console.error.bind(console));
+})();
+
 const NodeModule = createRequire(import.meta.url)("module");
 
 // Bilinçli tasarım (Hostinger):
@@ -48,9 +63,15 @@ const publicStoreUrl = (
   process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com"
 ).replace(/\/$/, "");
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
+const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
+let sigtermCount = 0;
+let firstSigtermAt = null;
+let sigtermIgnoredLogged = false;
+let lastSeenPpid = process.ppid;
+let cgroupMissingLogged = false;
 
 const adminHost = (
   process.env.ADMIN_HOST ??
@@ -139,7 +160,7 @@ function warnBadEnv() {
   }
 }
 
-/** @returns {{ pid: number, ready: boolean, t: number } | null} */
+/** @returns {{ pid: number, ready: boolean, t: number, standby: number | null } | null} */
 function readLockState() {
   try {
     const raw = fs.readFileSync(pidFile, "utf8").trim();
@@ -148,11 +169,17 @@ function readLockState() {
       const j = JSON.parse(raw);
       const pid = Number(j.pid);
       if (!Number.isInteger(pid) || pid <= 0) return null;
-      return { pid, ready: Boolean(j.ready), t: Number(j.t) || 0 };
+      const standby = Number(j.standby);
+      return {
+        pid,
+        ready: Boolean(j.ready),
+        t: Number(j.t) || 0,
+        standby: Number.isInteger(standby) && standby > 0 ? standby : null,
+      };
     }
     const pid = Number(raw);
     if (!Number.isInteger(pid) || pid <= 0) return null;
-    return { pid, ready: true, t: 0 };
+    return { pid, ready: true, t: 0, standby: null };
   } catch {
     return null;
   }
@@ -165,9 +192,19 @@ function readLockPid() {
 function writeLock(ready = false) {
   lockReady = Boolean(ready);
   try {
+    const prev = readLockState();
+    const standby =
+      prev?.standby && pidAlive(prev.standby) && prev.standby !== process.pid
+        ? prev.standby
+        : null;
     fs.writeFileSync(
       pidFile,
-      JSON.stringify({ pid: process.pid, ready: lockReady, t: Date.now() }),
+      JSON.stringify({
+        pid: process.pid,
+        ready: lockReady,
+        t: Date.now(),
+        standby,
+      }),
     );
   } catch (err) {
     console.warn(
@@ -177,11 +214,51 @@ function writeLock(ready = false) {
   }
 }
 
+function patchLockStandby(standbyPid) {
+  try {
+    const lock = readLockState();
+    if (!lock) return false;
+    fs.writeFileSync(
+      pidFile,
+      JSON.stringify({
+        pid: lock.pid,
+        ready: lock.ready,
+        t: lock.t,
+        standby: standbyPid,
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** @returns {boolean} bu süreç tek yedek slotunu aldı mı */
+function claimStandbySlot() {
+  const lock = readLockState();
+  if (!lock || !pidAlive(lock.pid)) return false;
+  if (lock.standby && lock.standby !== process.pid && pidAlive(lock.standby)) {
+    console.warn(
+      `[hostinger] yedek slot dolu standby=${lock.standby} — hemen çıkılıyor (biz=${process.pid})`,
+    );
+    return false;
+  }
+  return patchLockStandby(process.pid);
+}
+
+function clearStandbyIfUs() {
+  const lock = readLockState();
+  if (!lock || lock.standby !== process.pid) return;
+  patchLockStandby(null);
+}
+
 function clearLock() {
   try {
     if (readLockPid() === process.pid) {
       fs.unlinkSync(pidFile);
       console.log(`[hostinger] kilit bırakıldı pid=${process.pid}`);
+    } else {
+      clearStandbyIfUs();
     }
   } catch {
     /* */
@@ -225,7 +302,7 @@ function claimPrimaryLock() {
       const fd = fs.openSync(pidFile, "wx");
       fs.writeFileSync(
         fd,
-        JSON.stringify({ pid: process.pid, ready: false, t: Date.now() }),
+        JSON.stringify({ pid: process.pid, ready: false, t: Date.now(), standby: null }),
       );
       fs.closeSync(fd);
       console.log(
@@ -302,25 +379,55 @@ function platformEnvNames() {
 
 function readCgroupMemory() {
   const out = { max: null, current: null };
-  for (const base of ["/sys/fs/cgroup", "/sys/fs/cgroup/memory"]) {
+  const pairs = [
+    ["/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"],
+    [
+      "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+      "/sys/fs/cgroup/memory/memory.usage_in_bytes",
+    ],
+  ];
+  for (const [maxPath, curPath] of pairs) {
     try {
-      const maxPath = join(base, "memory.max");
-      const curPath = join(base, "memory.current");
-      if (fs.existsSync(maxPath)) out.max = fs.readFileSync(maxPath, "utf8").trim();
+      if (!fs.existsSync(maxPath)) continue;
+      out.max = fs.readFileSync(maxPath, "utf8").trim();
       if (fs.existsSync(curPath)) out.current = fs.readFileSync(curPath, "utf8").trim();
-      if (out.max || out.current) return out;
+      return out;
     } catch {
       /* */
     }
-    try {
-      const lim = join(base, "memory.limit_in_bytes");
-      const usage = join(base, "memory.usage_in_bytes");
-      if (fs.existsSync(lim)) out.max = fs.readFileSync(lim, "utf8").trim();
-      if (fs.existsSync(usage)) out.current = fs.readFileSync(usage, "utf8").trim();
-      if (out.max || out.current) return out;
-    } catch {
-      /* */
+  }
+  try {
+    const cg = fs.readFileSync("/proc/self/cgroup", "utf8");
+    for (const line of cg.split("\n")) {
+      const v2 = line.match(/^0::(.*)$/);
+      if (v2) {
+        const sub = v2[1] === "/" ? "" : v2[1];
+        const maxPath = `/sys/fs/cgroup${sub}/memory.max`;
+        const curPath = `/sys/fs/cgroup${sub}/memory.current`;
+        if (fs.existsSync(maxPath)) {
+          out.max = fs.readFileSync(maxPath, "utf8").trim();
+          if (fs.existsSync(curPath)) out.current = fs.readFileSync(curPath, "utf8").trim();
+          return out;
+        }
+      }
+      const v1 = line.match(/^\d+:memory:(.*)$/);
+      if (v1) {
+        const sub = v1[1] === "/" ? "" : v1[1];
+        const maxPath = `/sys/fs/cgroup/memory${sub}/memory.limit_in_bytes`;
+        const curPath = `/sys/fs/cgroup/memory${sub}/memory.usage_in_bytes`;
+        if (fs.existsSync(maxPath)) {
+          out.max = fs.readFileSync(maxPath, "utf8").trim();
+          if (fs.existsSync(curPath)) out.current = fs.readFileSync(curPath, "utf8").trim();
+          return out;
+        }
+      }
     }
+  } catch {
+    /* */
+  }
+  if (!cgroupMissingLogged) {
+    cgroupMissingLogged = true;
+    console.warn("[hostinger] cgroup okunamadı");
   }
   return out;
 }
@@ -334,6 +441,18 @@ function logStartupProbe() {
   console.log(
     `[hostinger] teşhis-env-adları ${platformEnvNames().join(",") || "(yok)"}`,
   );
+  for (const key of [
+    "LSAPI_MAX_PROCESS_TIME",
+    "LSAPI_PGRP_MAX_IDLE",
+    "LSAPI_PPID_NO_CHECK",
+    "LSNODE_GUARD_PPID",
+    "LSNODE_CONSOLE_LOG",
+  ]) {
+    const val = process.env[key];
+    console.log(
+      `[hostinger] teşhis-env ${key}=${val === undefined ? "(yok)" : val}`,
+    );
+  }
 }
 
 function logLifecycleSnapshot(tag) {
@@ -341,8 +460,29 @@ function logLifecycleSnapshot(tag) {
   const cg = readCgroupMemory();
   const uptimeMs = Date.now() - startedAt;
   console.log(
-    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} rssMB=${rssMb()} freeMB=${Math.round(os.freemem() / 1024 / 1024)} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
+    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} standby=${lock?.standby ?? "-"} rssMB=${rssMb()} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
   );
+}
+
+function startPpidWatch() {
+  setInterval(() => {
+    const p = process.ppid;
+    if (p === lastSeenPpid) return;
+    console.warn(
+      `[hostinger] ppid değişti ${lastSeenPpid}→${p} primaryUptimeMs=${Date.now() - startedAt} pid=${process.pid}`,
+    );
+    lastSeenPpid = p;
+  }, 2_000).unref();
+}
+
+function onSigterm() {
+  sigtermCount += 1;
+  const now = Date.now();
+  if (firstSigtermAt == null) firstSigtermAt = now;
+  console.warn(
+    `[hostinger] SIGTERM alındı #${sigtermCount} ageMs=${now - startedAt} sinceFirstMs=${now - firstSigtermAt} pid=${process.pid}`,
+  );
+  shutdown("SIGTERM");
 }
 
 function shutdown(signal) {
@@ -355,16 +495,19 @@ function shutdown(signal) {
     !bootFailed &&
     readLockPid() === process.pid
   ) {
-    console.warn(
-      `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} ageMs=${Date.now() - startedAt} rss=${rssMb()}MB reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
-    );
+    if (!sigtermIgnoredLogged) {
+      sigtermIgnoredLogged = true;
+      console.warn(
+        `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} n=${sigtermCount} firstAgeMs=${firstSigtermAt ? firstSigtermAt - startedAt : "-"} ageMs=${Date.now() - startedAt} rss=${rssMb()}MB reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
+      );
+    }
     return;
   }
 
   shuttingDown = true;
   const ageMs = Date.now() - startedAt;
   console.error(
-    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
+    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount}`,
   );
   logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
   clearLock();
@@ -395,7 +538,7 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (err) => {
   console.error("[hostinger] işlenmemiş promise (süreç açık kalıyor):", err);
 });
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGTERM", onSigterm);
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 function pinResolves(pinned) {
@@ -900,11 +1043,58 @@ let diagHeartbeatStarted = false;
 function startDiagHeartbeat() {
   if (diagHeartbeatStarted) return;
   diagHeartbeatStarted = true;
-  logLifecycleSnapshot("teşhis-30s");
   setInterval(() => {
     if (shuttingDown) return;
     logLifecycleSnapshot("teşhis-30s");
   }, 30_000).unref();
+}
+
+function becomePrimaryFromStandby() {
+  console.warn(
+    `[hostinger] yedek birincili devralıyor pid=${process.pid} (önceki birincil öldü)`,
+  );
+  writeLock(false);
+  watchPrimaryLock();
+  startSelfPing();
+  startNextAfterListen();
+}
+
+function runAsStandby() {
+  startDiagHeartbeat();
+  if (!Number.isFinite(standbyKeepMs) || standbyKeepMs <= 0) {
+    logLifecycleSnapshot("teşhis-yedek-çıkış");
+    setTimeout(() => process.exit(0), 400).unref();
+    return;
+  }
+  if (!claimStandbySlot()) {
+    logLifecycleSnapshot("teşhis-yedek-fazla");
+    process.exit(0);
+    return;
+  }
+  console.log(
+    `[hostinger] yedek bekliyor pid=${process.pid} keepMs=${standbyKeepMs}`,
+  );
+  const deadline = Date.now() + standbyKeepMs;
+  const poll = setInterval(() => {
+    if (shuttingDown) {
+      clearInterval(poll);
+      return;
+    }
+    const lock = readLockState();
+    if (!lock || !pidAlive(lock.pid)) {
+      clearInterval(poll);
+      clearStandbyIfUs();
+      becomePrimaryFromStandby();
+      return;
+    }
+    if (Date.now() >= deadline) {
+      clearInterval(poll);
+      clearStandbyIfUs();
+      logLifecycleSnapshot("teşhis-yedek-çıkış");
+      process.exit(0);
+    }
+  }, 500);
+  poll.unref();
 }
 
 /** Kilit bizde mi diye bak; başkası yaşayan sahipse fazlalığız. */
@@ -944,18 +1134,11 @@ function bindPublicPort() {
     console.log(
       `[hostinger] dinleniyor ${hostname}:${port} pid=${process.pid} rss=${rssMb()}MB ownLock=${ownLock} — ${ownLock ? "Next hazırlanıyor" : "yedek, Next yok"} (admin ${adminBasePath})`,
     );
-    startDiagHeartbeat();
     if (!ownLock) {
-      // 3 sn kuralı karşılandı; yaşayan birincili ezmeden çık.
-      setTimeout(() => {
-        if (shuttingDown) return;
-        console.warn(
-          `[hostinger] yedek çıkış pid=${process.pid} — ready birincil ayakta, Next yüklenmedi`,
-        );
-        process.exit(0);
-      }, 400).unref();
+      runAsStandby();
       return;
     }
+    startDiagHeartbeat();
     watchPrimaryLock();
     startSelfPing();
     startNextAfterListen();
@@ -995,6 +1178,7 @@ server.on("error", (err) => {
 // Akış: kilit dene → HER ZAMAN listen (3 sn) → kilit bizdeyse Next.
 warnBadEnv();
 logStartupProbe();
+startPpidWatch();
 console.log(
   `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version}`,
 );
