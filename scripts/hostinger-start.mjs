@@ -112,7 +112,9 @@ const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
 // ayakta kalır; ara süreçler debounce ile Next yüklemeden çıkar.
 const bootDebounceMs = Number(process.env.HOSTINGER_BOOT_DEBOUNCE_MS ?? "2000");
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
-const selfPingMs = Number(process.env.HOSTINGER_SELF_PING_MS ?? "8000");
+// Public self-ping LiteSpeed üzerinden yeni Node start tetikliyordu (özellikle
+// çok domainli trafikte). Varsayılan KAPALI. Açmak için örn. HOSTINGER_SELF_PING_MS=30000
+const selfPingMs = Number(process.env.HOSTINGER_SELF_PING_MS ?? "0");
 let shuttingDown = false;
 let nextBooted = false;
 let selfPingStarted = false;
@@ -1040,9 +1042,12 @@ function selfPing() {
 
 function startSelfPing() {
   if (selfPingStarted) return;
+  // 0 veya negatif = kapalı. Public URL ping'i yeni Node start fırtınası yaratıyordu.
+  if (!Number.isFinite(selfPingMs) || selfPingMs <= 0) {
+    vlog("[hostinger] self-ping kapalı (HOSTINGER_SELF_PING_MS<=0)");
+    return;
+  }
   selfPingStarted = true;
-  // Hostinger idle ~10-20 sn; 45 sn'lik ping süreci unutturuyordu.
-  // Listen anından itibaren sık ping — prepare sırasında da kayıt canlı kalsın.
   selfPing();
   setInterval(selfPing, selfPingMs).unref();
 }
