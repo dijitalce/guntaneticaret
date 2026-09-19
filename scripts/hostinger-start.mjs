@@ -106,9 +106,9 @@ const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") 
 const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
 const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
 /**
- * Lazy: proxy→fail→kendi Next; SIGTERM yok sayma yok.
- * Slot tavanı (MAX) + idle çıkış uygulanır (birikmeyi keser).
- * IDLE_MS yoksa KEEP>0 → KEEP; yoksa 60s. IDLE/KEEP=0 → idle çıkış kapalı.
+ * Lazy: proxy→fail→kendi Next; slot tavanı (MAX) + idle çıkış.
+ * Hazır birincil + kilit bizde → SIGTERM yok say (Hostinger recycle).
+ * Yedekler SIGTERM/idle/max ile çıkar. IDLE yoksa KEEP>0 → KEEP; yoksa 60s.
  */
 const lazyStandby = process.env.HOSTINGER_LAZY_STANDBY === "1";
 const useStandbyProxy = standbyProxy || lazyStandby;
@@ -658,10 +658,9 @@ function onSigint() {
 function shutdown(signal) {
   if (shuttingDown) return;
 
-  // Lazy modda SIGTERM yok sayma yok — yönetici kapatıyorsa graceful çık.
-  // Klasik modda: hazır birincil + kilit bizde → idle/recycle SIGTERM'i yok say.
+  // Hazır birincil + kilit bizde → Hostinger idle/recycle SIGTERM'ini yok say.
+  // (Lazy yedekler hâlâ çıkar; gerçek deploy’da kilit el değiştirince FAZLALIK yolu çalışır.)
   if (
-    !lazyStandby &&
     signal === "SIGTERM" &&
     sfHandler &&
     !bootFailed &&
