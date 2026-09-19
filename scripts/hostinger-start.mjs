@@ -31,12 +31,11 @@ function vwarn(...args) {
 
 const NodeModule = createRequire(import.meta.url)("module");
 
-// Hostinger: listen() genelde 3 sn içinde isteniyor — ama yalnızca BİRİNCİL
-// kilit alındıktan sonra dinleriz. Kilit doluysa Next yüklemeden ve
-// listen etmeden çıkarız (yaşayan birincili ezmemek için).
-// - /yonetim/* → admin paneli (subdomain gerekmez)
-// - admin.* host → ana site /yonetim’e yönlendir
-// - diğer her şey → vitrin
+// Bilinçli tasarım (Hostinger):
+// - listen() Next yüklemeden ÖNCE (3 sn kuralı) — kilit alınamasa bile dinle
+// - yaşayan ready birincilin kilidini ÇALMA
+// - hazır birincil, kilit kendindeyken SIGTERM'i yok say
+// - /yonetim/* → admin; admin.* → /yonetim; diğer → vitrin
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storefrontDir = join(root, "apps/storefront");
@@ -48,6 +47,10 @@ const adminBasePath = (process.env.ADMIN_BASE_PATH ?? "/yonetim").replace(/\/$/,
 const publicStoreUrl = (
   process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com"
 ).replace(/\/$/, "");
+const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
+const startedAt = Date.now();
+let requestsTotal = 0;
+let requestsInFlight = 0;
 
 const adminHost = (
   process.env.ADMIN_HOST ??
@@ -197,15 +200,14 @@ function pidAlive(pid) {
 
 /**
  * Yaşayan birincilin kilidini ASLA çalma.
- * Ölü PID / bozuk dosya → temizle ve al.
- * Alamazsan false — çağıran listen/Next yapmadan çıkmalı.
+ * Ölü PID → temizle ve al. Alamazsan false (yine de listen edilir).
  */
 function claimPrimaryLock() {
   for (let i = 0; i < 8; i++) {
     const existing = readLockState();
     if (existing && pidAlive(existing.pid)) {
       console.warn(
-        `[hostinger] kilit dolu — yaşayan birincil pid=${existing.pid} ready=${existing.ready} ageMs=${existing.t ? Date.now() - existing.t : "?"} — bu süreç çıkıyor (pid=${process.pid} port=${port})`,
+        `[hostinger] kilit dolu — yaşayan birincil pid=${existing.pid} ready=${existing.ready} ageMs=${existing.t ? Date.now() - existing.t : "?"} — yedek olacağız (pid=${process.pid} port=${port})`,
       );
       return false;
     }
@@ -233,23 +235,138 @@ function claimPrimaryLock() {
     } catch (err) {
       if (err?.code !== "EEXIST") {
         console.warn("[hostinger] kilit hatası:", err instanceof Error ? err.message : err);
-        // tmp yazılamıyorsa tek süreç varsay — devam et
         return true;
       }
-      // yarış: kısa bekle, tekrar
     }
   }
-  console.warn(`[hostinger] kilit alınamadı pid=${process.pid} — çıkılıyor`);
+  console.warn(`[hostinger] kilit alınamadı pid=${process.pid} — yedek olacağız`);
   return false;
 }
 
-function shutdown(signal) {
-  // SIGTERM her zaman kontrollü kapanış — yok sayma (platform yöneticisiyle çatışmasın).
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.error(
-    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} rss=${rssMb()}MB sf=${Boolean(sfHandler)}`,
+/**
+ * listen sonrası kilit yenileme.
+ * Yaşayan ready sahibi varken EZME. Yok / ölü / bootStuck → yaz.
+ * @returns {boolean} bu süreç kilit sahibi mi
+ */
+function tryAdoptLockOnListen() {
+  const existing = readLockState();
+  if (!existing) {
+    writeLock(false);
+    return true;
+  }
+  if (existing.pid === process.pid) {
+    writeLock(Boolean(sfHandler));
+    return true;
+  }
+  if (!pidAlive(existing.pid)) {
+    console.log(
+      `[hostinger] listen: ölü sahip pid=${existing.pid} — kilit alınıyor pid=${process.pid}`,
+    );
+    writeLock(false);
+    return true;
+  }
+  if (existing.ready) {
+    console.warn(
+      `[hostinger] listen: yaşayan ready birincil pid=${existing.pid} — kilit ezilmedi (biz=${process.pid})`,
+    );
+    return false;
+  }
+  const age = Date.now() - (existing.t || 0);
+  if (age > bootStuckMs) {
+    console.warn(
+      `[hostinger] listen: bootStuck birincil pid=${existing.pid} ageMs=${age} — kilit devralınıyor (biz=${process.pid})`,
+    );
+    writeLock(false);
+    return true;
+  }
+  console.warn(
+    `[hostinger] listen: soğuk birincil pid=${existing.pid} ageMs=${age} — kilit ezilmedi (biz=${process.pid})`,
   );
+  return false;
+}
+
+function readProcCmdline(pid) {
+  try {
+    return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " ").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function platformEnvNames() {
+  const re = /passenger|lsapi|litespeed|openlitespeed|phusion|hostinger|lsnode|nodejs/i;
+  return Object.keys(process.env)
+    .filter((k) => re.test(k))
+    .sort();
+}
+
+function readCgroupMemory() {
+  const out = { max: null, current: null };
+  for (const base of ["/sys/fs/cgroup", "/sys/fs/cgroup/memory"]) {
+    try {
+      const maxPath = join(base, "memory.max");
+      const curPath = join(base, "memory.current");
+      if (fs.existsSync(maxPath)) out.max = fs.readFileSync(maxPath, "utf8").trim();
+      if (fs.existsSync(curPath)) out.current = fs.readFileSync(curPath, "utf8").trim();
+      if (out.max || out.current) return out;
+    } catch {
+      /* */
+    }
+    try {
+      const lim = join(base, "memory.limit_in_bytes");
+      const usage = join(base, "memory.usage_in_bytes");
+      if (fs.existsSync(lim)) out.max = fs.readFileSync(lim, "utf8").trim();
+      if (fs.existsSync(usage)) out.current = fs.readFileSync(usage, "utf8").trim();
+      if (out.max || out.current) return out;
+    } catch {
+      /* */
+    }
+  }
+  return out;
+}
+
+function logStartupProbe() {
+  const ppid = process.ppid;
+  const parentCmd = ppid ? readProcCmdline(ppid) : null;
+  console.log(
+    `[hostinger] teşhis-start pid=${process.pid} ppid=${ppid} parentCmd=${parentCmd ?? "n/a"} argv=${JSON.stringify(process.argv)} port=${port} node=${process.version}`,
+  );
+  console.log(
+    `[hostinger] teşhis-env-adları ${platformEnvNames().join(",") || "(yok)"}`,
+  );
+}
+
+function logLifecycleSnapshot(tag) {
+  const lock = readLockState();
+  const cg = readCgroupMemory();
+  const uptimeMs = Date.now() - startedAt;
+  console.log(
+    `[hostinger] ${tag} pid=${process.pid} uptimeMs=${uptimeMs} reqTotal=${requestsTotal} reqInFlight=${requestsInFlight} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"} rssMB=${rssMb()} freeMB=${Math.round(os.freemem() / 1024 / 1024)} cgroupMax=${cg.max ?? "-"} cgroupCur=${cg.current ?? "-"}`,
+  );
+}
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+
+  // Hazır birincil + kilit bizde → idle/recycle SIGTERM'i yok say (bilinçli tasarım).
+  if (
+    signal === "SIGTERM" &&
+    sfHandler &&
+    !bootFailed &&
+    readLockPid() === process.pid
+  ) {
+    console.warn(
+      `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} ageMs=${Date.now() - startedAt} rss=${rssMb()}MB reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
+    );
+    return;
+  }
+
+  shuttingDown = true;
+  const ageMs = Date.now() - startedAt;
+  console.error(
+    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight}`,
+  );
+  logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
   clearLock();
   try {
     httpServer?.close(() => {
@@ -259,7 +376,6 @@ function shutdown(signal) {
   } catch {
     process.exit(0);
   }
-  // prepare bitmemişse bekleyen isteklere kısa tolerans; hazırsa 5sn drain
   if (!sfHandler && !bootFailed) {
     const deadline = Date.now() + 10_000;
     const poll = setInterval(() => {
@@ -724,6 +840,13 @@ async function routeRequest(req, res) {
 }
 
 const server = createServer((req, res) => {
+  requestsTotal += 1;
+  requestsInFlight += 1;
+  const done = () => {
+    requestsInFlight = Math.max(0, requestsInFlight - 1);
+  };
+  res.on("finish", done);
+  res.on("close", done);
   routeRequest(req, res).catch((err) => {
     console.error("[hostinger] istek hatası:", err);
     if (!res.headersSent) {
@@ -743,7 +866,7 @@ function startNextAfterListen() {
   nextBooted = true;
   if (readLockPid() !== process.pid) {
     console.warn(
-      `[hostinger] boot iptal — kilit bizde değil pid=${process.pid} sahip=${readLockPid()}`,
+      `[hostinger] boot iptal — kilit bizde değil pid=${process.pid} sahip=${readLockPid()} (Next yüklenmiyor)`,
     );
     shutdown("FAZLALIK_SÜREÇ");
     return;
@@ -772,6 +895,17 @@ function probeLocalHealth() {
 }
 
 let primaryWatchStarted = false;
+let diagHeartbeatStarted = false;
+
+function startDiagHeartbeat() {
+  if (diagHeartbeatStarted) return;
+  diagHeartbeatStarted = true;
+  logLifecycleSnapshot("teşhis-30s");
+  setInterval(() => {
+    if (shuttingDown) return;
+    logLifecycleSnapshot("teşhis-30s");
+  }, 30_000).unref();
+}
 
 /** Kilit bizde mi diye bak; başkası yaşayan sahipse fazlalığız. */
 function watchPrimaryLock() {
@@ -781,7 +915,6 @@ function watchPrimaryLock() {
     if (shuttingDown) return;
     const current = readLockState();
     if (!current) {
-      // dosya silinmiş — birincil olarak yeniden yaz
       writeLock(Boolean(sfHandler));
       console.warn(`[hostinger] kilit dosyası yoktu, yenilendi pid=${process.pid}`);
       return;
@@ -803,20 +936,26 @@ function watchPrimaryLock() {
 
 function bindPublicPort() {
   if (shuttingDown || server.listening) return;
-  if (readLockPid() !== process.pid) {
-    console.warn(
-      `[hostinger] listen iptal — kilit pid=${readLockPid()} (biz=${process.pid})`,
-    );
-    process.exit(0);
-    return;
-  }
+  // Hostinger 3 sn: her zaman dinle (kilit alınamasa bile).
   server.listen({ port, host: hostname, exclusive: true }, () => {
     bindAttempts = 0;
     parked = false;
-    writeLock(Boolean(sfHandler));
+    const ownLock = tryAdoptLockOnListen();
     console.log(
-      `[hostinger] dinleniyor ${hostname}:${port} pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin ${adminBasePath})`,
+      `[hostinger] dinleniyor ${hostname}:${port} pid=${process.pid} rss=${rssMb()}MB ownLock=${ownLock} — ${ownLock ? "Next hazırlanıyor" : "yedek, Next yok"} (admin ${adminBasePath})`,
     );
+    startDiagHeartbeat();
+    if (!ownLock) {
+      // 3 sn kuralı karşılandı; yaşayan birincili ezmeden çık.
+      setTimeout(() => {
+        if (shuttingDown) return;
+        console.warn(
+          `[hostinger] yedek çıkış pid=${process.pid} — ready birincil ayakta, Next yüklenmedi`,
+        );
+        process.exit(0);
+      }, 400).unref();
+      return;
+    }
     watchPrimaryLock();
     startSelfPing();
     startNextAfterListen();
@@ -833,16 +972,13 @@ server.on("error", (err) => {
     probeLocalHealth().then((healthy) => {
       if (shuttingDown) return;
       if (healthy) {
-        // Yaşayan birincili öldürme — port zaten hizmet veriyor.
         console.warn(
-          `[hostinger] ${port} yanıt veriyor — birincil kilidimiz var ama port dolu; kilidi bırakıp çıkıyoruz pid=${process.pid}`,
+          `[hostinger] ${port} yanıt veriyor — yedek pid=${process.pid} çıkıyor (birincil ayakta)`,
         );
-        clearLock();
         process.exit(0);
       }
       if (bindAttempts > 10) {
         console.error(`[hostinger] ${port} alınamadı pid=${process.pid}`);
-        clearLock();
         process.exit(1);
       }
       console.warn(
@@ -853,20 +989,19 @@ server.on("error", (err) => {
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
-  clearLock();
   process.exit(1);
 });
 
-// Akış: kilit al → alamazsan HİÇ dinleme/Next yok → alırsan listen + prepare.
+// Akış: kilit dene → HER ZAMAN listen (3 sn) → kilit bizdeyse Next.
 warnBadEnv();
+logStartupProbe();
 console.log(
   `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version}`,
 );
 if (!claimPrimaryLock()) {
   console.warn(
-    `[hostinger] yedek çıkış pid=${process.pid} — yaşayan birincil var, listen/Next yok`,
+    `[hostinger] yedek pid=${process.pid} — listen edilecek, yaşayan birincil kilidi ezilmeyecek`,
   );
-  process.exit(0);
 }
 bindPublicPort();
 
