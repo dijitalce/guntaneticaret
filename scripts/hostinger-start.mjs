@@ -31,7 +31,9 @@ function vwarn(...args) {
 
 const NodeModule = createRequire(import.meta.url)("module");
 
-// Hostinger: listen() 3 sn içinde çağrılmalı. Next'i listen'den SONRA yükle.
+// Hostinger: listen() genelde 3 sn içinde isteniyor — ama yalnızca BİRİNCİL
+// kilit alındıktan sonra dinleriz. Kilit doluysa Next yüklemeden ve
+// listen etmeden çıkarız (yaşayan birincili ezmemek için).
 // - /yonetim/* → admin paneli (subdomain gerekmez)
 // - admin.* host → ana site /yonetim’e yönlendir
 // - diğer her şey → vitrin
@@ -40,7 +42,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const storefrontDir = join(root, "apps/storefront");
 const adminDir = join(root, "apps/admin");
 
-const port = Number(process.env.PORT ?? "3000");
+const port = Number(process.env.PORT || 3000);
 const hostname = "0.0.0.0";
 const adminBasePath = (process.env.ADMIN_BASE_PATH ?? "/yonetim").replace(/\/$/, "") || "/yonetim";
 const publicStoreUrl = (
@@ -76,7 +78,7 @@ function rssMb() {
   return Math.round(process.memoryUsage().rss / 1024 / 1024);
 }
 
-/** Hostinger output dir (.next) izlerse cache yazmak SIGTERM + restart tetikler. */
+/** Hostinger output dir (.next) izlerse cache yazmak restart tetikleyebilir. */
 function redirectNextWritable(appDir, label) {
   const nextDir = join(appDir, ".next");
   if (!fs.existsSync(nextDir)) return;
@@ -87,12 +89,11 @@ function redirectNextWritable(appDir, label) {
     fs.mkdirSync(tmpPath, { recursive: true });
     try {
       const st = fs.lstatSync(appPath);
-      if (st.isSymbolicLink()) {
-        if (fs.readlinkSync(appPath) === tmpPath) continue;
-        fs.unlinkSync(appPath);
-      } else {
-        fs.rmSync(appPath, { recursive: true, force: true });
+      if (st.isSymbolicLink() && fs.readlinkSync(appPath) === tmpPath) {
+        continue; // zaten doğru — sessiz
       }
+      if (st.isSymbolicLink()) fs.unlinkSync(appPath);
+      else fs.rmSync(appPath, { recursive: true, force: true });
     } catch {
       /* yok */
     }
@@ -106,14 +107,7 @@ function redirectNextWritable(appDir, label) {
 }
 
 const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
-// Hostinger sık sık paralel start açıyor. Listen hemen kilidi çalınca hazır
-// vitrin süreci, henüz soğuk olan yenisi yüzünden FAZLALIK diye ölüyordu.
-// Kilit artık {pid, ready, t} — eski hazır süreç, yenisi ready olana kadar
-// ayakta kalır; ara süreçler debounce ile Next yüklemeden çıkar.
-const bootDebounceMs = Number(process.env.HOSTINGER_BOOT_DEBOUNCE_MS ?? "2000");
-const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
-// Public self-ping LiteSpeed üzerinden yeni Node start tetikliyordu (özellikle
-// çok domainli trafikte). Varsayılan KAPALI. Açmak için örn. HOSTINGER_SELF_PING_MS=30000
+// Public self-ping LiteSpeed üzerinden yeni Node start tetikleyebiliyor. Varsayılan KAPALI.
 const selfPingMs = Number(process.env.HOSTINGER_SELF_PING_MS ?? "0");
 let shuttingDown = false;
 let nextBooted = false;
@@ -155,7 +149,6 @@ function readLockState() {
     }
     const pid = Number(raw);
     if (!Number.isInteger(pid) || pid <= 0) return null;
-    // Eski düz-pid formatı: hazır kabul et (geriye dönük).
     return { pid, ready: true, t: 0 };
   } catch {
     return null;
@@ -173,14 +166,20 @@ function writeLock(ready = false) {
       pidFile,
       JSON.stringify({ pid: process.pid, ready: lockReady, t: Date.now() }),
     );
-  } catch {
-    /* tmp yazılamazsa devam */
+  } catch (err) {
+    console.warn(
+      `[hostinger] kilit yazılamadı pid=${process.pid}:`,
+      err instanceof Error ? err.message : err,
+    );
   }
 }
 
 function clearLock() {
   try {
-    if (readLockPid() === process.pid) fs.unlinkSync(pidFile);
+    if (readLockPid() === process.pid) {
+      fs.unlinkSync(pidFile);
+      console.log(`[hostinger] kilit bırakıldı pid=${process.pid}`);
+    }
   } catch {
     /* */
   }
@@ -196,8 +195,30 @@ function pidAlive(pid) {
   }
 }
 
+/**
+ * Yaşayan birincilin kilidini ASLA çalma.
+ * Ölü PID / bozuk dosya → temizle ve al.
+ * Alamazsan false — çağıran listen/Next yapmadan çıkmalı.
+ */
 function claimPrimaryLock() {
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
+    const existing = readLockState();
+    if (existing && pidAlive(existing.pid)) {
+      console.warn(
+        `[hostinger] kilit dolu — yaşayan birincil pid=${existing.pid} ready=${existing.ready} ageMs=${existing.t ? Date.now() - existing.t : "?"} — bu süreç çıkıyor (pid=${process.pid} port=${port})`,
+      );
+      return false;
+    }
+    if (existing) {
+      try {
+        fs.unlinkSync(pidFile);
+        console.log(
+          `[hostinger] ölü kilit temizlendi eskiPid=${existing.pid} yeniPid=${process.pid}`,
+        );
+      } catch {
+        /* */
+      }
+    }
     try {
       const fd = fs.openSync(pidFile, "wx");
       fs.writeFileSync(
@@ -205,100 +226,45 @@ function claimPrimaryLock() {
         JSON.stringify({ pid: process.pid, ready: false, t: Date.now() }),
       );
       fs.closeSync(fd);
-      console.log(`[hostinger] birincil kilit pid=${process.pid}`);
+      console.log(
+        `[hostinger] birincil kilit alındı pid=${process.pid} port=${port} rss=${rssMb()}MB`,
+      );
       return true;
     } catch (err) {
       if (err?.code !== "EEXIST") {
-        console.warn("[hostinger] kilit atlandı:", err instanceof Error ? err.message : err);
+        console.warn("[hostinger] kilit hatası:", err instanceof Error ? err.message : err);
+        // tmp yazılamıyorsa tek süreç varsay — devam et
         return true;
       }
-      const prev = readLockPid();
-      if (pidAlive(prev)) {
-        vwarn(`[hostinger] kilit dolu pid=${prev} — birincil ayakta, bu süreç yedek`);
-        return false;
-      }
-      try {
-        fs.unlinkSync(pidFile);
-      } catch {
-        /* */
-      }
+      // yarış: kısa bekle, tekrar
     }
   }
-  return true;
-}
-
-function requestPreviousToYield() {
-  const prev = readLockPid();
-  if (!pidAlive(prev)) {
-    try {
-      if (prev) fs.unlinkSync(pidFile);
-    } catch {
-      /* */
-    }
-    return;
-  }
-  console.warn(`[hostinger] pid=${process.pid} birincil ${prev} yerini alıyor`);
-  try {
-    // Hazır birincil SIGTERM'i yok sayabiliyor; zorla çıkar.
-    process.kill(prev, "SIGKILL");
-  } catch {
-    /* */
-  }
+  console.warn(`[hostinger] kilit alınamadı pid=${process.pid} — çıkılıyor`);
+  return false;
 }
 
 function shutdown(signal) {
+  // SIGTERM her zaman kontrollü kapanış — yok sayma (platform yöneticisiyle çatışmasın).
   if (shuttingDown) return;
-
-  // Idle recycle: Hostinger hazır birincile tek başına SIGTERM atıyor.
-  // Kilit hâlâ bizdeyse yok say — süreç ayakta kalsın, sonraki istek
-  // soğuk start açmasın.
-  //
-  // Yerine geçme: önce yeni süreç kilidi çalar, sonra SIGTERM gelir →
-  // kilidi kaybetmişsek kabul et (yeni Hostinger işçisi odur; eskiyi
-  // zorla ayakta tutup yeniyi FAZLALIK ile öldürmek spawn fırtınası yaptı).
-  if (
-    signal === "SIGTERM" &&
-    sfHandler &&
-    !bootFailed &&
-    readLockPid() === process.pid
-  ) {
-    console.warn(
-      `[hostinger] SIGTERM yok sayıldı (hazır birincil, kilit bizde) pid=${process.pid} rss=${rssMb()}MB`,
-    );
-    return;
-  }
-
   shuttingDown = true;
-  console.error(`[hostinger] ${signal} pid=${process.pid} rss=${rssMb()}MB — nazikçe kapanıyor`);
+  console.error(
+    `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} rss=${rssMb()}MB sf=${Boolean(sfHandler)}`,
+  );
   clearLock();
   try {
     httpServer?.close(() => {
-      vlog(`[hostinger] ${signal} sonrası soket kapandı pid=${process.pid}`);
+      console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${signal}`);
       process.exit(0);
     });
   } catch {
     process.exit(0);
   }
-  // .close() portu hemen bırakır (yeni süreç dinlemeye başlayabilir); bu süre
-  // sadece hâlâ devam eden isteklerin (yoğunluk anında yavaşlamış olabilir)
-  // yarıda kesilmeden bitmesi için tanınan ek tolerans. 2sn bazı yavaş
-  // isteklerin ortasında kesilmesine (504/bağlantı sıfırlama gibi görünen
-  // hatalara) yol açabiliyordu.
-  //
-  // Loglarda bazı süreçlerin "vitrin hazır" olmadan (Next.js prepare()
-  // bitmeden) SIGTERM aldığı görüldü. O anda o sürece denk gelmiş bir istek
-  // varsa, cevabı sfHandler'ın hazır olmasına bağlı — sabit 5sn bazen
-  // prepare()'in bitmesine yetmeyip isteği bağlantı-sıfırlama ile
-  // kesebiliyordu. Bu yüzden prepare() hâlâ bitmemişse, hazır olur olmaz
-  // (waiters'a cevap gitsin diye) biraz daha bekleyip çıkıyoruz; normal
-  // durumda (zaten hazırsa) eski 5sn tolerans değişmiyor.
+  // prepare bitmemişse bekleyen isteklere kısa tolerans; hazırsa 5sn drain
   if (!sfHandler && !bootFailed) {
     const deadline = Date.now() + 10_000;
     const poll = setInterval(() => {
       if (sfHandler || bootFailed || Date.now() >= deadline) {
         clearInterval(poll);
-        // sfHandler artık hazırsa bekleyen isteklerin cevabı gitmesi için
-        // bir sonraki tick'e kadar tanı, sonra kapan.
         setTimeout(() => process.exit(0), sfHandler ? 250 : 0);
       }
     }, 200).unref();
@@ -775,25 +741,17 @@ let parked = false;
 function startNextAfterListen() {
   if (nextBooted) return;
   nextBooted = true;
-  // Paralel start'larda son yazan kilit sahibi kalır; ara süreçler
-  // pahalı prepare()'e girmeden çıksın.
-  const bootTimer = setTimeout(() => {
-    if (shuttingDown) return;
-    const lock = readLockState();
-    if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) {
-      console.warn(
-        `[hostinger] pid=${process.pid} boot iptal — kilit pid=${lock.pid}'de (Next yüklenmeden çıkılıyor)`,
-      );
-      shutdown("FAZLALIK_SÜREÇ");
-      return;
-    }
-    if (!lock || lock.pid !== process.pid) writeLock(false);
-    bootNext().catch((err) => {
-      console.error("[hostinger] Next başlatılamadı:", err);
-      notifyBootFailed();
-    });
-  }, bootDebounceMs);
-  bootTimer.unref();
+  if (readLockPid() !== process.pid) {
+    console.warn(
+      `[hostinger] boot iptal — kilit bizde değil pid=${process.pid} sahip=${readLockPid()}`,
+    );
+    shutdown("FAZLALIK_SÜREÇ");
+    return;
+  }
+  bootNext().catch((err) => {
+    console.error("[hostinger] Next başlatılamadı:", err);
+    notifyBootFailed();
+  });
 }
 
 function probeLocalHealth() {
@@ -815,15 +773,7 @@ function probeLocalHealth() {
 
 let primaryWatchStarted = false;
 
-/**
- * Hostinger'da bazı ortamlarda listen() ÇAKIŞMADAN (EADDRINUSE hiç
- * görünmeden) hep başarılı oluyor — muhtemelen her yeni süreç kendi
- * yalıtılmış ağ görünümünde portu boş görüyor. Bu durumda eski süreç
- * gerçekte hâlâ ayakta ve trafik almıyor olsa bile kimse ona SIGTERM
- * göndermiyor; sadece kilit dosyasını izleyip "ben artık kilidin
- * sahibi değilim ve kilidin gerçek sahibi hayatta" olduğunu fark eden
- * bu bekçi, süreci düzgünce kapatıp biriken "hayalet" kopyaları temizler.
- */
+/** Kilit bizde mi diye bak; başkası yaşayan sahipse fazlalığız. */
 function watchPrimaryLock() {
   if (primaryWatchStarted) return;
   primaryWatchStarted = true;
@@ -831,44 +781,41 @@ function watchPrimaryLock() {
     if (shuttingDown) return;
     const current = readLockState();
     if (!current) {
-      if (sfHandler) writeLock(true);
+      // dosya silinmiş — birincil olarak yeniden yaz
+      writeLock(Boolean(sfHandler));
+      console.warn(`[hostinger] kilit dosyası yoktu, yenilendi pid=${process.pid}`);
       return;
     }
     if (current.pid === process.pid) return;
     if (!pidAlive(current.pid)) {
       writeLock(Boolean(sfHandler));
       console.log(
-        `[hostinger] pid=${process.pid} kilit geri alındı (eski pid=${current.pid} öldü) ready=${Boolean(sfHandler)}`,
-      );
-      return;
-    }
-
-    // Başka süreç kilitte ve hayatta = Hostinger'ın yeni işçisi.
-    // Kilidi GERİ ALMA — yeniyi FAZLALIK ile öldürmek spawn fırtınası
-    // yaratıyordu (Hostinger sürekli yeni süreç açıp biz çıkarıyorduk).
-    // Yenisi hazır olunca (veya takılı kalırsa) eski/fazla süreç çıksın.
-    const age = Date.now() - (current.t || 0);
-    if (!current.ready && age < bootStuckMs) {
-      vlog(
-        `[hostinger] pid=${process.pid} yeni birincil pid=${current.pid} hazır değil — bekleniyor`,
+        `[hostinger] ölü sahip pid=${current.pid} — kilit yenilendi pid=${process.pid}`,
       );
       return;
     }
     console.warn(
-      `[hostinger] pid=${process.pid} kilit artık pid=${current.pid}'e ait ve o süreç hayatta — bu süreç fazlalık, kapanıyor`,
+      `[hostinger] kilit başkasında pid=${current.pid} (biz=${process.pid}) — FAZLALIK, kapanıyor`,
     );
     shutdown("FAZLALIK_SÜREÇ");
-  }, 2_000).unref();
+  }, 5_000).unref();
 }
 
 function bindPublicPort() {
   if (shuttingDown || server.listening) return;
+  if (readLockPid() !== process.pid) {
+    console.warn(
+      `[hostinger] listen iptal — kilit pid=${readLockPid()} (biz=${process.pid})`,
+    );
+    process.exit(0);
+    return;
+  }
   server.listen({ port, host: hostname, exclusive: true }, () => {
     bindAttempts = 0;
     parked = false;
-    writeLock(false);
+    writeLock(Boolean(sfHandler));
     console.log(
-      `[hostinger] ${hostname}:${port} dinleniyor pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin path ${adminBasePath})`,
+      `[hostinger] dinleniyor ${hostname}:${port} pid=${process.pid} rss=${rssMb()}MB — Next hazırlanıyor (admin ${adminBasePath})`,
     );
     watchPrimaryLock();
     startSelfPing();
@@ -879,9 +826,6 @@ function bindPublicPort() {
 server.on("error", (err) => {
   if (err?.code === "EADDRINUSE") {
     bindAttempts += 1;
-    // Hostinger bazen eski sürece SIGTERM ile yeni start'ı aynı anda yollar.
-    // 400ms bekleyip tekrar dinlemek, kapanmakta olan birincilin portu
-    // bırakmasına izin verir — hemen çıkmak portu boş bırakırdı.
     if (bindAttempts === 1) {
       setTimeout(bindPublicPort, 400);
       return;
@@ -889,38 +833,40 @@ server.on("error", (err) => {
     probeLocalHealth().then((healthy) => {
       if (shuttingDown) return;
       if (healthy) {
-        // Hostinger sık sık ikinci bir start süreci açıyor. Eski kod bunu
-        // görünce sağlıklı birincili SIGTERM ile öldürüyordu — kullanıcıya
-        // "site çalışmıyor" olarak yansıyan sürekli soğuk başlangıç.
-        vwarn(
-          `[hostinger] ${port} yanıt veriyor — yedek pid=${process.pid} çıkıyor (birincil ayakta)`,
+        // Yaşayan birincili öldürme — port zaten hizmet veriyor.
+        console.warn(
+          `[hostinger] ${port} yanıt veriyor — birincil kilidimiz var ama port dolu; kilidi bırakıp çıkıyoruz pid=${process.pid}`,
         );
+        clearLock();
         process.exit(0);
       }
-      if (bindAttempts > 20) {
+      if (bindAttempts > 10) {
         console.error(`[hostinger] ${port} alınamadı pid=${process.pid}`);
+        clearLock();
         process.exit(1);
       }
       console.warn(
-        `[hostinger] ${port} dolu ama yanıtsız (deneme ${bindAttempts}) — eski süreç sonlandırılıyor`,
+        `[hostinger] ${port} dolu/yanıtsız deneme=${bindAttempts} pid=${process.pid} — tekrar`,
       );
-      requestPreviousToYield();
-      setTimeout(bindPublicPort, 150);
+      setTimeout(bindPublicPort, 300);
     });
     return;
   }
   console.error("[hostinger] sunucu hatası:", err);
+  clearLock();
   process.exit(1);
 });
 
-// Hostinger reverse-proxy, listen() yapılan porta bağlanır. Rastgele porta
-// dummy listen yapmak "Site açılıyor" sayfasında kilitlenmeye yol açtı.
-// Bu süreç Hostinger'ın başlattığı süreçse PORT'u almak zorunda.
+// Akış: kilit al → alamazsan HİÇ dinleme/Next yok → alırsan listen + prepare.
 warnBadEnv();
+console.log(
+  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version}`,
+);
 if (!claimPrimaryLock()) {
-  vwarn(
-    `[hostinger] pid=${process.pid} yedek — sağlıklı birincili öldürmeden porta bağlanmayı deneyecek`,
+  console.warn(
+    `[hostinger] yedek çıkış pid=${process.pid} — yaşayan birincil var, listen/Next yok`,
   );
+  process.exit(0);
 }
 bindPublicPort();
 
@@ -972,11 +918,9 @@ async function bootNext() {
   });
 
   await storefront.prepare();
-  // Debounce sırasında daha yeni bir süreç kilidi almış olabilir.
-  const lock = readLockState();
-  if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) {
+  if (readLockPid() !== process.pid) {
     console.warn(
-      `[hostinger] pid=${process.pid} prepare bitti ama kilit pid=${lock.pid}'de — fazlalık, kapanıyor`,
+      `[hostinger] prepare bitti ama kilit bizde değil pid=${process.pid} sahip=${readLockPid()} — çıkılıyor`,
     );
     sfHandler = null;
     shutdown("FAZLALIK_SÜREÇ");
@@ -985,7 +929,9 @@ async function bootNext() {
   sfHandler = storefront.getRequestHandler();
   writeLock(true);
   notifyReady("sf");
-  console.log(`[hostinger] vitrin hazır pid=${process.pid} rss=${rssMb()}MB`);
+  console.log(
+    `[hostinger] vitrin hazır pid=${process.pid} port=${port} rss=${rssMb()}MB`,
+  );
 
   if (!adminBuildReady) {
     console.warn(
@@ -996,17 +942,12 @@ async function bootNext() {
   }
 
   setInterval(() => {
-    console.log(`[hostinger] canlı pid=${process.pid} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)}`);
+    const lock = readLockState();
+    console.log(
+      `[hostinger] canlı pid=${process.pid} port=${port} rss=${rssMb()}MB sf=${Boolean(sfHandler)} admin=${Boolean(adminHandler)} kilitPid=${lock?.pid ?? "-"} kilitReady=${lock?.ready ?? "-"}`,
+    );
   }, 120_000).unref();
 
-  // Son loglarda rss ~225-226MB'a değince Hostinger'ın kendisi süreci
-  // durduruyordu (bazen SIGTERM ile, bazen hiç log bırakmadan doğrudan
-  // SIGKILL ile — muhtemelen bu Node app slotu için ayrılan bellek
-  // tavanına (cgroup limiti) çok yaklaşınca). Platform bize fırsat
-  // vermeden kesmeden ÖNCE, kendi kontrolümüzde, temiz bir şekilde
-  // kilidi bırakıp çıkalım ki Hostinger'ın "3 sn içinde listen()"
-  // beklentisini bozan ani/sessiz ölümler yerine öngörülebilir,
-  // loglanan bir devir teslim olsun.
   setInterval(checkMemoryCeiling, 8_000).unref();
 }
 
