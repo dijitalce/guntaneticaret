@@ -693,6 +693,8 @@ function shutdown(signal) {
 
   const graceMs = yieldingPrimary ? 1200 : signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
 
+  if (!sfHandler && !bootFailed) notifyBootFailed();
+
   try {
     httpServer?.close(() => {
       console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${exitReason}`);
@@ -2306,7 +2308,7 @@ function runAsStandby() {
           exitLazyStandby("yedek-fazla");
         }
       }
-    }, 1000).unref();
+    }, 250).unref();
     return;
   }
 
