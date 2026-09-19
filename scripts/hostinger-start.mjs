@@ -367,7 +367,13 @@ function pruneStandbyPids() {
 
 /** @returns {boolean} slot alındı mı */
 function claimStandbySlot() {
-  const alive = pruneStandbyPids();
+  let alive = pruneStandbyPids();
+  // Birincil yanlışlıkla listede kaldıysa slot hesabından düş.
+  const lockPid = readLockPid();
+  if (lockPid && lockPid !== process.pid && alive.includes(lockPid)) {
+    alive = alive.filter((p) => p !== lockPid);
+    writeStandbyPids(alive);
+  }
   if (alive.includes(process.pid)) return true;
   if (alive.length >= standbyMax) {
     console.warn(
@@ -1525,12 +1531,19 @@ function proxyToPrimary(req, res) {
           return;
         }
         const code = errCode || (typeof reason === "string" && reason.includes("ECONNRESET") ? "ECONNRESET" : null);
+        const retryableUnix =
+          code === "ECONNRESET" ||
+          code === "ECONNREFUSED" ||
+          code === "ENOENT" ||
+          code === "EPIPE" ||
+          code === "ENOTCONN" ||
+          /ECONNRESET|ECONNREFUSED|ENOENT|EPIPE|ENOTCONN/.test(String(reason));
         const canRetryTcp =
           !headersWritten &&
           !res.headersSent &&
           viaUsed === "unix" &&
           (req.method === "GET" || req.method === "HEAD") &&
-          (code === "ECONNRESET" || code === "ECONNREFUSED" || String(reason).includes("ECONNRESET") || String(reason).includes("ECONNREFUSED")) &&
+          retryableUnix &&
           (ep.tcpPort || ep.port);
 
         if (canRetryTcp) {
@@ -1828,12 +1841,23 @@ async function routeRequest(req, res) {
       lock &&
       lock.pid !== process.pid &&
       pidAlive(lock.pid);
+    const primaryAliveReady = Boolean(primaryAlive && lock.ready);
     // ready olmasa da erken sock için bir kez dene
     const shouldProxy = primaryAlive && (lock.ready || lazyStandby);
 
     if (shouldProxy) {
-      const ok = await proxyToPrimary(req, res);
+      let ok = await proxyToPrimary(req, res);
       if (ok || res.headersSent || res.writableEnded) return;
+      // Geçici unix/ENOENT: kısa bekleyip bir kez daha dene (self-boot fırtınası önlemi)
+      if (lazyStandby && primaryAliveReady) {
+        await new Promise((r) => {
+          const t = setTimeout(r, 80);
+          t.unref?.();
+        });
+        if (shuttingDown || res.writableEnded) return;
+        ok = await proxyToPrimary(req, res);
+        if (ok || res.headersSent || res.writableEnded) return;
+      }
       if (!lazyStandby) {
         sendProxyFailure(req, res, pathOnly);
         return;
@@ -1844,6 +1868,13 @@ async function routeRequest(req, res) {
       // Kilit sahibi veya boot sürüyorsa self-boot YOK — mevcut promise'i bekle.
       if (readLockPid() === process.pid || bootNextPromise) {
         await ensureBootNext("route-lock-owner");
+      } else if (primaryAliveReady) {
+        // Hazır birincil yaşıyor — ikinci Next yükleme (sock/kilit çalma) YASAK.
+        console.warn(
+          `[hostinger] proxy-fail self-boot yok primary=${lock.pid} alive — 503 pid=${process.pid}`,
+        );
+        sendLazy503(req, res, pathOnly);
+        return;
       } else {
         await ensureStandbySelfBoot();
       }
@@ -2111,6 +2142,7 @@ function ensureStandbySelfBoot() {
       pidAlive(lock.pid);
 
     if (!primaryAliveReady) {
+      removeStandbyPid(process.pid);
       writeLock(false);
       isPrimaryProcess = true;
       isStandbyMode = false;
@@ -2153,11 +2185,13 @@ function ensureStandbySelfBoot() {
         after.ready;
 
       if (!stillSecondary) {
+        removeStandbyPid(process.pid);
         if (readLockPid() !== process.pid) writeLock(false);
         writeLock(true);
         isPrimaryProcess = true;
         isStandbyMode = false;
         watchPrimaryLock();
+        startSelfPing();
         startPrimarySock();
       }
 
