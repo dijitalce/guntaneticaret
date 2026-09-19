@@ -105,9 +105,25 @@ const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
 const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
 const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
-/** Lazy: MAX/KEEP yok say; proxy→fail→kendi Next; SIGTERM yok sayma yok. */
+/**
+ * Lazy: proxy→fail→kendi Next; SIGTERM yok sayma yok.
+ * Slot tavanı (MAX) + idle çıkış uygulanır (birikmeyi keser).
+ * IDLE_MS yoksa KEEP>0 → KEEP; yoksa 60s. IDLE/KEEP=0 → idle çıkış kapalı.
+ */
 const lazyStandby = process.env.HOSTINGER_LAZY_STANDBY === "1";
 const useStandbyProxy = standbyProxy || lazyStandby;
+const standbyIdleMs = (() => {
+  const raw = process.env.HOSTINGER_STANDBY_IDLE_MS;
+  if (raw != null && String(raw).trim() !== "") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : 60_000;
+  }
+  if (lazyStandby) {
+    if (Number.isFinite(standbyKeepMs) && standbyKeepMs > 0) return standbyKeepMs;
+    return 60_000;
+  }
+  return 0;
+})();
 const primarySockPath = join(os.tmpdir(), "guntan-primary.sock");
 const primaryEndpointFile = join(os.tmpdir(), "guntan-primary.json");
 const aliveDir = join(os.tmpdir(), "guntan-alive");
@@ -129,6 +145,7 @@ let cgroupMissingLogged = false;
 let isStandbyMode = false;
 let exitReason = "unknown";
 let isPrimaryProcess = false;
+let lazyStandbyExiting = false;
 
 const adminHost = (
   process.env.ADMIN_HOST ??
@@ -2163,19 +2180,72 @@ function ensureStandbySelfBoot() {
   return standbySelfBoot;
 }
 
+function exitLazyStandby(reason) {
+  if (shuttingDown || lazyStandbyExiting) return;
+  if (readLockPid() === process.pid) return;
+  lazyStandbyExiting = true;
+  removeStandbyPid(process.pid);
+  isStandbyMode = false;
+  logLifecycleSnapshot(`teşhis-${reason}`);
+  exitReason = reason;
+  console.warn(
+    `[hostinger] lazy-yedek çıkış reason=${reason} pid=${process.pid} idleMs=${standbyIdleMs} max=${standbyMax} sinceLastReqMs=${lastRequestAt == null ? "never" : Date.now() - lastRequestAt} inFlight=${requestsInFlight} rss=${rssMb()}MB`,
+  );
+  clearAlive();
+  // Listen sonrası kısa gecikme — Hostinger 3 sn kuralı / in-flight proxy
+  setTimeout(() => {
+    if (shuttingDown || readLockPid() === process.pid) return;
+    if (requestsInFlight > 0 || sfHandler) {
+      shutdown(reason);
+      return;
+    }
+    process.exit(0);
+  }, 400).unref();
+}
+
 function runAsStandby() {
   startDiagHeartbeat();
 
   if (lazyStandby) {
+    if (!claimStandbySlot()) {
+      exitLazyStandby("yedek-fazla");
+      return;
+    }
     isStandbyMode = true;
     console.log(
-      `[hostinger] lazy-yedek dinliyor pid=${process.pid} — MAX/KEEP yok sayıldı, istekte proxy/self-boot`,
+      `[hostinger] lazy-yedek dinliyor pid=${process.pid} — max=${standbyMax} idleMs=${standbyIdleMs} istekte proxy/self-boot`,
     );
     setInterval(() => {
-      if (shuttingDown || sfHandler) return;
+      if (shuttingDown) return;
       const lock = readLockState();
       if (!lock || !pidAlive(lock.pid)) {
-        becomePrimaryFromStandby();
+        if (!sfHandler || readLockPid() !== process.pid) {
+          becomePrimaryFromStandby();
+        }
+        return;
+      }
+      // Idle / tavan: ready birincil varken gereksiz yedekleri bırak.
+      if (readLockPid() === process.pid) return;
+      if (standbySelfBoot && !sfHandler) return; // self-boot sürüyor
+      if (requestsInFlight > 0) return;
+      if (!lock.ready) return;
+
+      if (standbyIdleMs > 0) {
+        const last = lastRequestAt ?? startedAt;
+        if (Date.now() - last >= standbyIdleMs) {
+          exitLazyStandby("yedek-idle");
+          return;
+        }
+      }
+
+      // Slot tavanı aşıldıysa (yarış / eski kayıt) en yeni fazlalık çıksın:
+      // biz listede sonlardaysak ve max üstündeysek çık.
+      const slots = pruneStandbyPids();
+      if (slots.length > standbyMax && slots.includes(process.pid)) {
+        const overflow = slots.slice(standbyMax);
+        if (overflow.includes(process.pid)) {
+          exitLazyStandby("yedek-fazla");
+        }
       }
     }, 1000).unref();
     return;
@@ -2317,7 +2387,7 @@ if (!isPrimaryProcess) {
 logStartupProbe();
 startPpidWatch();
 console.log(
-  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version} lazy=${lazyStandby} proxy=${useStandbyProxy} aliveCount=${countAliveProcesses()}`,
+  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version} lazy=${lazyStandby} proxy=${useStandbyProxy} max=${standbyMax} idleMs=${standbyIdleMs} aliveCount=${countAliveProcesses()}`,
 );
 bindPublicPort();
 
