@@ -1068,34 +1068,46 @@ function wantsHtml(req) {
 function closePrimarySock() {
   const netSrv = primaryNetServer;
   const tcpSrv = primaryTcpServer;
+  const mayUnlink = isPrimaryProcess === true;
   primaryNetServer = null;
   primaryTcpServer = null;
   primaryHttpBridge = null;
   primaryEndpoint = null;
+
+  const unlinkOwnedArtifacts = () => {
+    if (!mayUnlink) return;
+    try {
+      fs.unlinkSync(primarySockPath);
+    } catch {
+      /* */
+    }
+    try {
+      const raw = fs.readFileSync(primaryEndpointFile, "utf8");
+      const j = JSON.parse(raw);
+      // Yalnız kendi yazdığımız endpoint'i sil — başka birincili ezme.
+      if (Number(j.pid) === process.pid) fs.unlinkSync(primaryEndpointFile);
+    } catch {
+      /* parse/okuma hatasında kör unlink YOK */
+    }
+  };
+
+  let pending = 0;
+  const onOneClosed = () => {
+    pending -= 1;
+    if (pending <= 0) unlinkOwnedArtifacts();
+  };
+
   for (const s of [netSrv, tcpSrv]) {
     if (!s) continue;
+    pending += 1;
     try {
+      s.once("close", onOneClosed);
       s.close();
     } catch {
-      /* */
+      onOneClosed();
     }
   }
-  try {
-    fs.unlinkSync(primarySockPath);
-  } catch {
-    /* */
-  }
-  try {
-    const raw = fs.readFileSync(primaryEndpointFile, "utf8");
-    const j = JSON.parse(raw);
-    if (Number(j.pid) === process.pid) fs.unlinkSync(primaryEndpointFile);
-  } catch {
-    try {
-      fs.unlinkSync(primaryEndpointFile);
-    } catch {
-      /* */
-    }
-  }
+  if (pending === 0) unlinkOwnedArtifacts();
 }
 
 function writePrimaryEndpoint(ep) {
@@ -1462,7 +1474,7 @@ function proxyToPrimary(req, res) {
       return;
     }
 
-    const ep = readPrimaryEndpoint();
+    let ep = readPrimaryEndpoint();
     if (!ep) {
       logProxyError("no-sock", `${primarySockPath}|${primaryEndpointFile}`);
       resolve(false);
@@ -1477,159 +1489,54 @@ function proxyToPrimary(req, res) {
       return;
     }
 
-    // Unix: probe yok (false-negative). TCP: 500ms probe.
-    const maybeProbe =
-      ep.kind === "unix"
-        ? Promise.resolve({ ok: true, reason: null })
-        : probePrimaryConnect(ep, 500);
+    /** @type {Record<string, string | string[] | undefined>} */
+    const headers = { ...req.headers };
+    for (const key of Object.keys(headers)) {
+      if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
+    }
+    headers["x-forwarded-host"] = String(req.headers.host ?? "");
+    headers["x-forwarded-proto"] = String(
+      req.headers["x-forwarded-proto"] ?? "https",
+    );
+    const priorFor = req.headers["x-forwarded-for"];
+    const remote = req.socket?.remoteAddress ?? "";
+    headers["x-forwarded-for"] = priorFor
+      ? `${priorFor}, ${remote}`
+      : remote;
 
-    maybeProbe.then((probeResult) => {
-      const okProbe = probeResult === true || probeResult?.ok === true;
-      if (!okProbe) {
-        logProxyError(
-          "connect-probe-fail",
-          `reason=${probeResult?.reason ?? "fail"} ${ep.kind === "unix" ? ep.path : `${ep.host}:${ep.port}`}`,
-        );
-        resolve(false);
-        return;
-      }
+    const pathOnly = String(req.url ?? "/").split("?")[0];
+    const method = String(req.method ?? "GET").toUpperCase();
+    const isIdempotent = method === "GET" || method === "HEAD";
+    const proxyT0 = Date.now();
+    let settled = false;
+    let headersWritten = false;
+    let viaUsed = ep.kind === "tcp" ? "tcp" : "unix";
+    let enoentRetried = false;
+    let tcpTried = false;
 
-      /** @type {Record<string, string | string[] | undefined>} */
-      const headers = { ...req.headers };
-      for (const key of Object.keys(headers)) {
-        if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
-      }
-      headers["x-forwarded-host"] = String(req.headers.host ?? "");
-      headers["x-forwarded-proto"] = String(
-        req.headers["x-forwarded-proto"] ?? "https",
-      );
-      const priorFor = req.headers["x-forwarded-for"];
-      const remote = req.socket?.remoteAddress ?? "";
-      headers["x-forwarded-for"] = priorFor
-        ? `${priorFor}, ${remote}`
-        : remote;
-
-      const pathOnly = String(req.url ?? "/").split("?")[0];
-      const proxyT0 = Date.now();
-      loggedProxyAttempts += 1;
+    const doneOk = () => {
+      if (settled) return;
+      settled = true;
       console.log(
-        `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} via=${ep.kind} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+        `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${viaUsed} url=${pathOnly} host=${req.headers.host ?? "-"} ms=${Date.now() - proxyT0}`,
       );
+      resolve(true);
+    };
 
-      let settled = false;
-      let headersWritten = false;
-      let viaUsed = ep.kind === "tcp" ? "tcp" : "unix";
-      const finish = (ok, reason, errCode) => {
-        if (settled) return;
-        const ms = Date.now() - proxyT0;
-        if (ok) {
-          settled = true;
-          console.log(
-            `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${viaUsed} url=${pathOnly} host=${req.headers.host ?? "-"} ms=${ms}`,
-          );
-          resolve(true);
-          return;
-        }
-        const code = errCode || (typeof reason === "string" && reason.includes("ECONNRESET") ? "ECONNRESET" : null);
-        const retryableUnix =
-          code === "ECONNRESET" ||
-          code === "ECONNREFUSED" ||
-          code === "ENOENT" ||
-          code === "EPIPE" ||
-          code === "ENOTCONN" ||
-          /ECONNRESET|ECONNREFUSED|ENOENT|EPIPE|ENOTCONN/.test(String(reason));
-        const canRetryTcp =
-          !headersWritten &&
-          !res.headersSent &&
-          viaUsed === "unix" &&
-          (req.method === "GET" || req.method === "HEAD") &&
-          retryableUnix &&
-          (ep.tcpPort || ep.port);
+    const doneFail = (reason) => {
+      if (settled) return;
+      settled = true;
+      if (reason) {
+        logProxyError(
+          reason,
+          `headersWritten=${headersWritten} ms=${Date.now() - proxyT0} via=${viaUsed}`,
+        );
+      }
+      resolve(false);
+    };
 
-        if (canRetryTcp) {
-          console.log(`[hostinger] proxy-retry via=tcp after=${code || reason}`);
-          viaUsed = "tcp";
-          // yeniden dene: yeni request (settled henüz true değil)
-          const tcpOpts = {
-            host: "127.0.0.1",
-            port: Number(ep.tcpPort || ep.port),
-            path: req.url ?? "/",
-            method: req.method,
-            headers,
-            timeout: 20_000,
-          };
-          const upstream2 = http.request(tcpOpts, (upRes) => {
-            headersWritten = true;
-            res.statusCode = upRes.statusCode ?? 502;
-            for (const [key, value] of Object.entries(upRes.headers)) {
-              if (value == null) continue;
-              if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) continue;
-              if (key.toLowerCase() === "x-guntan-app") continue;
-              res.setHeader(key, value);
-            }
-            res.setHeader("x-guntan-app", "proxied-standby");
-            upRes.pipe(res);
-            upRes.on("error", (err) => {
-              settled = true;
-              logProxyError(
-                err?.code || "upstream-res",
-                `syscall=${err?.syscall ?? "-"} message=${err instanceof Error ? err.message : err} headersWritten=${headersWritten} ms=${Date.now() - proxyT0} via=tcp`,
-              );
-              resolve(false);
-            });
-            res.on("finish", () => {
-              settled = true;
-              console.log(
-                `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=tcp url=${pathOnly} host=${req.headers.host ?? "-"} ms=${Date.now() - proxyT0}`,
-              );
-              resolve(true);
-            });
-          });
-          upstream2.on("error", (err) => {
-            settled = true;
-            logProxyError(
-              err?.code || "connect",
-              `syscall=${err?.syscall ?? "-"} message=${err instanceof Error ? err.message : err} headersWritten=false ms=${Date.now() - proxyT0} via=tcp`,
-            );
-            resolve(false);
-          });
-          upstream2.on("timeout", () => {
-            upstream2.destroy();
-            settled = true;
-            logProxyError("timeout", `headersWritten=false ms=${Date.now() - proxyT0} via=tcp`);
-            resolve(false);
-          });
-          // GET: gövde yok — end yeterli (pipe zaten bitti olabilir)
-          upstream2.end();
-          return;
-        }
-
-        settled = true;
-        if (reason) {
-          logProxyError(reason, `headersWritten=${headersWritten} ms=${ms} via=${viaUsed}`);
-        }
-        resolve(false);
-      };
-
-      const requestOpts =
-        ep.kind === "unix"
-          ? {
-              socketPath: ep.path,
-              path: req.url ?? "/",
-              method: req.method,
-              headers,
-              timeout: 20_000,
-            }
-          : {
-              host: ep.host,
-              port: ep.port,
-              path: req.url ?? "/",
-              method: req.method,
-              headers,
-              timeout: 20_000,
-            };
-
-      const upstream = http.request(requestOpts, (upRes) => {
+    const pipeUpstream = (opts) => {
+      const upstream = http.request(opts, (upRes) => {
         headersWritten = true;
         res.statusCode = upRes.statusCode ?? 502;
         for (const [key, value] of Object.entries(upRes.headers)) {
@@ -1641,30 +1548,24 @@ function proxyToPrimary(req, res) {
         res.setHeader("x-guntan-app", "proxied-standby");
         upRes.pipe(res);
         upRes.on("error", (err) => {
-          finish(
-            false,
+          doneFail(
             `upstream-res:${err instanceof Error ? err.message : String(err)}`,
           );
         });
-        res.on("finish", () => finish(true));
+        res.on("finish", () => doneOk());
       });
-
       upstream.on("timeout", () => {
         upstream.destroy();
-        finish(false, "timeout", "timeout");
+        onUpstreamFail("timeout", "timeout");
       });
       upstream.on("error", (err) => {
         const code = err?.code ?? "";
         const syscall = err?.syscall ?? "-";
-        finish(
-          false,
+        onUpstreamFail(
           `connect code=${code || (err instanceof Error ? err.message : String(err))} syscall=${syscall}`,
           code,
         );
       });
-
-      // GET'te req.close gövde bitince hemen gelir — upstream'i öldürme.
-      // İstemci kopmasını res üzerinden izle.
       res.on("close", () => {
         if (!res.writableFinished) {
           try {
@@ -1674,9 +1575,144 @@ function proxyToPrimary(req, res) {
           }
         }
       });
+      if (isIdempotent) upstream.end();
+      else req.pipe(upstream);
+    };
 
-      req.pipe(upstream);
-    });
+    const startUnix = () => {
+      viaUsed = "unix";
+      loggedProxyAttempts += 1;
+      console.log(
+        `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} via=unix method=${method} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+      );
+      const sockPath = ep.path || ep.sockPath || primarySockPath;
+      pipeUpstream({
+        socketPath: sockPath,
+        path: req.url ?? "/",
+        method: req.method,
+        headers,
+        timeout: 20_000,
+      });
+    };
+
+    const startTcp = (afterCode) => {
+      // Endpoint'i tazele — unix fail sonrası tcpPort json'da olabilir.
+      const fresh = readPrimaryEndpoint();
+      if (fresh && (!fresh.pid || Number(fresh.pid) === lock.pid)) {
+        ep = fresh;
+      }
+      const tcpPort = Number(ep.tcpPort || ep.port);
+      if (!Number.isInteger(tcpPort) || tcpPort <= 0) {
+        doneFail(afterCode ? `no-tcp-after-${afterCode}` : "no-tcp");
+        return;
+      }
+      tcpTried = true;
+      viaUsed = "tcp";
+      loggedProxyAttempts += 1;
+      console.log(
+        `[hostinger] proxy-tcp-deneme #${loggedProxyAttempts} via=tcp pid=${process.pid} → primary=${lock.pid} after=${afterCode || "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+      );
+      pipeUpstream({
+        host: String(ep.host || "127.0.0.1"),
+        port: tcpPort,
+        path: req.url ?? "/",
+        method: req.method,
+        headers,
+        timeout: 20_000,
+      });
+    };
+
+    /**
+     * @param {string} reason
+     * @param {string} [errCode]
+     */
+    function onUpstreamFail(reason, errCode) {
+      if (settled || headersWritten || res.headersSent) {
+        doneFail(reason);
+        return;
+      }
+      const code =
+        errCode ||
+        (typeof reason === "string" && reason.includes("ENOENT")
+          ? "ENOENT"
+          : typeof reason === "string" && reason.includes("ECONNREFUSED")
+            ? "ECONNREFUSED"
+            : typeof reason === "string" && reason.includes("ECONNRESET")
+              ? "ECONNRESET"
+              : null);
+      const primaryStillAlive = pidAlive(lock.pid);
+
+      // SORUN 2: ENOENT + birincil hayatta → 150ms bekle, sock var mı bak, unix bir kez daha.
+      if (
+        viaUsed === "unix" &&
+        code === "ENOENT" &&
+        primaryStillAlive &&
+        isIdempotent &&
+        !enoentRetried
+      ) {
+        enoentRetried = true;
+        console.warn(
+          `[hostinger] proxy-enoent-retry ms=150 pid=${process.pid} primary=${lock.pid} url=${pathOnly}`,
+        );
+        const t = setTimeout(() => {
+          if (settled || res.headersSent || res.writableEnded) return;
+          if (!pidAlive(lock.pid)) {
+            doneFail("enoent-retry-primary-dead");
+            return;
+          }
+          const sockPath = ep.path || ep.sockPath || primarySockPath;
+          if (!fs.existsSync(sockPath)) {
+            // Sock hâlâ yok → TCP dene (SORUN 3)
+            if (!tcpTried) {
+              startTcp("ENOENT");
+              return;
+            }
+            doneFail(reason);
+            return;
+          }
+          startUnix();
+        }, 150);
+        t.unref?.();
+        return;
+      }
+
+      // SORUN 3: unix ENOENT/ECONNREFUSED → TCP
+      if (
+        viaUsed === "unix" &&
+        !tcpTried &&
+        isIdempotent &&
+        (code === "ENOENT" ||
+          code === "ECONNREFUSED" ||
+          code === "ECONNRESET" ||
+          code === "EPIPE" ||
+          code === "ENOTCONN")
+      ) {
+        startTcp(code || reason);
+        return;
+      }
+
+      doneFail(reason);
+    }
+
+    // İlk deneme: unix tercihli; endpoint zaten tcp ise doğrudan tcp.
+    if (ep.kind === "tcp") {
+      // TCP probe (kısa)
+      probePrimaryConnect(ep, 500).then((probeResult) => {
+        const okProbe = probeResult === true || probeResult?.ok === true;
+        if (!okProbe) {
+          logProxyError(
+            "connect-probe-fail",
+            `reason=${probeResult?.reason ?? "fail"} ${ep.host}:${ep.port}`,
+          );
+          resolve(false);
+          return;
+        }
+        startTcp("endpoint-tcp");
+      });
+      return;
+    }
+
+    startUnix();
   });
 }
 
@@ -1846,18 +1882,8 @@ async function routeRequest(req, res) {
     const shouldProxy = primaryAlive && (lock.ready || lazyStandby);
 
     if (shouldProxy) {
-      let ok = await proxyToPrimary(req, res);
+      const ok = await proxyToPrimary(req, res);
       if (ok || res.headersSent || res.writableEnded) return;
-      // Geçici unix/ENOENT: kısa bekleyip bir kez daha dene (self-boot fırtınası önlemi)
-      if (lazyStandby && primaryAliveReady) {
-        await new Promise((r) => {
-          const t = setTimeout(r, 80);
-          t.unref?.();
-        });
-        if (shuttingDown || res.writableEnded) return;
-        ok = await proxyToPrimary(req, res);
-        if (ok || res.headersSent || res.writableEnded) return;
-      }
       if (!lazyStandby) {
         sendProxyFailure(req, res, pathOnly);
         return;
