@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import net from "node:net";
 import os from "node:os";
 import { parse } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -108,6 +109,8 @@ const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
 const lazyStandby = process.env.HOSTINGER_LAZY_STANDBY === "1";
 const useStandbyProxy = standbyProxy || lazyStandby;
 const primarySockPath = join(os.tmpdir(), "guntan-primary.sock");
+const primaryEndpointFile = join(os.tmpdir(), "guntan-primary.json");
+const aliveDir = join(os.tmpdir(), "guntan-alive");
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
@@ -205,8 +208,14 @@ let selfPingStarted = false;
 let lockReady = false;
 /** @type {import("node:http").Server | null} */
 let httpServer = null;
+/** LiteSpeed http.Server.listen'ı yamadığı için net.Server ile dinleriz */
+/** @type {import("node:net").Server | null} */
+let primaryNetServer = null;
+/** listen ÇAĞRILMAZ — sadece connection emit */
 /** @type {import("node:http").Server | null} */
-let primarySockServer = null;
+let primaryHttpBridge = null;
+/** @type {{ kind: "unix", path: string } | { kind: "tcp", host: string, port: number } | null} */
+let primaryEndpoint = null;
 let bindAttempts = 0;
 
 function warnBadEnv() {
@@ -278,6 +287,7 @@ function clearLock() {
   }
   removeStandbyPid(process.pid);
   if (owned) closePrimarySock();
+  clearAlive();
 }
 
 function pidAlive(pid) {
@@ -1019,11 +1029,13 @@ function wantsHtml(req) {
 }
 
 function closePrimarySock() {
-  const server = primarySockServer;
-  primarySockServer = null;
-  if (server) {
+  const netSrv = primaryNetServer;
+  primaryNetServer = null;
+  primaryHttpBridge = null;
+  primaryEndpoint = null;
+  if (netSrv) {
     try {
-      server.close();
+      netSrv.close();
     } catch {
       /* */
     }
@@ -1033,19 +1045,128 @@ function closePrimarySock() {
   } catch {
     /* */
   }
+  try {
+    const raw = fs.readFileSync(primaryEndpointFile, "utf8");
+    const j = JSON.parse(raw);
+    if (Number(j.pid) === process.pid) fs.unlinkSync(primaryEndpointFile);
+  } catch {
+    try {
+      fs.unlinkSync(primaryEndpointFile);
+    } catch {
+      /* */
+    }
+  }
 }
 
-function startPrimarySock() {
-  if (!useStandbyProxy || shuttingDown || !sfHandler) return;
-  if (readLockPid() !== process.pid) return;
-  if (primarySockServer?.listening) return;
-  closePrimarySock();
+function writePrimaryEndpoint(ep) {
+  primaryEndpoint = ep;
   try {
-    fs.unlinkSync(primarySockPath);
+    fs.writeFileSync(
+      primaryEndpointFile,
+      JSON.stringify({ pid: process.pid, t: Date.now(), ...ep }),
+    );
+  } catch (err) {
+    console.warn(
+      `[hostinger] primary-endpoint yazılamadı:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/** @returns {{ kind: "unix", path: string, pid?: number } | { kind: "tcp", host: string, port: number, pid?: number } | null} */
+function readPrimaryEndpoint() {
+  try {
+    const j = JSON.parse(fs.readFileSync(primaryEndpointFile, "utf8"));
+    const pid = Number(j.pid);
+    if (Number.isInteger(pid) && pid > 0 && pid !== process.pid && !pidAlive(pid)) {
+      return null;
+    }
+    if (j.kind === "unix" && j.path) return { kind: "unix", path: String(j.path), pid };
+    if (j.kind === "tcp" && j.port) {
+      return {
+        kind: "tcp",
+        host: String(j.host || "127.0.0.1"),
+        port: Number(j.port),
+        pid,
+      };
+    }
+    if (j.sockPath) return { kind: "unix", path: String(j.sockPath), pid };
+    if (j.port) {
+      return { kind: "tcp", host: "127.0.0.1", port: Number(j.port), pid };
+    }
   } catch {
     /* */
   }
-  const sockServer = createServer((req, res) => {
+  if (fs.existsSync(primarySockPath)) {
+    return { kind: "unix", path: primarySockPath };
+  }
+  return null;
+}
+
+function touchAlive() {
+  try {
+    fs.mkdirSync(aliveDir, { recursive: true });
+    fs.writeFileSync(join(aliveDir, String(process.pid)), String(Date.now()));
+  } catch {
+    /* */
+  }
+}
+
+function clearAlive() {
+  try {
+    fs.unlinkSync(join(aliveDir, String(process.pid)));
+  } catch {
+    /* */
+  }
+}
+
+function pruneAlive() {
+  try {
+    if (!fs.existsSync(aliveDir)) return;
+    for (const name of fs.readdirSync(aliveDir)) {
+      const pid = Number(name);
+      if (!Number.isInteger(pid) || pid <= 0) continue;
+      if (pid !== process.pid && !pidAlive(pid)) {
+        try {
+          fs.unlinkSync(join(aliveDir, name));
+        } catch {
+          /* */
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+}
+
+function countAliveProcesses() {
+  pruneAlive();
+  try {
+    return fs.readdirSync(aliveDir).filter((n) => /^\d+$/.test(n)).length;
+  } catch {
+    return 0;
+  }
+}
+
+function logAliveSnapshot(tag) {
+  touchAlive();
+  console.log(
+    `[hostinger] ${tag} pid=${process.pid} aliveCount=${countAliveProcesses()} rss=${rssMb()}MB`,
+  );
+}
+
+/**
+ * LiteSpeed http.Server.prototype.listen'ı yamadığı için ikinci listen ignore olur.
+ * Bu yüzden net.createServer dinler; http bridge'e connection emit edilir (listen YOK).
+ */
+function startPrimarySock() {
+  if (!useStandbyProxy || shuttingDown || !sfHandler) return;
+  if (readLockPid() !== process.pid) return;
+  if (primaryNetServer?.listening) return;
+
+  closePrimarySock();
+
+  const bridge = createServer((req, res) => {
     routeRequest(req, res).catch((err) => {
       console.error("[hostinger] primary-sock istek hatası:", err);
       if (!res.headersSent) {
@@ -1054,25 +1175,127 @@ function startPrimarySock() {
       }
     });
   });
-  primarySockServer = sockServer;
-  sockServer.on("error", (err) => {
-    console.warn(
-      `[hostinger] primary-sock hata pid=${process.pid}:`,
-      err instanceof Error ? err.message : err,
-    );
-  });
-  sockServer.listen(primarySockPath, () => {
-    try {
-      fs.chmodSync(primarySockPath, 0o600);
-    } catch (err) {
-      console.warn(
-        `[hostinger] primary-sock chmod:`,
-        err instanceof Error ? err.message : err,
-      );
+  // ÖNEMLİ: bridge.listen() ÇAĞRILMAZ
+  primaryHttpBridge = bridge;
+
+  const onConnection = (socket) => {
+    bridge.emit("connection", socket);
+  };
+
+  const listenUnix = () =>
+    new Promise((resolve) => {
+      try {
+        fs.unlinkSync(primarySockPath);
+      } catch {
+        /* */
+      }
+      const n = net.createServer(onConnection);
+      let settled = false;
+      n.once("error", (err) => {
+        if (settled) return;
+        settled = true;
+        console.warn(
+          `[hostinger] primary-sock hata: ${err instanceof Error ? err.message : err}`,
+        );
+        try {
+          n.close();
+        } catch {
+          /* */
+        }
+        resolve(null);
+      });
+      n.listen(primarySockPath, () => {
+        if (settled) return;
+        settled = true;
+        try {
+          fs.chmodSync(primarySockPath, 0o600);
+        } catch (err) {
+          console.warn(
+            `[hostinger] primary-sock chmod:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+        console.log(
+          `[hostinger] primary-sock dinliyor path=${primarySockPath} pid=${process.pid}`,
+        );
+        resolve(n);
+      });
+    });
+
+  const listenTcp = () =>
+    new Promise((resolve) => {
+      const n = net.createServer(onConnection);
+      let settled = false;
+      n.once("error", (err) => {
+        if (settled) return;
+        settled = true;
+        console.warn(
+          `[hostinger] primary-tcp hata: ${err instanceof Error ? err.message : err}`,
+        );
+        try {
+          n.close();
+        } catch {
+          /* */
+        }
+        resolve(null);
+      });
+      n.listen(0, "127.0.0.1", () => {
+        if (settled) return;
+        settled = true;
+        const addr = n.address();
+        const p = addr && typeof addr === "object" ? addr.port : 0;
+        console.log(
+          `[hostinger] primary-tcp dinliyor 127.0.0.1:${p} pid=${process.pid}`,
+        );
+        resolve({ server: n, port: p });
+      });
+    });
+
+  (async () => {
+    const unix = await listenUnix();
+    if (unix) {
+      primaryNetServer = unix;
+      writePrimaryEndpoint({ kind: "unix", path: primarySockPath });
+      return;
     }
-    console.log(
-      `[hostinger] primary-sock dinleniyor path=${primarySockPath} pid=${process.pid}`,
+    console.warn(
+      `[hostinger] primary-sock unix açılamadı — TCP 127.0.0.1:0 fallback`,
     );
+    const tcp = await listenTcp();
+    if (tcp) {
+      primaryNetServer = tcp.server;
+      writePrimaryEndpoint({
+        kind: "tcp",
+        host: "127.0.0.1",
+        port: tcp.port,
+      });
+      return;
+    }
+    console.error(
+      `[hostinger] primary-endpoint BAŞARISIZ — unix ve TCP açılamadı pid=${process.pid}`,
+    );
+  })();
+}
+
+function probePrimaryConnect(ep) {
+  return new Promise((resolve) => {
+    const sock =
+      ep.kind === "unix"
+        ? net.connect({ path: ep.path })
+        : net.connect({ host: ep.host, port: ep.port });
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, 200);
+    sock.once("connect", () => {
+      clearTimeout(timer);
+      sock.end();
+      resolve(true);
+    });
+    sock.once("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
   });
 }
 
@@ -1091,8 +1314,8 @@ function logPlaceholder(kind, req, pathOnly) {
 }
 
 /**
- * Yedekten birincile unix soket üzerinden aktar.
- * @returns {Promise<boolean>} başarılı stream
+ * Yedekten birincile unix/TCP üzerinden aktar.
+ * @returns {Promise<boolean>}
  */
 function proxyToPrimary(req, res) {
   return new Promise((resolve) => {
@@ -1101,57 +1324,78 @@ function proxyToPrimary(req, res) {
       resolve(false);
       return;
     }
-    if (!fs.existsSync(primarySockPath)) {
-      logProxyError("no-sock", primarySockPath);
+
+    const ep = readPrimaryEndpoint();
+    if (!ep) {
+      logProxyError("no-sock", `${primarySockPath}|${primaryEndpointFile}`);
       resolve(false);
       return;
     }
 
-    /** @type {Record<string, string | string[] | undefined>} */
-    const headers = { ...req.headers };
-    for (const key of Object.keys(headers)) {
-      if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
-    }
-    // Host ASLA değiştirilmez (tenant Host ile çözülür).
-    headers["x-forwarded-host"] = String(req.headers.host ?? "");
-    headers["x-forwarded-proto"] = String(
-      req.headers["x-forwarded-proto"] ?? "https",
-    );
-    const priorFor = req.headers["x-forwarded-for"];
-    const remote = req.socket?.remoteAddress ?? "";
-    headers["x-forwarded-for"] = priorFor
-      ? `${priorFor}, ${remote}`
-      : remote;
-
-    const pathOnly = String(req.url ?? "/").split("?")[0];
-    loggedProxyAttempts += 1;
-    console.log(
-      `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
-    );
-
-    let settled = false;
-    const finish = (ok, reason) => {
-      if (settled) return;
-      settled = true;
-      if (ok) {
-        console.log(
-          `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+    probePrimaryConnect(ep).then((okProbe) => {
+      if (!okProbe) {
+        logProxyError(
+          "connect-probe-fail",
+          ep.kind === "unix" ? ep.path : `${ep.host}:${ep.port}`,
         );
-      } else if (reason) {
-        logProxyError(reason);
+        resolve(false);
+        return;
       }
-      resolve(ok);
-    };
 
-    const upstream = http.request(
-      {
-        socketPath: primarySockPath,
-        path: req.url ?? "/",
-        method: req.method,
-        headers,
-        timeout: 20_000,
-      },
-      (upRes) => {
+      /** @type {Record<string, string | string[] | undefined>} */
+      const headers = { ...req.headers };
+      for (const key of Object.keys(headers)) {
+        if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
+      }
+      headers["x-forwarded-host"] = String(req.headers.host ?? "");
+      headers["x-forwarded-proto"] = String(
+        req.headers["x-forwarded-proto"] ?? "https",
+      );
+      const priorFor = req.headers["x-forwarded-for"];
+      const remote = req.socket?.remoteAddress ?? "";
+      headers["x-forwarded-for"] = priorFor
+        ? `${priorFor}, ${remote}`
+        : remote;
+
+      const pathOnly = String(req.url ?? "/").split("?")[0];
+      loggedProxyAttempts += 1;
+      console.log(
+        `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} via=${ep.kind} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+      );
+
+      let settled = false;
+      const finish = (ok, reason) => {
+        if (settled) return;
+        settled = true;
+        if (ok) {
+          console.log(
+            `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} via=${ep.kind} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+          );
+        } else if (reason) {
+          logProxyError(reason);
+        }
+        resolve(ok);
+      };
+
+      const requestOpts =
+        ep.kind === "unix"
+          ? {
+              socketPath: ep.path,
+              path: req.url ?? "/",
+              method: req.method,
+              headers,
+              timeout: 20_000,
+            }
+          : {
+              host: ep.host,
+              port: ep.port,
+              path: req.url ?? "/",
+              method: req.method,
+              headers,
+              timeout: 20_000,
+            };
+
+      const upstream = http.request(requestOpts, (upRes) => {
         res.statusCode = upRes.statusCode ?? 502;
         for (const [key, value] of Object.entries(upRes.headers)) {
           if (value == null) continue;
@@ -1162,38 +1406,42 @@ function proxyToPrimary(req, res) {
         res.setHeader("x-guntan-app", "proxied-standby");
         upRes.pipe(res);
         upRes.on("error", (err) => {
-          finish(false, `upstream-res:${err instanceof Error ? err.message : String(err)}`);
+          finish(
+            false,
+            `upstream-res:${err instanceof Error ? err.message : String(err)}`,
+          );
         });
         res.on("finish", () => finish(true));
         res.on("close", () => finish(true));
-      },
-    );
+      });
 
-    upstream.on("timeout", () => {
-      upstream.destroy();
-      finish(false, "timeout");
-    });
-    upstream.on("error", (err) => {
-      const code = err && typeof err === "object" && "code" in err ? err.code : "";
-      finish(
-        false,
-        `connect:${code || (err instanceof Error ? err.message : String(err))}`,
-      );
-    });
-
-    const abortUpstream = () => {
-      try {
+      upstream.on("timeout", () => {
         upstream.destroy();
-      } catch {
-        /* */
-      }
-    };
-    req.on("aborted", abortUpstream);
-    req.on("close", () => {
-      if (!res.writableEnded) abortUpstream();
-    });
+        finish(false, "timeout");
+      });
+      upstream.on("error", (err) => {
+        const code =
+          err && typeof err === "object" && "code" in err ? err.code : "";
+        finish(
+          false,
+          `connect:${code || (err instanceof Error ? err.message : String(err))}`,
+        );
+      });
 
-    req.pipe(upstream);
+      const abortUpstream = () => {
+        try {
+          upstream.destroy();
+        } catch {
+          /* */
+        }
+      };
+      req.on("aborted", abortUpstream);
+      req.on("close", () => {
+        if (!res.writableEnded) abortUpstream();
+      });
+
+      req.pipe(upstream);
+    });
   });
 }
 
@@ -1260,6 +1508,9 @@ let bootFailed = false;
 let adminPrepare = null;
 /** @type {Promise<boolean> | null} */
 let standbySelfBoot = null;
+/** Tek Next yükleme — primary bootNext ile paylaşılır */
+/** @type {Promise<boolean> | null} */
+let bootNextPromise = null;
 let nextFactory = null;
 /** @type {{ kind: "sf" | "admin", resolve: (ok: boolean) => void, timer: ReturnType<typeof setTimeout> }[]} */
 let waiters = [];
@@ -1366,7 +1617,12 @@ async function routeRequest(req, res) {
     }
 
     if (lazyStandby) {
-      await ensureStandbySelfBoot();
+      // Kilit sahibi veya boot sürüyorsa self-boot YOK — mevcut promise'i bekle.
+      if (readLockPid() === process.pid || bootNextPromise) {
+        await ensureBootNext("route-lock-owner");
+      } else {
+        await ensureStandbySelfBoot();
+      }
       if (res.writableEnded || res.headersSent) return;
       if (!sfHandler) {
         const ready = await waitUntilReady("sf", req);
@@ -1376,7 +1632,6 @@ async function routeRequest(req, res) {
           return;
         }
       }
-      // sfHandler hazır → aşağıdaki normal routing
     }
   }
 
@@ -1501,8 +1756,6 @@ server.headersTimeout = 66_000;
 let parked = false;
 
 function startNextAfterListen() {
-  if (nextBooted) return;
-  nextBooted = true;
   if (readLockPid() !== process.pid) {
     console.warn(
       `[hostinger] boot iptal — kilit bizde değil pid=${process.pid} sahip=${readLockPid()} (Next yüklenmiyor)`,
@@ -1510,10 +1763,37 @@ function startNextAfterListen() {
     shutdown("FAZLALIK_SÜREÇ");
     return;
   }
-  bootNext().catch((err) => {
-    console.error("[hostinger] Next başlatılamadı:", err);
-    notifyBootFailed();
-  });
+  ensureBootNext("primary-listen").catch(() => {});
+}
+
+/**
+ * Süreçte tek Next prepare. Tekrar çağrıda mevcut promise döner.
+ * @param {string} reason
+ * @returns {Promise<boolean>}
+ */
+function ensureBootNext(reason) {
+  if (sfHandler) return Promise.resolve(true);
+  if (bootFailed) return Promise.resolve(false);
+  if (bootNextPromise) {
+    console.log(
+      `[hostinger] next-yükleme tekrarı engellendi reason=${reason} pid=${process.pid}`,
+    );
+    return bootNextPromise;
+  }
+  nextBooted = true;
+  console.log(
+    `[hostinger] next-yükleme başlıyor reason=${reason} pid=${process.pid} rss=${rssMb()}MB`,
+  );
+  bootNextPromise = bootNext()
+    .then(() => Boolean(sfHandler))
+    .catch((err) => {
+      console.error("[hostinger] Next başlatılamadı:", err);
+      bootNextPromise = null;
+      nextBooted = false;
+      notifyBootFailed();
+      return false;
+    });
+  return bootNextPromise;
 }
 
 function probeLocalHealth() {
@@ -1565,15 +1845,28 @@ function becomePrimaryFromStandby() {
 
 /**
  * Lazy yedek: proxy fail / birincil yok → kendi Next (tek promise).
- * Ready birincil varken kilidi EZME.
+ * Ready birincil varken kilidi EZME. Kilit sahibi / boot inflight → self-boot YOK.
  */
 function ensureStandbySelfBoot() {
   if (sfHandler) return Promise.resolve(true);
   if (bootFailed) return Promise.resolve(false);
-  if (standbySelfBoot) return standbySelfBoot;
+
+  if (readLockPid() === process.pid || bootNextPromise) {
+    console.log(
+      `[hostinger] next-yükleme tekrarı engellendi reason=self-boot-skip-owner pid=${process.pid}`,
+    );
+    return ensureBootNext("self-boot-redirect-owner");
+  }
+
+  if (standbySelfBoot) {
+    console.log(
+      `[hostinger] next-yükleme tekrarı engellendi reason=self-boot-inflight pid=${process.pid}`,
+    );
+    return standbySelfBoot;
+  }
 
   standbySelfBoot = (async () => {
-    nextBooted = true;
+    logAliveSnapshot("yedek-self-boot-başlangıç");
     console.log(
       `[hostinger] yedek-self-boot başlıyor pid=${process.pid} rss=${rssMb()}MB`,
     );
@@ -1589,16 +1882,24 @@ function ensureStandbySelfBoot() {
       isStandbyMode = false;
       watchPrimaryLock();
       startSelfPing();
+      // Artık kilit sahibi — ortak bootNext kullan
+      return ensureBootNext("self-boot-became-primary");
+    }
+
+    console.log(
+      `[hostinger] yedek-self-boot kilit ezilmiyor primary=${lock.pid} — kendi sfHandler`,
+    );
+
+    // Secondary: ayrı Next ama bootNextPromise ile çakışmasın
+    if (bootNextPromise) {
       console.log(
-        `[hostinger] yedek-self-boot kilit devralındı pid=${process.pid}`,
+        `[hostinger] next-yükleme tekrarı engellendi reason=secondary-sees-boot pid=${process.pid}`,
       );
-    } else {
-      console.log(
-        `[hostinger] yedek-self-boot kilit ezilmiyor primary=${lock.pid} — kendi sfHandler`,
-      );
+      return bootNextPromise;
     }
 
     try {
+      nextBooted = true;
       redirectNextWritable(storefrontDir, "storefront");
       const next = loadNext();
       const storefront = next({
@@ -1635,6 +1936,7 @@ function ensureStandbySelfBoot() {
     } catch (err) {
       console.error("[hostinger] yedek-self-boot başarısız:", err);
       standbySelfBoot = null;
+      nextBooted = false;
       notifyBootFailed();
       return false;
     }
@@ -1785,6 +2087,7 @@ server.on("error", (err) => {
 
 // Akış: kilit dene → HER ZAMAN listen (3 sn) → kilit bizdeyse Next.
 warnBadEnv();
+touchAlive();
 isPrimaryProcess = claimPrimaryLock();
 if (!isPrimaryProcess) {
   console.warn(
@@ -1794,7 +2097,7 @@ if (!isPrimaryProcess) {
 logStartupProbe();
 startPpidWatch();
 console.log(
-  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version} lazy=${lazyStandby} proxy=${useStandbyProxy}`,
+  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version} lazy=${lazyStandby} proxy=${useStandbyProxy} aliveCount=${countAliveProcesses()}`,
 );
 bindPublicPort();
 
