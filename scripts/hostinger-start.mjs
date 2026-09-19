@@ -69,26 +69,51 @@ const canonicalHost = (() => {
     return "guntanotoyedekparca.com";
   }
 })();
-/** Ana + www + ALLOWED_HOSTS (virgülle). Grup domainleri buraya eklenmeli. */
+
+/** Küçük harf, port yok, baştaki www. yok. */
+function normalizeHostName(hostHeader) {
+  let h = String(hostHeader ?? "")
+    .split(":")[0]
+    .toLowerCase()
+    .trim();
+  if (h.startsWith("www.")) h = h.slice(4);
+  return h;
+}
+
+/**
+ * Ana domain her zaman izinli + ALLOWED_HOSTS (virgülle).
+ * Karşılaştırma normalizeHostName ile (www./port/case).
+ */
 const allowedHosts = (() => {
-  const set = new Set([canonicalHost, `www.${canonicalHost}`]);
+  const set = new Set([normalizeHostName(canonicalHost)]);
   for (const part of String(process.env.ALLOWED_HOSTS ?? "").split(",")) {
-    const h = part.trim().toLowerCase().split(":")[0];
+    const h = normalizeHostName(part);
     if (h) set.add(h);
   }
   return set;
 })();
+
+function isAllowedHost(hostHeader) {
+  const h = normalizeHostName(hostHeader);
+  if (!h) return false;
+  return allowedHosts.has(h);
+}
+
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
 const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
 const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
 const standbyProxy = process.env.HOSTINGER_STANDBY_PROXY === "1";
+/** Lazy: MAX/KEEP yok say; proxy→fail→kendi Next; SIGTERM yok sayma yok. */
+const lazyStandby = process.env.HOSTINGER_LAZY_STANDBY === "1";
+const useStandbyProxy = standbyProxy || lazyStandby;
 const primarySockPath = join(os.tmpdir(), "guntan-primary.sock");
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
 let loggedEarlyRequests = 0;
 let loggedProxyAttempts = 0;
+let loggedPlaceholders = 0;
 /** @type {number | null} */
 let lastRequestAt = null;
 let sigtermCount = 0;
@@ -114,11 +139,9 @@ const adminHost = (
 ).toLowerCase();
 
 function isAdminHost(hostHeader) {
-  const host = String(hostHeader ?? "")
-    .split(":")[0]
-    .toLowerCase();
+  const host = normalizeHostName(hostHeader);
   if (!host) return false;
-  if (host === adminHost) return true;
+  if (host === normalizeHostName(adminHost)) return true;
   return host.startsWith("admin.");
 }
 
@@ -127,17 +150,10 @@ function isAdminPath(urlPath) {
   return path === adminBasePath || path.startsWith(`${adminBasePath}/`);
 }
 
-function normalizeRequestHost(hostHeader) {
-  return String(hostHeader ?? "")
-    .split(":")[0]
-    .toLowerCase();
-}
-
-/** İzin verilmeyen Host → ana siteye 301. admin.* ve /yonetim dokunulmaz. */
+/** İzin verilmeyen Host → ana siteye 301. admin.* ve /yonetim dokunulmaz. Host ASLA rewrite edilmez. */
 function maybeHostRedirect(req, res, pathOnly) {
   if (isAdminHost(req.headers.host) || isAdminPath(pathOnly)) return false;
-  const host = normalizeRequestHost(req.headers.host);
-  if (allowedHosts.has(host)) return false;
+  if (isAllowedHost(req.headers.host)) return false;
   const dest = `${publicStoreUrl}${req.url ?? "/"}`;
   res.statusCode = 301;
   res.setHeader("location", dest);
@@ -520,7 +536,7 @@ function readCgroupMemory() {
   }
   if (!cgroupMissingLogged) {
     cgroupMissingLogged = true;
-    console.warn("[hostinger] cgroup okunamadı");
+    if (VERBOSE) console.warn("[hostinger] cgroup okunamadı");
   }
   return out;
 }
@@ -612,8 +628,10 @@ function onSigint() {
 function shutdown(signal) {
   if (shuttingDown) return;
 
-  // Hazır birincil + kilit bizde → idle/recycle SIGTERM'i yok say (bilinçli tasarım).
+  // Lazy modda SIGTERM yok sayma yok — yönetici kapatıyorsa graceful çık.
+  // Klasik modda: hazır birincil + kilit bizde → idle/recycle SIGTERM'i yok say.
   if (
+    !lazyStandby &&
     signal === "SIGTERM" &&
     sfHandler &&
     !bootFailed &&
@@ -630,32 +648,33 @@ function shutdown(signal) {
 
   shuttingDown = true;
   exitReason = signal;
-  closePrimarySock();
   const ageMs = Date.now() - startedAt;
   console.error(
     `[hostinger] kapanış neden=${signal} pid=${process.pid} port=${port} ageMs=${ageMs} rss=${rssMb()}MB sf=${Boolean(sfHandler)} reqTotal=${requestsTotal} inFlight=${requestsInFlight} sigtermN=${sigtermCount} sigintN=${sigintCount}`,
   );
   logLifecycleSnapshot(`teşhis-kapanış-${signal}`);
-  clearLock();
+
+  const graceMs = lazyStandby && signal === "SIGTERM" ? 2500 : sfHandler ? 5000 : 10_000;
+
   try {
     httpServer?.close(() => {
       console.log(`[hostinger] soket kapandı pid=${process.pid} neden=${signal}`);
-      process.exit(0);
     });
   } catch {
-    process.exit(0);
+    /* */
   }
-  if (!sfHandler && !bootFailed) {
-    const deadline = Date.now() + 10_000;
-    const poll = setInterval(() => {
-      if (sfHandler || bootFailed || Date.now() >= deadline) {
-        clearInterval(poll);
-        setTimeout(() => process.exit(0), sfHandler ? 250 : 0);
-      }
-    }, 200).unref();
-  } else {
-    setTimeout(() => process.exit(0), 5000);
-  }
+  closePrimarySock();
+  clearLock();
+
+  const deadline = Date.now() + graceMs;
+  const poll = setInterval(() => {
+    if (requestsInFlight <= 0 || Date.now() >= deadline) {
+      clearInterval(poll);
+      process.exit(0);
+    }
+  }, 50);
+  if (!(lazyStandby && signal === "SIGTERM")) poll.unref?.();
+  setTimeout(() => process.exit(0), graceMs + 200).unref();
 }
 
 process.on("uncaughtException", (err) => {
@@ -1017,7 +1036,8 @@ function closePrimarySock() {
 }
 
 function startPrimarySock() {
-  if (!standbyProxy || shuttingDown || !sfHandler) return;
+  if (!useStandbyProxy || shuttingDown || !sfHandler) return;
+  if (readLockPid() !== process.pid) return;
   if (primarySockServer?.listening) return;
   closePrimarySock();
   try {
@@ -1062,6 +1082,14 @@ function logProxyError(reason, detail) {
   );
 }
 
+function logPlaceholder(kind, req, pathOnly) {
+  if (loggedPlaceholders >= 5) return;
+  loggedPlaceholders += 1;
+  console.warn(
+    `[hostinger] yer-tutucu/503 #${loggedPlaceholders} kind=${kind} pid=${process.pid} host=${req.headers.host ?? "-"} url=${pathOnly}`,
+  );
+}
+
 /**
  * Yedekten birincile unix soket üzerinden aktar.
  * @returns {Promise<boolean>} başarılı stream
@@ -1073,12 +1101,18 @@ function proxyToPrimary(req, res) {
       resolve(false);
       return;
     }
+    if (!fs.existsSync(primarySockPath)) {
+      logProxyError("no-sock", primarySockPath);
+      resolve(false);
+      return;
+    }
 
     /** @type {Record<string, string | string[] | undefined>} */
     const headers = { ...req.headers };
     for (const key of Object.keys(headers)) {
       if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) delete headers[key];
     }
+    // Host ASLA değiştirilmez (tenant Host ile çözülür).
     headers["x-forwarded-host"] = String(req.headers.host ?? "");
     headers["x-forwarded-proto"] = String(
       req.headers["x-forwarded-proto"] ?? "https",
@@ -1089,18 +1123,23 @@ function proxyToPrimary(req, res) {
       ? `${priorFor}, ${remote}`
       : remote;
 
-    if (loggedProxyAttempts < 3) {
-      loggedProxyAttempts += 1;
-      const pathOnly = String(req.url ?? "/").split("?")[0];
-      console.log(
-        `[hostinger] teşhis-proxy #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
-      );
-    }
+    const pathOnly = String(req.url ?? "/").split("?")[0];
+    loggedProxyAttempts += 1;
+    console.log(
+      `[hostinger] proxy-deneme #${loggedProxyAttempts} pid=${process.pid} → primary=${lock.pid} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+    );
 
     let settled = false;
-    const finish = (ok) => {
+    const finish = (ok, reason) => {
       if (settled) return;
       settled = true;
+      if (ok) {
+        console.log(
+          `[hostinger] proxy-ok pid=${process.pid} → primary=${lock.pid} url=${pathOnly} host=${req.headers.host ?? "-"}`,
+        );
+      } else if (reason) {
+        logProxyError(reason);
+      }
       resolve(ok);
     };
 
@@ -1123,8 +1162,7 @@ function proxyToPrimary(req, res) {
         res.setHeader("x-guntan-app", "proxied-standby");
         upRes.pipe(res);
         upRes.on("error", (err) => {
-          logProxyError("upstream-res", err instanceof Error ? err.message : String(err));
-          finish(false);
+          finish(false, `upstream-res:${err instanceof Error ? err.message : String(err)}`);
         });
         res.on("finish", () => finish(true));
         res.on("close", () => finish(true));
@@ -1132,13 +1170,15 @@ function proxyToPrimary(req, res) {
     );
 
     upstream.on("timeout", () => {
-      logProxyError("timeout", "20s");
       upstream.destroy();
-      finish(false);
+      finish(false, "timeout");
     });
     upstream.on("error", (err) => {
-      logProxyError("connect", err instanceof Error ? err.message : String(err));
-      finish(false);
+      const code = err && typeof err === "object" && "code" in err ? err.code : "";
+      finish(
+        false,
+        `connect:${code || (err instanceof Error ? err.message : String(err))}`,
+      );
     });
 
     const abortUpstream = () => {
@@ -1158,6 +1198,7 @@ function proxyToPrimary(req, res) {
 }
 
 function sendProxyFailure(req, res, pathOnly) {
+  logPlaceholder("proxy-fail", req, pathOnly);
   if (isStaticAssetPath(pathOnly) || !wantsHtml(req)) {
     res.statusCode = 503;
     res.setHeader("retry-after", "5");
@@ -1184,11 +1225,41 @@ function sendProxyFailure(req, res, pathOnly) {
   );
 }
 
+function sendLazy503(req, res, pathOnly) {
+  logPlaceholder("lazy-timeout", req, pathOnly);
+  if (isStaticAssetPath(pathOnly) || !wantsHtml(req)) {
+    res.statusCode = 503;
+    res.setHeader("retry-after", "2");
+    res.setHeader("cache-control", "no-store");
+    res.setHeader("x-guntan-app", "standby-self");
+    res.end();
+    return;
+  }
+  sendHtml(
+    res,
+    503,
+    `<!doctype html><html lang="tr"><meta charset="utf-8"/><title>Site açılıyor</title>
+<meta http-equiv="refresh" content="2"/>
+<body style="font-family:system-ui;padding:2rem;max-width:40rem">
+<h1>Site açılıyor</h1>
+<p>Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.</p>
+</body></html>`,
+    {
+      "x-guntan-app": "standby-self",
+      "Retry-After": "2",
+      "Cache-Control": "no-store",
+      "CDN-Cache-Control": "no-store",
+    },
+  );
+}
+
 let sfHandler = null;
 let adminHandler = null;
 let bootFailed = false;
 /** @type {Promise<boolean> | null} */
 let adminPrepare = null;
+/** @type {Promise<boolean> | null} */
+let standbySelfBoot = null;
 let nextFactory = null;
 /** @type {{ kind: "sf" | "admin", resolve: (ok: boolean) => void, timer: ReturnType<typeof setTimeout> }[]} */
 let waiters = [];
@@ -1274,22 +1345,44 @@ async function routeRequest(req, res) {
     return;
   }
 
-  // Yedek/birincil fark etmez — Next yüklemeden; yedek hemen çıkabilir.
+  // Host rewrite yok — tenant Host ile çözülür; izinli değilse 301.
   if (maybeHostRedirect(req, res, pathOnly)) return;
 
-  // Yedek → hazır birincile unix proxy (HOSTINGER_STANDBY_PROXY=1).
-  if (standbyProxy && !sfHandler) {
+  // Proxy / lazy self-boot (Next henüz yokken).
+  if (useStandbyProxy && !sfHandler) {
     const lock = readLockState();
-    if (lock?.ready && lock.pid !== process.pid && pidAlive(lock.pid)) {
+    const primaryReady =
+      Boolean(lock?.ready) &&
+      lock.pid !== process.pid &&
+      pidAlive(lock.pid);
+
+    if (primaryReady) {
       const ok = await proxyToPrimary(req, res);
       if (ok || res.headersSent || res.writableEnded) return;
-      sendProxyFailure(req, res, pathOnly);
-      return;
+      if (!lazyStandby) {
+        sendProxyFailure(req, res, pathOnly);
+        return;
+      }
+    }
+
+    if (lazyStandby) {
+      await ensureStandbySelfBoot();
+      if (res.writableEnded || res.headersSent) return;
+      if (!sfHandler) {
+        const ready = await waitUntilReady("sf", req);
+        if (res.writableEnded) return;
+        if (!ready || !sfHandler) {
+          sendLazy503(req, res, pathOnly);
+          return;
+        }
+      }
+      // sfHandler hazır → aşağıdaki normal routing
     }
   }
 
-  // Yedek süreç Next yüklemez; bağlantıyı sıfırlama — "Site açılıyor" 200.
-  if (isStandbyMode) {
+  // Klasik yedek yer tutucu (lazy kapalıyken).
+  if (isStandbyMode && !lazyStandby && !sfHandler) {
+    logPlaceholder("standby-placeholder", req, pathOnly);
     sendUnavailable(
       res,
       "Site açılıyor",
@@ -1299,8 +1392,8 @@ async function routeRequest(req, res) {
     return;
   }
 
-  // Opsiyonel: yedekte waitUntilReady (15 sn) yerine hemen 200.
-  if (standbyFastResponse && !isPrimaryProcess && !sfHandler) {
+  if (standbyFastResponse && !lazyStandby && !isPrimaryProcess && !sfHandler) {
+    logPlaceholder("fast-response", req, pathOnly);
     sendUnavailable(
       res,
       "Site açılıyor",
@@ -1310,7 +1403,6 @@ async function routeRequest(req, res) {
     return;
   }
 
-  // Klasörlü subdomain Node’a gelmez; gelirse ana site paneline al.
   if (isAdminHost(req.headers.host) && !isAdminPath(pathOnly)) {
     const dest = `${publicStoreUrl}${adminBasePath}${pathOnly === "/" ? "" : pathOnly}${parsedUrl.search ?? ""}`;
     res.statusCode = 302;
@@ -1345,8 +1437,7 @@ async function routeRequest(req, res) {
     const ready = await waitUntilReady("sf", req);
     if (res.writableEnded) return;
     if (!ready || !sfHandler) {
-      // 503 Hostinger/LiteSpeed sağlık kontrolünü "uygulama öldü" sanıp
-      // yeni süreç başlatıyordu; o da birincili öldürüp döngüye giriyordu.
+      logPlaceholder("boot-wait", req, pathOnly);
       sendUnavailable(
         res,
         "Site açılıyor",
@@ -1357,7 +1448,11 @@ async function routeRequest(req, res) {
     }
   }
 
-  res.setHeader("x-guntan-app", "storefront");
+  const lockNow = readLockState();
+  res.setHeader(
+    "x-guntan-app",
+    lockNow?.pid === process.pid ? "storefront" : "standby-self",
+  );
   enableSharedHtmlCache(req, res);
   return sfHandler(req, res, parsedUrl);
 }
@@ -1457,14 +1552,115 @@ function becomePrimaryFromStandby() {
   console.warn(
     `[hostinger] yedek birincili devralıyor pid=${process.pid} (önceki birincil öldü)`,
   );
-  writeLock(false);
+  writeLock(Boolean(sfHandler));
   watchPrimaryLock();
   startSelfPing();
+  if (sfHandler) {
+    writeLock(true);
+    startPrimarySock();
+    return;
+  }
   startNextAfterListen();
+}
+
+/**
+ * Lazy yedek: proxy fail / birincil yok → kendi Next (tek promise).
+ * Ready birincil varken kilidi EZME.
+ */
+function ensureStandbySelfBoot() {
+  if (sfHandler) return Promise.resolve(true);
+  if (bootFailed) return Promise.resolve(false);
+  if (standbySelfBoot) return standbySelfBoot;
+
+  standbySelfBoot = (async () => {
+    nextBooted = true;
+    console.log(
+      `[hostinger] yedek-self-boot başlıyor pid=${process.pid} rss=${rssMb()}MB`,
+    );
+    const lock = readLockState();
+    const primaryAliveReady =
+      Boolean(lock?.ready) &&
+      lock.pid !== process.pid &&
+      pidAlive(lock.pid);
+
+    if (!primaryAliveReady) {
+      writeLock(false);
+      isPrimaryProcess = true;
+      isStandbyMode = false;
+      watchPrimaryLock();
+      startSelfPing();
+      console.log(
+        `[hostinger] yedek-self-boot kilit devralındı pid=${process.pid}`,
+      );
+    } else {
+      console.log(
+        `[hostinger] yedek-self-boot kilit ezilmiyor primary=${lock.pid} — kendi sfHandler`,
+      );
+    }
+
+    try {
+      redirectNextWritable(storefrontDir, "storefront");
+      const next = loadNext();
+      const storefront = next({
+        dev: false,
+        dir: storefrontDir,
+        hostname,
+        port,
+      });
+      await storefront.prepare();
+      if (shuttingDown) return false;
+
+      const after = readLockState();
+      const stillSecondary =
+        after &&
+        after.pid !== process.pid &&
+        pidAlive(after.pid) &&
+        after.ready;
+
+      if (!stillSecondary) {
+        if (readLockPid() !== process.pid) writeLock(false);
+        writeLock(true);
+        isPrimaryProcess = true;
+        isStandbyMode = false;
+        watchPrimaryLock();
+        startPrimarySock();
+      }
+
+      sfHandler = storefront.getRequestHandler();
+      notifyReady("sf");
+      console.log(
+        `[hostinger] yedek-self-boot hazır pid=${process.pid} role=${stillSecondary ? "standby-self" : "primary"} rss=${rssMb()}MB`,
+      );
+      return true;
+    } catch (err) {
+      console.error("[hostinger] yedek-self-boot başarısız:", err);
+      standbySelfBoot = null;
+      notifyBootFailed();
+      return false;
+    }
+  })();
+
+  return standbySelfBoot;
 }
 
 function runAsStandby() {
   startDiagHeartbeat();
+
+  if (lazyStandby) {
+    isStandbyMode = true;
+    console.log(
+      `[hostinger] lazy-yedek dinliyor pid=${process.pid} — MAX/KEEP yok sayıldı, istekte proxy/self-boot`,
+    );
+    setInterval(() => {
+      if (shuttingDown || sfHandler) return;
+      const lock = readLockState();
+      if (!lock || !pidAlive(lock.pid)) {
+        becomePrimaryFromStandby();
+      }
+    }, 1000).unref();
+    return;
+  }
+
   if (!Number.isFinite(standbyKeepMs) || standbyKeepMs <= 0) {
     logLifecycleSnapshot("teşhis-yedek-çıkış");
     exitReason = "yedek-hemen";
@@ -1482,7 +1678,6 @@ function runAsStandby() {
     `[hostinger] yedek bekliyor pid=${process.pid} keepMs=${standbyKeepMs} max=${standbyMax}`,
   );
   const deadline = Date.now() + standbyKeepMs;
-  // unref YOK — event loop açık kalsın (HOSTINGER_STANDBY_KEEP_MS > 0).
   const poll = setInterval(() => {
     if (shuttingDown) {
       clearInterval(poll);
@@ -1523,6 +1718,10 @@ function watchPrimaryLock() {
       console.log(
         `[hostinger] ölü sahip pid=${current.pid} — kilit yenilendi pid=${process.pid}`,
       );
+      return;
+    }
+    // Lazy secondary: ready birincil varken kendi sfHandler ile servis — FAZLALIK ile çıkma.
+    if (lazyStandby && sfHandler && current.ready) {
       return;
     }
     console.warn(
@@ -1595,7 +1794,7 @@ if (!isPrimaryProcess) {
 logStartupProbe();
 startPpidWatch();
 console.log(
-  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version}`,
+  `[hostinger] start pid=${process.pid} port=${port} entry=hostinger-start node=${process.version} lazy=${lazyStandby} proxy=${useStandbyProxy}`,
 );
 bindPublicPort();
 
