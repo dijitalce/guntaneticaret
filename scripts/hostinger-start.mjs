@@ -65,9 +65,13 @@ const publicStoreUrl = (
 const bootStuckMs = Number(process.env.HOSTINGER_BOOT_STUCK_MS ?? "90000");
 const standbyKeepMs = Number(process.env.HOSTINGER_STANDBY_KEEP_MS ?? "0");
 const standbyMax = Math.max(1, Number(process.env.HOSTINGER_STANDBY_MAX ?? "2") || 2);
+const standbyFastResponse = process.env.HOSTINGER_STANDBY_FAST_RESPONSE === "1";
 const startedAt = Date.now();
 let requestsTotal = 0;
 let requestsInFlight = 0;
+let loggedEarlyRequests = 0;
+/** @type {number | null} */
+let lastRequestAt = null;
 let sigtermCount = 0;
 let sigintCount = 0;
 let firstSigtermAt = null;
@@ -526,8 +530,13 @@ function onSigterm() {
   sigtermCount += 1;
   const now = Date.now();
   if (firstSigtermAt == null) firstSigtermAt = now;
+  const role = isStandbyMode ? "standby" : isPrimaryProcess ? "primary" : "yedek";
+  const sinceLastReqMs = lastRequestAt == null ? "never" : now - lastRequestAt;
   console.warn(
     `[hostinger] SIGTERM alındı #${sigtermCount} ageMs=${now - startedAt} sinceFirstMs=${now - firstSigtermAt} pid=${process.pid}`,
+  );
+  console.warn(
+    `[hostinger] teşhis-sigterm-anında pid=${process.pid} role=${role} sinceLastReqMs=${sinceLastReqMs} inFlight=${requestsInFlight} primary=${isPrimaryProcess} standby=${isStandbyMode}`,
   );
   logPrimarySignal("SIGTERM", sigtermCount);
   shutdown("SIGTERM");
@@ -1005,6 +1014,17 @@ async function routeRequest(req, res) {
     return;
   }
 
+  // Opsiyonel: yedekte waitUntilReady (15 sn) yerine hemen 200.
+  if (standbyFastResponse && !isPrimaryProcess && !sfHandler) {
+    sendUnavailable(
+      res,
+      "Site açılıyor",
+      "Sunucu hazırlanıyor. Sayfa kendiliğinden yenilenecek.",
+      200,
+    );
+    return;
+  }
+
   // Klasörlü subdomain Node’a gelmez; gelirse ana site paneline al.
   if (isAdminHost(req.headers.host) && !isAdminPath(pathOnly)) {
     const dest = `${publicStoreUrl}${adminBasePath}${pathOnly === "/" ? "" : pathOnly}${parsedUrl.search ?? ""}`;
@@ -1060,11 +1080,32 @@ async function routeRequest(req, res) {
 const server = createServer((req, res) => {
   requestsTotal += 1;
   requestsInFlight += 1;
+  const reqStartedAt = Date.now();
+  lastRequestAt = reqStartedAt;
+  const shouldLogEarly = loggedEarlyRequests < 3;
+  const earlyN = shouldLogEarly ? ++loggedEarlyRequests : 0;
+  let earlyLogged = false;
   const done = () => {
     requestsInFlight = Math.max(0, requestsInFlight - 1);
   };
-  res.on("finish", done);
-  res.on("close", done);
+  const logEarlyRequest = () => {
+    if (!shouldLogEarly || earlyLogged) return;
+    earlyLogged = true;
+    const pathOnly = String(req.url ?? "/").split("?")[0];
+    const role = isStandbyMode ? "standby" : isPrimaryProcess ? "primary" : "yedek";
+    const ua = String(req.headers["user-agent"] ?? "-").slice(0, 160);
+    console.log(
+      `[hostinger] teşhis-istek #${earlyN} pid=${process.pid} role=${role} ageMs=${reqStartedAt - startedAt} method=${req.method ?? "-"} url=${pathOnly} host=${req.headers.host ?? "-"} ua=${JSON.stringify(ua)} remote=${req.socket?.remoteAddress ?? "-"} durationMs=${Date.now() - reqStartedAt}`,
+    );
+  };
+  res.on("finish", () => {
+    done();
+    logEarlyRequest();
+  });
+  res.on("close", () => {
+    done();
+    logEarlyRequest();
+  });
   routeRequest(req, res).catch((err) => {
     console.error("[hostinger] istek hatası:", err);
     if (!res.headersSent) {
