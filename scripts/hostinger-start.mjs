@@ -2319,6 +2319,7 @@ function runAsStandby() {
   if (!claimStandbySlot()) {
     logLifecycleSnapshot("teşhis-yedek-fazla");
     exitReason = "yedek-fazla";
+    clearAlive();
     process.exit(0);
     return;
   }
