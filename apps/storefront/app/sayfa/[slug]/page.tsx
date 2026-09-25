@@ -6,6 +6,7 @@ import { db, pages } from "@guntan/db";
 import { GIZLILIK_BODY, GIZLILIK_TITLE } from "@guntan/db/content/gizlilik";
 import { getTenant } from "../../../src/tenant";
 import { IADE_TITLE, ReturnPolicy } from "../../../src/return-policy";
+import { DistanceSalesContract, MESAFELI_TITLE } from "../../../src/distance-sales";
 
 async function loadPage(slug: string) {
   const tenant = await getTenant();
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   if (slug === "gizlilik") return { title: GIZLILIK_TITLE };
   if (slug === "iade") return { title: IADE_TITLE };
+  if (slug === "mesafeli-satis") return { title: MESAFELI_TITLE };
   const page = await loadPage(slug);
   if (!page) return { title: "Sayfa bulunamadı" };
   return {
@@ -40,6 +42,7 @@ export default async function CmsPage({ params }: { params: Promise<{ slug: stri
     );
   }
   if (slug === "iade") return <ReturnPolicy />;
+  if (slug === "mesafeli-satis") return <DistanceSalesContract />;
   const page = await loadPage(slug);
   if (!page) notFound();
   return (

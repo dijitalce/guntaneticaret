@@ -12,6 +12,9 @@ export const COMPANY_CONTACT = {
   phone: "+90 551 194 61 68",
   phoneTel: "+905511946168",
   whatsapp: "905511946168",
+  email: "info@guntanotoyedekparca.com",
+  site: "www.guntanotoyedekparca.com",
+  tradeName: "Güntan Oto Yedek Parça",
 } as const;
 
 export const COMPANY_ADDRESS = COMPANY_CONTACT.lines.join(", ");

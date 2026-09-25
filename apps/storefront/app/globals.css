@@ -1694,6 +1694,25 @@ body {
 .contact-card p { margin: 0.85rem 0 0; }
 .contact-card a { color: var(--primary); font-weight: 650; }
 
+.sales-contract {
+  max-width: 820px;
+  font-size: 12pt;
+  font-weight: 700;
+  line-height: 1.55;
+}
+.sales-contract h1 {
+  margin: 0 0 1rem;
+  font-size: 16pt;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.sales-contract h2 {
+  margin: 1.35rem 0 0.45rem;
+  font-size: 12pt;
+  letter-spacing: 0;
+}
+.sales-contract p { margin: 0 0 0.75rem; }
+
 .cms-prose { max-width: 760px; }
 .cms-prose h1 {
   margin: 0 0 1.1rem;
