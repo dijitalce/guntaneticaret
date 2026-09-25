@@ -42,10 +42,10 @@ INSERT INTO `tenant_settings` (
   '33333333-3333-4333-8333-333333333333',
   '11111111-1111-4111-8111-111111111111',
   'Güntan Oto Yedek Parça',
-  '0216 000 00 00',
-  '905550000000',
+  '+90 551 194 61 68',
+  '905511946168',
   'info@guntanotoyedekparca.com',
-  'İstanbul',
+  'Bağcılar Güngören Sanayi Sitesi, 15. Blok No: 49, Başakşehir / İstanbul',
   JSON_OBJECT('allCatalogUrl', 'https://guntanotoyedekparca.com'),
   JSON_OBJECT(
     'primary', '#b42318',
@@ -73,7 +73,10 @@ INSERT INTO `tenant_settings` (
   CURRENT_TIMESTAMP
 )
 ON DUPLICATE KEY UPDATE
-  `site_name` = VALUES(`site_name`);
+  `site_name` = VALUES(`site_name`),
+  `phone` = VALUES(`phone`),
+  `whatsapp` = VALUES(`whatsapp`),
+  `address` = VALUES(`address`);
 
 SELECT t.slug, t.status, d.hostname, d.is_primary, s.site_name
 FROM tenants t

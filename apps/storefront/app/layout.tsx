@@ -14,6 +14,7 @@ import { CartShell } from "../src/cart-drawer";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
 import { TENANT_STATUS } from "@guntan/types";
+import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -144,8 +145,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="footer-grid">
               <div>
                 <h3>{tenant.siteName}</h3>
-                <p>{tenant.address}</p>
-                <p>{tenant.phone}</p>
+                {tenant.tenant.slug === "guntan" ? (
+                  <p className="footer-address">
+                    {COMPANY_CONTACT.lines.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                  </p>
+                ) : (
+                  <p>{tenant.address}</p>
+                )}
+                {tenant.tenant.slug === "guntan" ? (
+                  <>
+                    <p>
+                      <a href={`tel:${COMPANY_CONTACT.phoneTel}`}>{COMPANY_CONTACT.phone}</a>
+                    </p>
+                    <p>
+                      <a href={`https://wa.me/${COMPANY_CONTACT.whatsapp}`} target="_blank" rel="noreferrer">
+                        WhatsApp {COMPANY_CONTACT.phone}
+                      </a>
+                    </p>
+                  </>
+                ) : (
+                  tenant.phone ? <p>{tenant.phone}</p> : null
+                )}
               </div>
               <div>
                 <h3>Kurumsal</h3>

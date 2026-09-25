@@ -2,6 +2,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { COMPANY_ADDRESS, COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { resolveTenantByHost, themeToCssVars } from "@guntan/tenant";
 import { TENANT_HOST_CACHE_TTL_SECONDS, TENANT_STATUS } from "@guntan/types";
 import type { TenantPublicConfig } from "@guntan/types";
@@ -21,7 +22,14 @@ function cachedTenantByHost(host: string) {
 /** Layout / metadata: tenant yoksa null (notFound çağırmaz — beyaz ekranı önler). */
 export const tryGetTenant = cache(async (): Promise<TenantPublicConfig | null> => {
   const h = await headers();
-  return cachedTenantByHost(requestHost(h));
+  const tenant = await cachedTenantByHost(requestHost(h));
+  if (!tenant || tenant.tenant.slug !== "guntan") return tenant;
+  return {
+    ...tenant,
+    address: COMPANY_ADDRESS,
+    phone: COMPANY_CONTACT.phone,
+    whatsapp: COMPANY_CONTACT.whatsapp,
+  };
 });
 
 export const getTenant = cache(async (): Promise<TenantPublicConfig> => {

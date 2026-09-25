@@ -11,6 +11,7 @@ import {
 } from "./schema";
 import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
+import { COMPANY_ADDRESS, COMPANY_CONTACT } from "./content/contact";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES, siteHosts } from "./group-sites";
 
 type SiteDef = {
@@ -66,10 +67,10 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
   const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
   const payload = {
     siteName: site.name,
-    phone: "0216 000 00 00",
-    whatsapp: "905550000000",
+    phone: site.slug === "guntan" ? COMPANY_CONTACT.phone : "0216 000 00 00",
+    whatsapp: site.slug === "guntan" ? COMPANY_CONTACT.whatsapp : "905550000000",
     email: site.email,
-    address: "İstanbul",
+    address: site.slug === "guntan" ? COMPANY_ADDRESS : "İstanbul",
     themeTokens: { ...DEFAULT_THEME_TOKENS },
     defaultMetaTitle: site.name,
     defaultMetaDescription: `${site.name} için oto yedek parça.`,

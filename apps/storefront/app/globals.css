@@ -1663,9 +1663,36 @@ body {
   letter-spacing: 0.06em;
 }
 .footer-grid a { display: block; padding: 0.18rem 0; }
+.footer-address span { display: block; }
 .footer-copy { margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 0.9rem; font-size: 0.8rem; }
 
 .page-surface { padding: 1.25rem 0 2rem; }
+
+.contact-page { max-width: 720px; }
+.contact-page h1 {
+  margin: 0 0 1rem;
+  letter-spacing: -0.03em;
+  font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+}
+.contact-card {
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  line-height: 1.55;
+}
+.contact-card address {
+  display: grid;
+  gap: 0.15rem;
+  font-style: normal;
+}
+.contact-card strong { margin-bottom: 0.2rem; }
+.contact-tax {
+  margin-top: 0.75rem;
+  color: var(--muted-foreground);
+}
+.contact-card p { margin: 0.85rem 0 0; }
+.contact-card a { color: var(--primary); font-weight: 650; }
 
 .cms-prose { max-width: 760px; }
 .cms-prose h1 {

@@ -30,6 +30,7 @@ import {
 } from "./schema";
 import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
+import { COMPANY_ADDRESS, COMPANY_CONTACT } from "./content/contact";
 import { GIZLILIK_BODY, GIZLILIK_TITLE } from "./content/gizlilik";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES } from "./group-sites";
 import { ADMIN_PERMISSION, ADMIN_ROLE, DEFAULT_THEME_TOKENS, ROLE_PERMISSIONS } from "@guntan/types";
@@ -405,10 +406,10 @@ async function main() {
     {
       tenantId: guntan.id,
       siteName: "Güntan Oto Yedek Parça",
-      phone: "0216 000 00 00",
-      whatsapp: "905550000000",
+      phone: COMPANY_CONTACT.phone,
+      whatsapp: COMPANY_CONTACT.whatsapp,
       email: "info@guntanotoyedekparca.com",
-      address: "İstanbul",
+      address: COMPANY_ADDRESS,
       themeTokens: guntanTheme,
       defaultMetaTitle: "Güntan Oto Yedek Parça",
       defaultMetaDescription: "Tüm markalar için oto yedek parça.",
