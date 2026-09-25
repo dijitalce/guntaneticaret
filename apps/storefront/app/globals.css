@@ -1667,6 +1667,180 @@ body {
 
 .page-surface { padding: 1.25rem 0 2rem; }
 
+.cms-prose { max-width: 760px; }
+.cms-prose h1 {
+  margin: 0 0 1.1rem;
+  letter-spacing: -0.03em;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  line-height: 1.2;
+}
+.cms-prose h2 {
+  margin: 1.65rem 0 0.65rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+.cms-prose p {
+  margin: 0 0 0.9rem;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+
+.return-policy { max-width: 980px; }
+.return-policy-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  margin-bottom: 1.15rem;
+}
+.return-policy-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, #fff);
+}
+.return-policy h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.return-policy-head p {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.return-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.return-card {
+  padding: 1rem 1rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.return-card-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 0.7rem;
+  border-radius: 10px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, #fff);
+}
+.return-card h2 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+.return-card strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+.return-card p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.return-section { margin-top: 1.35rem; }
+.return-section > h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.7rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+.return-section > h2 svg { color: var(--primary); }
+.return-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.return-steps li {
+  padding: 0.95rem 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.return-steps span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 0.55rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.return-steps strong { display: block; margin-bottom: 0.25rem; font-size: 0.92rem; }
+.return-steps p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.return-checks {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.return-checks li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  line-height: 1.5;
+}
+.return-checks li::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  margin-top: 0.12rem;
+  border-radius: 999px;
+  background: #128c4b url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M7 12.5 10.2 16 17 8.5' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+.return-note {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid #f3d48a;
+  border-radius: 12px;
+  background: #fff8e8;
+  color: #7a4b08;
+  line-height: 1.6;
+}
+@media (max-width: 900px) {
+  .return-highlights,
+  .return-steps { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .return-policy-head { grid-template-columns: 1fr; }
+  .return-highlights,
+  .return-steps { grid-template-columns: 1fr; }
+}
+
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

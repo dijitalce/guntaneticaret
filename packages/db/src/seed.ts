@@ -30,6 +30,7 @@ import {
 } from "./schema";
 import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
+import { GIZLILIK_BODY, GIZLILIK_TITLE } from "./content/gizlilik";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES } from "./group-sites";
 import { ADMIN_PERMISSION, ADMIN_ROLE, DEFAULT_THEME_TOKENS, ROLE_PERMISSIONS } from "@guntan/types";
 import { permissions, rolePermissions } from "./schema/system";
@@ -38,6 +39,10 @@ function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `scrypt:${salt}:${hash}`;
+}
+
+async function publishGizlilik() {
+  await db.update(pages).set({ title: GIZLILIK_TITLE, body: GIZLILIK_BODY }).where(eq(pages.slug, "gizlilik"));
 }
 
 function slugify(value: string): string {
@@ -118,8 +123,8 @@ async function main() {
       for (const page of [
         { title: "Hakkımızda", slug: "hakkimizda", body: "Hakkımızda içeriği." },
         { title: "Mesafeli Satış Sözleşmesi", slug: "mesafeli-satis", body: "Sözleşme metni." },
-        { title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
-        { title: "İade Şartları", slug: "iade", body: "İade koşulları." },
+        { title: GIZLILIK_TITLE, slug: "gizlilik", body: GIZLILIK_BODY },
+        { title: "İade ve Değişim Politikası", slug: "iade", body: "İade ve değişim politikası." },
       ]) {
         const [have] = await db
           .select()
@@ -128,6 +133,7 @@ async function main() {
           .limit(1);
         if (!have) await db.insert(pages).values({ tenantId: guntanRow.id, ...page });
       }
+      await publishGizlilik();
     }
     await compileVisibility(db);
     await pool.end();
@@ -466,8 +472,8 @@ async function main() {
     for (const page of [
       { title: "Hakkımızda", slug: "hakkimizda", body: "Hakkımızda içeriği." },
       { title: "Mesafeli Satış Sözleşmesi", slug: "mesafeli-satis", body: "Sözleşme metni." },
-      { title: "Gizlilik", slug: "gizlilik", body: "KVKK ve gizlilik." },
-      { title: "İade Şartları", slug: "iade", body: "İade koşulları." },
+      { title: GIZLILIK_TITLE, slug: "gizlilik", body: GIZLILIK_BODY },
+      { title: "İade ve Değişim Politikası", slug: "iade", body: "İade ve değişim politikası." },
     ]) {
       const haveTenantPage = await db
         .select()
@@ -487,6 +493,8 @@ async function main() {
       ]);
     }
   }
+
+  await publishGizlilik();
 
   const [haveFeed] = await db.select().from(xmlFeeds).limit(1);
   if (!haveFeed) {

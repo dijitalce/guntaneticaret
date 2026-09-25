@@ -157,7 +157,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <h3>Yardım</h3>
                 <Link href="/sayfa/mesafeli-satis">Mesafeli satış</Link>
                 <Link href="/sayfa/gizlilik">Gizlilik</Link>
-                <Link href="/sayfa/iade">İade şartları</Link>
+                <Link href="/sayfa/iade">İade ve değişim</Link>
               </div>
               <div>
                 <h3>Alışveriş</h3>

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./vehicle-catalog": "./src/vehicle-catalog.ts"
+    "./vehicle-catalog": "./src/vehicle-catalog.ts",
+    "./content/gizlilik": "./src/content/gizlilik.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate",

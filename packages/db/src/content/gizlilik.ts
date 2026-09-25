@@ -1,28 +1,6 @@
--- CMS sayfaları (Hakkımızda vb.) — ana tenant id bootstrap_main_tenant.sql ile aynı
--- phpMyAdmin → SQL → Yapıştır → Git
+export const GIZLILIK_TITLE = "Gizlilik Sözleşmesi";
 
-SET NAMES utf8mb4;
-
-SET @tenant := '11111111-1111-4111-8111-111111111111';
-
-INSERT INTO `pages` (`id`, `tenant_id`, `title`, `slug`, `body`, `is_published`, `created_at`, `updated_at`)
-SELECT UUID(), @tenant, 'Hakkımızda', 'hakkimizda', 'Güntan Oto Yedek Parça hakkında bilgiler.', 1, NOW(), NOW()
-FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM pages WHERE tenant_id=@tenant AND slug='hakkimizda');
-
-INSERT INTO `pages` (`id`, `tenant_id`, `title`, `slug`, `body`, `is_published`, `created_at`, `updated_at`)
-SELECT UUID(), @tenant, 'Mesafeli Satış Sözleşmesi', 'mesafeli-satis', 'Sözleşme metni.', 1, NOW(), NOW()
-FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM pages WHERE tenant_id=@tenant AND slug='mesafeli-satis');
-
-INSERT INTO `pages` (`id`, `tenant_id`, `title`, `slug`, `body`, `is_published`, `created_at`, `updated_at`)
-SELECT UUID(), @tenant, 'Gizlilik', 'gizlilik', 'KVKK ve gizlilik.', 1, NOW(), NOW()
-FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM pages WHERE tenant_id=@tenant AND slug='gizlilik');
-
-INSERT INTO `pages` (`id`, `tenant_id`, `title`, `slug`, `body`, `is_published`, `created_at`, `updated_at`)
-SELECT UUID(), @tenant, 'İade ve Değişim Politikası', 'iade', 'İade ve değişim politikası.', 1, NOW(), NOW()
-FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM pages WHERE tenant_id=@tenant AND slug='iade');
-
-UPDATE `pages`
-SET `title` = 'Gizlilik Sözleşmesi', `body` = 'Mağazamızda verilen tüm servisler ve hizmetler, www.guntanotoyedekparca.com adresinde kayıtlı Güntan Oto Yedek Parça firmamıza aittir ve firmamız tarafından işletilir.
+export const GIZLILIK_BODY = `Mağazamızda verilen tüm servisler ve hizmetler, www.guntanotoyedekparca.com adresinde kayıtlı Güntan Oto Yedek Parça firmamıza aittir ve firmamız tarafından işletilir.
 
 Firmamız, çeşitli amaçlarla kişisel veriler toplayabilir. Aşağıda, toplanan kişisel verilerin nasıl ve ne şekilde toplandığı, bu verilerin nasıl ve ne şekilde korunduğu belirtilmiştir.
 
@@ -44,7 +22,7 @@ Firmamız, alışveriş sitelerimizden alışveriş yapan kredi kartı sahipleri
 
 İşlemler sürecine girdiğinizde güvenli bir sitede olduğunuzu anlamak için dikkat etmeniz gereken iki şey vardır. Bunlardan biri tarayıcınızın en alt satırında bulunan bir anahtar ya da kilit simgesidir. Bu güvenli bir internet sayfasında olduğunuzu gösterir ve her türlü bilgileriniz şifrelenerek korunur. Bu bilgiler, ancak satış işlemleri sürecine bağlı olarak ve verdiğiniz talimat istikametinde kullanılır. Alışveriş sırasında kullanılan kredi kartı ile ilgili bilgiler alışveriş sitelerimizden bağımsız olarak 128 bit SSL (Secure Sockets Layer) protokolü ile şifrelenip sorgulanmak üzere ilgili bankaya ulaştırılır. Kartın kullanılabilirliği onaylandığı takdirde alışverişe devam edilir. Kartla ilgili hiçbir bilgi tarafımızdan görüntülenemediğinden ve kaydedilmediğinden, üçüncü şahısların herhangi bir koşulda bu bilgileri ele geçirmesi engellenmiş olur.
 
-Online olarak kredi kartı ile verilen siparişlerin ödeme/fatura/teslimat adresi bilgilerinin güvenilirliği firmamız tarafından Kredi Kartları Dolandırıcılığı''na karşı denetlenmektedir. Bu yüzden, alışveriş sitelerimizden ilk defa sipariş veren müşterilerin siparişlerinin tedarik ve teslimat aşamasına gelebilmesi için öncelikle finansal ve adres/telefon bilgilerinin doğruluğunun onaylanması gereklidir. Bu bilgilerin kontrolü için gerekirse kredi kartı sahibi müşteri ile veya ilgili banka ile irtibata geçilmektedir.
+Online olarak kredi kartı ile verilen siparişlerin ödeme/fatura/teslimat adresi bilgilerinin güvenilirliği firmamız tarafından Kredi Kartları Dolandırıcılığı'na karşı denetlenmektedir. Bu yüzden, alışveriş sitelerimizden ilk defa sipariş veren müşterilerin siparişlerinin tedarik ve teslimat aşamasına gelebilmesi için öncelikle finansal ve adres/telefon bilgilerinin doğruluğunun onaylanması gereklidir. Bu bilgilerin kontrolü için gerekirse kredi kartı sahibi müşteri ile veya ilgili banka ile irtibata geçilmektedir.
 
 Üye olurken verdiğiniz tüm bilgilere sadece siz ulaşabilir ve siz değiştirebilirsiniz. Üye giriş bilgilerinizi güvenli koruduğunuz takdirde başkalarının sizinle ilgili bilgilere ulaşması ve bunları değiştirmesi mümkün değildir. Bu amaçla, üyelik işlemleri sırasında 256 bit SSL güvenlik alanı içinde hareket edilir. Bu sistem kırılması mümkün olmayan bir uluslararası bir şifreleme standardıdır.
 
@@ -56,7 +34,7 @@ MAİL ORDER KREDİ KART BİLGİLERİ GÜVENLİĞİ
 
 Kredi kartı mail-order yöntemi ile bize göndereceğiniz kimlik ve kredi kart bilgileriniz firmamız tarafından gizlilik prensibine göre saklanacaktır. Bu bilgiler olası banka ile oluşabilecek kredi kartından para çekim itirazlarına karşı 60 gün süre ile bekletilip daha sonrasında imha edilmektedir. Sipariş ettiğiniz ürünlerin bedeli karşılığında bize göndereceğiniz tarafınızdan onaylı mail-order formu bedeli dışında herhangi bir bedelin kartınızdan çekilmesi halinde doğal olarak bankaya itiraz edebilir ve bu tutarın ödenmesini engelleyebileceğiniz için bir risk oluşturmamaktadır.
 
-2.2. Site''de yer alan bilgiler hiçbir şekilde çoğaltılamaz, yayınlanamaz, kopyalanamaz, sunulamaz ve/veya aktarılamaz. Site''nin bütünü veya bir kısmı diğer bir internet sitesinde izinsiz olarak kullanılamaz.
+2.2. Site'de yer alan bilgiler hiçbir şekilde çoğaltılamaz, yayınlanamaz, kopyalanamaz, sunulamaz ve/veya aktarılamaz. Site'nin bütünü veya bir kısmı diğer bir internet sitesinde izinsiz olarak kullanılamaz.
 
 ÜÇÜNCÜ TARAF WEB SİTELERİ VE UYGULAMALAR
 
@@ -68,7 +46,7 @@ Aşağıda belirtilen sınırlı hallerde Firmamız, işbu "Gizlilik Politikası
 
 1. Kanun, Kanun Hükmünde Kararname, Yönetmelik v.b. yetkili hukuki otorite tarafından çıkarılan ve yürürlülükte olan hukuk kurallarının getirdiği zorunluluklara uymak;
 
-2. Mağazamızın kullanıcılarla akdettiği "Üyelik Sözleşmesi"''nin ve diğer sözleşmelerin gereklerini yerine getirmek ve bunları uygulamaya koymak amacıyla;
+2. Mağazamızın kullanıcılarla akdettiği "Üyelik Sözleşmesi"'nin ve diğer sözleşmelerin gereklerini yerine getirmek ve bunları uygulamaya koymak amacıyla;
 
 3. Yetkili idari ve adli otorite tarafından usulüne göre yürütülen bir araştırma veya soruşturmanın yürütümü amacıyla kullanıcılarla ilgili bilgi talep edilmesi;
 
@@ -76,15 +54,12 @@ Aşağıda belirtilen sınırlı hallerde Firmamız, işbu "Gizlilik Politikası
 
 E-POSTA GÜVENLİĞİ
 
-Mağazamızın Müşteri Hizmetleri''ne, herhangi bir siparişinizle ilgili olarak göndereceğiniz e-postalarda, asla kredi kartı numaranızı veya şifrelerinizi yazmayınız. E-postalarda yer alan bilgiler üçüncü şahıslar tarafından görülebilir. Firmamız e-postalarınızdan aktarılan bilgilerin güvenliğini hiçbir koşulda garanti edemez.
+Mağazamızın Müşteri Hizmetleri'ne, herhangi bir siparişinizle ilgili olarak göndereceğiniz e-postalarda, asla kredi kartı numaranızı veya şifrelerinizi yazmayınız. E-postalarda yer alan bilgiler üçüncü şahıslar tarafından görülebilir. Firmamız e-postalarınızdan aktarılan bilgilerin güvenliğini hiçbir koşulda garanti edemez.
 
 TARAYICI ÇEREZLERİ
 
-Firmamız, mağazamızı ziyaret eden kullanıcılar ve kullanıcıların web sitesini kullanımı hakkındaki bilgileri teknik bir iletişim dosyası (Çerez-Cookie) kullanarak elde edebilir. Bahsi geçen teknik iletişim dosyaları, ana bellekte saklanmak üzere bir internet sitesinin kullanıcının tarayıcısına (browser) gönderdiği küçük metin dosyalarıdır. Teknik iletişim dosyası site hakkında durum ve tercihleri saklayarak İnternet''in kullanımını kolaylaştırır.
+Firmamız, mağazamızı ziyaret eden kullanıcılar ve kullanıcıların web sitesini kullanımı hakkındaki bilgileri teknik bir iletişim dosyası (Çerez-Cookie) kullanarak elde edebilir. Bahsi geçen teknik iletişim dosyaları, ana bellekte saklanmak üzere bir internet sitesinin kullanıcının tarayıcısına (browser) gönderdiği küçük metin dosyalarıdır. Teknik iletişim dosyası site hakkında durum ve tercihleri saklayarak İnternet'in kullanımını kolaylaştırır.
 
 Teknik iletişim dosyası, siteyi kaç kişinin ziyaret ettiğini, bir kişinin siteyi hangi amaçla, kaç kez ziyaret ettiğini ve ne kadar sitede kaldıkları hakkında istatistiksel bilgileri elde etmeye ve kullanıcılar için özel tasarlanmış kullanıcı sayfalarından dinamik olarak reklam ve içerik üretilmesine yardımcı olur. Teknik iletişim dosyası, ana bellekte veya e-postanızdan veri veya başkaca herhangi bir kişisel bilgi almak için tasarlanmamıştır. Tarayıcıların pek çoğu başta teknik iletişim dosyasını kabul eder biçimde tasarlanmıştır ancak kullanıcılar dilerse teknik iletişim dosyasının gelmemesi veya teknik iletişim dosyasının gönderildiğinde uyarı verilmesini sağlayacak biçimde ayarları değiştirebilirler.
 
-Firmamız, işbu "Gizlilik Politikası" hükümlerini dilediği zaman sitede yayınlamak veya kullanıcılara elektronik posta göndermek veya sitesinde yayınlamak suretiyle değiştirebilir. Gizlilik Politikası hükümleri değiştiği takdirde, yayınlandığı tarihte yürürlük kazanır.', `updated_at` = NOW()
-WHERE `slug` = 'gizlilik';
-
-SELECT slug, title FROM pages WHERE tenant_id=@tenant;
+Firmamız, işbu "Gizlilik Politikası" hükümlerini dilediği zaman sitede yayınlamak veya kullanıcılara elektronik posta göndermek veya sitesinde yayınlamak suretiyle değiştirebilir. Gizlilik Politikası hükümleri değiştiği takdirde, yayınlandığı tarihte yürürlük kazanır.`;
