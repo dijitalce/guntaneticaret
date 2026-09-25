@@ -407,7 +407,7 @@ body.admin-body textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
-  align-items: end;
+  align-items: flex-end;
   padding: 0.9rem 1.1rem;
   border-bottom: 1px solid var(--admin-border);
   background: #faf7f3;

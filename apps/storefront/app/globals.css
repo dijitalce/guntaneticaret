@@ -857,7 +857,7 @@ body {
 .category-finder-controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: flex-end;
   gap: 0.6rem;
 }
 .category-finder-controls label {
