@@ -22,6 +22,9 @@ import {
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS } from "@guntan/types";
 import { contentHash, mapRaw, normalizeOem, parseProductXml } from "./index";
 import { inferFitments } from "./fitment-from-name";
+import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
+
+const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
 
 function slugify(value: string): string {
   return value
@@ -83,17 +86,23 @@ async function upsertNamed<T extends { id: string; slug: string }>(
 
 async function main() {
   const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-  const filePath = join(root, "products.xml");
+  const filePath = process.env.ALTAY_XML_PATH || join(root, "products.xml");
   console.log("Parsing", filePath);
   const rawItems = await parseProductXml(createReadStream(filePath));
   const mappedAll = rawItems.map((raw) => mapRaw(raw, MAPPING)).filter((x): x is NonNullable<typeof x> => x !== null);
   const byExternal = new Map<string, (typeof mappedAll)[number]>();
   for (const row of mappedAll) byExternal.set(row.externalId, row);
-  const mapped = [...byExternal.values()];
-  console.log(`Parsed ${rawItems.length} items, mapped ${mappedAll.length}, unique ${mapped.length}`);
+  const unique = [...byExternal.values()];
 
   const [supplier] = await db.select().from(suppliers).where(eq(suppliers.code, "DEMO")).limit(1);
   if (!supplier) throw new Error("DEMO tedarikçi yok. Önce seed çalıştır.");
+
+  const existing = await loadExistingProducts(supplier.id);
+  const mapped = unique.filter((row) => needsImport(existing.get(row.externalId), contentHash(row), FORCE_FULL));
+  const unchanged = unique.length - mapped.length;
+  console.log(
+    `Parsed ${rawItems.length} items, mapped ${mappedAll.length}, unique ${unique.length}, changed/new ${mapped.length}, unchanged ${unchanged}`,
+  );
 
   const existingFeed = await db.select().from(xmlFeeds).where(eq(xmlFeeds.name, "Güntan ürün XML")).limit(1);
   let feedId = existingFeed[0]?.id;
@@ -116,7 +125,7 @@ async function main() {
     feedId,
     status: IMPORT_RUN_STATUS.RUNNING,
     startedAt: new Date().toISOString(),
-    total: mapped.length,
+    total: unique.length,
   });
 
   const brandCache = new Map<string, typeof vehicleBrands.$inferSelect>();
@@ -307,17 +316,22 @@ async function main() {
     if (i % 4000 === 0) console.log(`Imported ${Math.min(i + chunk, mapped.length)} / ${mapped.length}`);
   }
 
+  const missing = failed ? 0 : await markMissingFromFeed(existing, new Set(unique.map((r) => r.externalId)));
+  console.log(`Listeden çıkan (satıştan kaldırılan): ${missing}`);
+
   console.log("Compiling visibility…");
   await compileVisibility(db);
   await db.update(xmlImportRuns).set({
     status: failed ? IMPORT_RUN_STATUS.COMPLETED_WITH_WARNINGS : IMPORT_RUN_STATUS.COMPLETED,
     finishedAt: new Date().toISOString(),
-    total: mapped.length,
+    total: unique.length,
     createdCount: created,
     updatedCount: updated,
+    unchangedCount: unchanged,
     failedCount: failed,
+    inactivatedCount: missing,
   }).where(eq(xmlImportRuns.id, runId));
-  console.log({ created, failed, total: mapped.length });
+  console.log({ created, unchanged, missing, failed, total: unique.length });
   await pool.end();
 }
 

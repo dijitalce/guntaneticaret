@@ -14,9 +14,24 @@ export type BasbugRaw = {
   y?: string;
   dc?: string;
   lf?: number | string;
+  /** Net alış fiyatı (FiyatGetir); varsa marj bunun üzerine basılır. */
+  nf?: number | string;
+  /** StokGetir: seçili depoda stok (0/1). */
+  stok?: number;
+  /** StokGetir: öncelikli diğer depolarda stok (0/1). */
+  sFarkliDepo?: number;
   _listeGrubu?: string;
   _listeGrubuAd?: string;
 };
+
+export type BasbugFile = {
+  malzemeListesi?: BasbugRaw[];
+  /** DovizBilgisiGetir satış kurları; fetch sırasında eklenir. */
+  _doviz?: { EUR?: number; USD?: number };
+  _fetchedAt?: string;
+};
+
+export const BASBUG_IN_STOCK_QTY = 4;
 
 const GROUP_BRAND: Record<string, string> = {
   BMW: "BMW",
@@ -74,12 +89,28 @@ function buildName(row: BasbugRaw): string {
   return parts.join(" — ") || row.no || "Ürün";
 }
 
+/** Net fiyat varsa o, yoksa liste fiyatı (maliyetin üstünde kalır, marj korunur). */
+export function basbugCost(row: BasbugRaw): number | null {
+  const nf = Number(row.nf);
+  if (row.nf != null && Number.isFinite(nf) && nf > 0) return nf;
+  const lf = Number(row.lf);
+  if (!Number.isFinite(lf) || lf < 0) return null;
+  return lf;
+}
+
+/** Stok bilgisi yoksa (eski JSON) veya BASBUG_USE_STOCK=0 ise stokta varsayılır. */
+export function basbugStock(row: BasbugRaw): number {
+  if (process.env.BASBUG_USE_STOCK === "0") return BASBUG_IN_STOCK_QTY;
+  if (row.stok == null && row.sFarkliDepo == null) return BASBUG_IN_STOCK_QTY;
+  return (row.stok ?? 0) > 0 || (row.sFarkliDepo ?? 0) > 0 ? BASBUG_IN_STOCK_QTY : 0;
+}
+
 export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv()): MappedProduct | null {
   const externalId = row.no?.trim();
   if (!externalId) return null;
-  const lf = Number(row.lf);
-  if (!Number.isFinite(lf) || lf < 0) return null;
-  const priceTry = priceToTry(lf, row.dc, rates);
+  const cost = basbugCost(row);
+  if (cost == null) return null;
+  const priceTry = priceToTry(cost, row.dc, rates);
   const sellTry = applyMarginToPrice(priceTry);
   const oems = splitOems(row.oe);
   const category = row._listeGrubuAd?.trim() || row.lgk?.trim() || undefined;
@@ -91,7 +122,7 @@ export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv()): MappedPr
     manufacturer: row.uk?.trim() || undefined,
     category,
     price: sellTry.toFixed(2),
-    stock: 4,
+    stock: basbugStock(row),
     oem: oems[0],
   };
 }

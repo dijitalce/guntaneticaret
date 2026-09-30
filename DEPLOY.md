@@ -34,7 +34,7 @@ proxy_set_header X-Forwarded-Proto $scheme;
 - `STOREFRONT_URL=https://guntanotoyedekparca.com`
 - `ADMIN_URL` ve `BETTER_AUTH_SECRET` üretim değerleri
 - `products.xml` sunucuda tutulur, Git’e konmaz; `pnpm import:xml`
-- Basbug JSON da Git’e konmaz. Sunucuya ayrı yükle, sonra import et.
+- Basbug JSON da Git’e konmaz; `pnpm import:sync` API'den çeker (aşağıda).
 
 ## Hostinger MySQL
 
@@ -83,7 +83,39 @@ nohup env BASBUG_JSON_PATH=/path/to/all_products.json pnpm import:basbug > /tmp/
 tail -f /tmp/basbug-import.log
 ```
 
-Kurlar (EUR/USD → TL): isteğe bağlı `BASBUG_EUR_TRY=56.3` `BASBUG_USD_TRY=48.4`.
+Kurlar (EUR/USD → TL): Başbuğ API'nin kendi satış kuru, yoksa TCMB. Elle sabitlemek için `BASBUG_EUR_TRY=56.3` `BASBUG_USD_TRY=48.4`.
+
+### Otomatik fiyat/stok güncellemesi (12 saatte bir)
+
+`pnpm import:sync` şunları yapar:
+
+1. Altay (Eryaz GetProduct) XML'ini indirir → `products.xml`
+2. Başbuğ API'den malzeme + net fiyat (`nf`) + stok (`BASBUG_DEPO`) + döviz çeker → `data/basbug/all_products.json`
+3. Sadece değişen/yeni ürünleri import eder
+4. Aynı OE+marka için stoktaki en ucuz ürünü aktif bırakır, görünürlüğü derler
+
+Marj her seferinde tedarikçinin ham fiyatından hesaplanır (`price-tiers.ts`), tekrar çalıştırmak marjı ikilemez.
+**Senkron açıkken `pnpm import:price-tiers --from-cost` çalıştırma** — marj üstüne marj biner.
+
+Kurulum:
+
+1. Sunucu `.env` dosyasına `ERYAZ_*` ve `BASBUG_*` değerlerini ekle (`.env.example`'a bak).
+2. Eryaz sadece whitelist'teki IP'ye yanıt verir; Node uygulamasının çalıştığı sunucunun IP'si whitelist'te olmalı.
+3. İlk çalıştırmadan önce yedek al: `./scripts/backup.sh`
+4. Elle bir kez dene: `./scripts/supplier-sync.sh` → `logs/supplier-sync-YYYYMM.log`
+   Tedarikçi listesinden çıkan ürünler `missing_from_feed` olur (sitede görünmez), listeye dönünce tekrar açılır.
+   Liste mevcut ürünlerin %80'inden azsa bu işaretleme atlanır.
+5. hPanel → Gelişmiş → Cron Jobs → özel komut:
+
+```bash
+/home/KULLANICI/.../guntaneticaret/scripts/supplier-sync.sh
+```
+
+   Zamanlama `0 6,18 * * *` (sunucu saati UTC ise `0 3,15 * * *`). Başbuğ verisi 02:00–05:00 arası yenilendiği için bu saatler güvenli.
+   Cron `node` bulamazsa komutun başına `NODE_BIN=/path/to/node` ekle.
+
+Aynı anda iki senkron çalışmaz (kilit dosyası). Başbuğ tek oturuma izin verir; senkron bitince oturumu kapatır.
+Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
 ### Disk / prune
 

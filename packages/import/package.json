@@ -10,7 +10,8 @@
     "guntan-xml": "tsx src/cli.ts",
     "basbug-json": "tsx src/basbug-cli.ts",
     "dedupe-cheapest": "tsx src/dedupe-cli.ts",
-    "price-tiers": "tsx src/apply-price-tiers-cli.ts"
+    "price-tiers": "tsx src/apply-price-tiers-cli.ts",
+    "supplier-sync": "tsx src/sync-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",

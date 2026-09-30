@@ -51,6 +51,22 @@ describe("basbug mapping", () => {
     expect(fits.some((f) => f.brand === "Ford" && f.model === "Focus")).toBe(true);
   });
 
+  it("marks up net price (nf) instead of list price when present", () => {
+    const rates = { EUR: 50, USD: 40 };
+    const mapped = mapBasbugRow({ no: "BCH 1", ac: "P", dc: "EUR", lf: 29.92, nf: 22.23 }, rates);
+    // 22.23 EUR × 50 = 1111.50 TL maliyet → %25 kademe
+    expect(mapped?.price).toBe("1389.38");
+    const noNet = mapBasbugRow({ no: "BCH 2", ac: "P", dc: "TL", lf: 100 }, rates);
+    expect(noNet?.price).toBe("130.00");
+  });
+
+  it("maps stock flags from StokGetir", () => {
+    expect(mapBasbugRow({ no: "S1", ac: "P", lf: 10, stok: 1, sFarkliDepo: 0 })?.stock).toBe(4);
+    expect(mapBasbugRow({ no: "S2", ac: "P", lf: 10, stok: 0, sFarkliDepo: 1 })?.stock).toBe(4);
+    expect(mapBasbugRow({ no: "S3", ac: "P", lf: 10, stok: 0, sFarkliDepo: 0 })?.stock).toBe(0);
+    expect(mapBasbugRow({ no: "S4", ac: "P", lf: 10 })?.stock).toBe(4);
+  });
+
   it("reads fx defaults from env helpers", () => {
     const rates = fxRatesFromEnv();
     expect(rates.EUR).toBeGreaterThan(1);
@@ -72,6 +88,15 @@ describe("dedupe cheapest", () => {
     const decision = pickCheapestWinners([
       { id: "b1", price: 100, supplierCode: "BASBUG", normalizedOem: "ABC123", manufacturerSlug: "bosch" },
       { id: "g1", price: 100, supplierCode: "DEMO", normalizedOem: "ABC123", manufacturerSlug: "bosch" },
+    ]);
+    expect(decision.activateIds).toEqual(["g1"]);
+    expect(decision.deactivateIds).toEqual(["b1"]);
+  });
+
+  it("prefers in-stock product over cheaper out-of-stock one", () => {
+    const decision = pickCheapestWinners([
+      { id: "g1", price: 200, supplierCode: "DEMO", normalizedOem: "ABC123", manufacturerSlug: "bosch", inStock: true },
+      { id: "b1", price: 150, supplierCode: "BASBUG", normalizedOem: "ABC123", manufacturerSlug: "bosch", inStock: false },
     ]);
     expect(decision.activateIds).toEqual(["g1"]);
     expect(decision.deactivateIds).toEqual(["b1"]);

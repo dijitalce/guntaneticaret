@@ -22,13 +22,25 @@ import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS } from "@guntan/types
 import { contentHash } from "./index";
 import {
   allOemsForRow,
-  fxRatesFromEnv,
   inferBasbugFitments,
   mapBasbugRow,
   slugify,
+  type BasbugFile,
   type BasbugRaw,
 } from "./basbug-map";
 import { runDedupeCheapest } from "./dedupe-cheapest";
+import { resolveFxRates, type FxRates } from "./fx";
+import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
+
+const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
+
+async function resolveBasbugRates(file: BasbugFile): Promise<FxRates & { source: string }> {
+  const d = file._doviz;
+  if (!process.env.BASBUG_EUR_TRY && !process.env.BASBUG_USD_TRY && d?.EUR && d?.USD) {
+    return { EUR: d.EUR, USD: d.USD, source: "basbug" };
+  }
+  return resolveFxRates();
+}
 
 const DEFAULT_PATH = "/Users/alperengoktuna/Desktop/aktan-xml/data/basbug/all_products.json";
 const FEED_NAME = "Basbug malzeme JSON";
@@ -57,13 +69,10 @@ async function upsertNamed(
 
 async function main() {
   const filePath = process.env.BASBUG_JSON_PATH || DEFAULT_PATH;
-  const rates = fxRatesFromEnv();
   console.log("Loading", filePath);
+  const rawJson = JSON.parse(await readFile(filePath, "utf8")) as BasbugFile;
+  const rates = await resolveBasbugRates(rawJson);
   console.log("FX rates TRY:", rates);
-
-  const rawJson = JSON.parse(await readFile(filePath, "utf8")) as {
-    malzemeListesi?: BasbugRaw[];
-  };
   const rawItems = rawJson.malzemeListesi ?? [];
   console.log(`Loaded ${rawItems.length} Basbug rows`);
 
@@ -106,8 +115,13 @@ async function main() {
     if (!mapped) continue;
     byExternal.set(mapped.externalId, { raw, mapped });
   }
-  const mappedPairs = Array.from(byExternal.values());
-  console.log(`Mapped unique products: ${mappedPairs.length}`);
+  const allPairs = Array.from(byExternal.values());
+  const existing = await loadExistingProducts(supplier!.id);
+  const mappedPairs = allPairs.filter(({ mapped }) =>
+    needsImport(existing.get(mapped.externalId), contentHash(mapped), FORCE_FULL),
+  );
+  const unchanged = allPairs.length - mappedPairs.length;
+  console.log(`Mapped unique products: ${allPairs.length}, changed/new: ${mappedPairs.length}, unchanged: ${unchanged}`);
 
   const runId = newId();
   await db.insert(xmlImportRuns).values({
@@ -115,7 +129,7 @@ async function main() {
     feedId,
     status: IMPORT_RUN_STATUS.RUNNING,
     startedAt: new Date().toISOString(),
-    total: mappedPairs.length,
+    total: allPairs.length,
   });
 
   const brandCache = new Map<string, typeof vehicleBrands.$inferSelect>();
@@ -227,7 +241,7 @@ async function main() {
         price: row.price,
         compareAtPrice: null,
         stockQty: row.stock,
-        stockStatus: "in_stock",
+        stockStatus: row.stock > 0 ? "in_stock" : "out_of_stock",
         status: PRODUCT_STATUS.ACTIVE,
         contentHash: contentHash(row),
         source: PRODUCT_SOURCE.XML,
@@ -306,6 +320,9 @@ async function main() {
     }
   }
 
+  const missing = failed ? 0 : await markMissingFromFeed(existing, new Set(allPairs.map((p) => p.mapped.externalId)));
+  console.log(`Listeden çıkan (satıştan kaldırılan): ${missing}`);
+
   console.log("Running cheapest dedupe…");
   const dedupe = await runDedupeCheapest({ compile: false });
   console.log({
@@ -327,15 +344,16 @@ async function main() {
     .set({
       status: failed ? IMPORT_RUN_STATUS.COMPLETED_WITH_WARNINGS : IMPORT_RUN_STATUS.COMPLETED,
       finishedAt: new Date().toISOString(),
-      total: mappedPairs.length,
+      total: allPairs.length,
       createdCount: created,
       updatedCount: 0,
+      unchangedCount: unchanged,
       failedCount: failed,
-      inactivatedCount: dedupe.deactivated,
+      inactivatedCount: missing + dedupe.deactivated,
     })
     .where(eq(xmlImportRuns.id, runId));
 
-  console.log({ created, failed, total: mappedPairs.length, dedupe: {
+  console.log({ created, unchanged, missing, failed, total: allPairs.length, dedupe: {
     groups: dedupe.groups,
     deactivated: dedupe.deactivated,
     activated: dedupe.activated,

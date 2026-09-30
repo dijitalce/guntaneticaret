@@ -23,6 +23,7 @@
     "import:basbug": "pnpm --filter @guntan/import basbug-json",
     "import:dedupe": "pnpm --filter @guntan/import dedupe-cheapest",
     "import:price-tiers": "pnpm --filter @guntan/import price-tiers",
+    "import:sync": "pnpm --filter @guntan/import supplier-sync",
     "db:studio": "pnpm --filter @guntan/db studio",
     "worker": "pnpm --filter @guntan/worker dev"
   },

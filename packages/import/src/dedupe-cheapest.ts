@@ -8,6 +8,8 @@ export type DedupeCandidate = {
   supplierCode: string;
   normalizedOem: string;
   manufacturerSlug: string;
+  /** Varsayılan true; stoksuz ürün stokta olan rakibini gizlemez. */
+  inStock?: boolean;
 };
 
 export type DedupeDecision = {
@@ -18,8 +20,11 @@ export type DedupeDecision = {
 
 const PREFERRED_SUPPLIER = "DEMO";
 
-/** Prefer lower price; on tie keep DEMO (Güntan) over BASBUG. */
+/** Prefer in-stock, then lower price; on tie keep DEMO (Güntan) over BASBUG. */
 export function compareCandidates(a: DedupeCandidate, b: DedupeCandidate): number {
+  const aStock = a.inStock !== false;
+  const bStock = b.inStock !== false;
+  if (aStock !== bStock) return aStock ? -1 : 1;
   if (a.price !== b.price) return a.price - b.price;
   if (a.supplierCode === PREFERRED_SUPPLIER && b.supplierCode !== PREFERRED_SUPPLIER) return -1;
   if (b.supplierCode === PREFERRED_SUPPLIER && a.supplierCode !== PREFERRED_SUPPLIER) return 1;
@@ -68,6 +73,7 @@ export async function runDedupeCheapest(options: { compile?: boolean } = {}) {
     .select({
       id: products.id,
       price: products.price,
+      stockQty: products.stockQty,
       status: products.status,
       supplierCode: suppliers.code,
       normalizedOem: productOems.normalized,
@@ -87,6 +93,7 @@ export async function runDedupeCheapest(options: { compile?: boolean } = {}) {
   const candidates: DedupeCandidate[] = rows.map((r) => ({
     id: r.id,
     price: Number(r.price),
+    inStock: r.stockQty > 0,
     supplierCode: r.supplierCode,
     normalizedOem: r.normalizedOem,
     manufacturerSlug: r.manufacturerSlug,

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Cron: 0 6,18 * * *  /path/to/guntaneticaret/scripts/supplier-sync.sh
+# Sunucu saati UTC ise: 0 3,15 * * *
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mkdir -p "$ROOT/logs"
+LOG="$ROOT/logs/supplier-sync-$(date +%Y%m).log"
+
+# Cron'da PATH kısıtlıdır; NODE_BIN verilmediyse bilinen yerlere bak.
+NODE="${NODE_BIN:-$(command -v node || true)}"
+if [[ -z "$NODE" ]]; then
+  for candidate in "$HOME"/.nvm/versions/node/*/bin/node /opt/alt/alt-nodejs*/root/usr/bin/node /usr/local/bin/node; do
+    [[ -x "$candidate" ]] && NODE="$candidate"
+  done
+fi
+if [[ -z "$NODE" ]]; then
+  echo "[$(date -Is)] node bulunamadı; NODE_BIN=/path/to/node ile çalıştırın" >> "$LOG"
+  exit 1
+fi
+
+cd "$ROOT/packages/import"
+"$NODE" --import tsx src/sync-cli.ts "$@" >> "$LOG" 2>&1
