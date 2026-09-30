@@ -11,7 +11,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, open, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchEryazXml, eryazConfigFromEnv } from "./eryaz-fetch";
@@ -19,8 +19,11 @@ import { basbugConfigFromEnv, fetchBasbugCatalog } from "./basbug-fetch";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../../..");
-const envFile = join(root, ".env");
-if (existsSync(envFile)) process.loadEnvFile(envFile);
+// Hostinger panel ortam değişkenleri cron'a geçmez; ayarlar deploy klasörü
+// dışındaki bir dosyadan okunur (deploy'da silinmez).
+for (const envFile of [process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync.env"), join(root, ".env")]) {
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
+}
 
 const SKIP_FETCH = process.argv.includes("--skip-fetch");
 const LOCK_PATH = join(tmpdir(), "guntan-supplier-sync.lock");
