@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { COMPANY_ADDRESS, COMPANY_CONTACT } from "@guntan/db/content/contact";
-import { resolveTenantByHost, themeToCssVars } from "@guntan/tenant";
+import { resolveTenantByHost, resolveTenantByHostOrThrow, themeToCssVars } from "@guntan/tenant";
 import { TENANT_HOST_CACHE_TTL_SECONDS, TENANT_STATUS } from "@guntan/types";
 import type { TenantPublicConfig } from "@guntan/types";
 
@@ -11,12 +11,17 @@ function requestHost(h: Headers): string {
   return h.get("x-request-host") ?? h.get("host") ?? "guntan.localhost";
 }
 
-function cachedTenantByHost(host: string) {
-  return unstable_cache(
-    () => resolveTenantByHost(host),
-    ["tenant-host", host],
-    { revalidate: TENANT_HOST_CACHE_TTL_SECONDS },
-  )();
+async function cachedTenantByHost(host: string): Promise<TenantPublicConfig | null> {
+  try {
+    // DB hatası fırlatılmalı: unstable_cache null'ı "tenant yok" diye diske yazar ve DB düzelse de 404 kalır.
+    return await unstable_cache(
+      () => resolveTenantByHostOrThrow(host),
+      ["tenant-host", host],
+      { revalidate: TENANT_HOST_CACHE_TTL_SECONDS },
+    )();
+  } catch {
+    return resolveTenantByHost(host);
+  }
 }
 
 /** Layout / metadata: tenant yoksa null (notFound çağırmaz — beyaz ekranı önler). */
