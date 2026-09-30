@@ -101,7 +101,7 @@ export async function listVisibleBrands(tenantId: string) {
     })
     .from(tenantVisibleBrands)
     .innerJoin(vehicleBrands, eq(tenantVisibleBrands.brandId, vehicleBrands.id))
-    .where(eq(tenantVisibleBrands.tenantId, tenantId))
+    .where(and(eq(tenantVisibleBrands.tenantId, tenantId), eq(vehicleBrands.isActive, true)))
     .orderBy(asc(vehicleBrands.sortOrder), asc(vehicleBrands.name));
 }
 
@@ -116,7 +116,7 @@ export async function getBrandBySlug(tenantId: string, slug: string) {
     })
     .from(tenantVisibleBrands)
     .innerJoin(vehicleBrands, eq(tenantVisibleBrands.brandId, vehicleBrands.id))
-    .where(and(eq(tenantVisibleBrands.tenantId, tenantId), eq(vehicleBrands.slug, slug)))
+    .where(and(eq(tenantVisibleBrands.tenantId, tenantId), eq(vehicleBrands.slug, slug), eq(vehicleBrands.isActive, true)))
     .limit(1);
   return row ?? null;
 }
@@ -142,7 +142,7 @@ export async function getModelBySlug(brandId: string, slug: string) {
   const [row] = await db
     .select()
     .from(vehicleModels)
-    .where(and(eq(vehicleModels.brandId, brandId), eq(vehicleModels.slug, slug)))
+    .where(and(eq(vehicleModels.brandId, brandId), eq(vehicleModels.slug, slug), eq(vehicleModels.isActive, true)))
     .limit(1);
   return row ?? null;
 }
