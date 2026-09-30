@@ -1,6 +1,6 @@
 import { and, count, desc, gte, inArray, sql, sum } from "drizzle-orm";
 import Link from "next/link";
-import { db, orders, products, tenants, xmlImportRuns } from "@guntan/db";
+import { db, orders, products, tenants, xmlFeeds, xmlImportRuns } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
 import {
   IconAlert,
@@ -11,6 +11,8 @@ import {
   IconRefresh,
   IconWallet,
 } from "@/src/icons";
+import { SyncClock } from "@/src/sync-status";
+import { formatDuration } from "@/src/sync-time";
 import { EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Özet" };
@@ -18,6 +20,17 @@ export const metadata = { title: "Özet" };
 const REVENUE_STATUSES = ["paid", "preparing", "shipped", "completed"];
 const TR_OFFSET = "+03:00";
 const DAYS = 14;
+const SYNC_INTERVAL_H = 12;
+const RUN_STALE_MS = 6 * 3600_000;
+const FEED_LABELS: Record<string, string> = { "Güntan ürün XML": "Altay (XML)" };
+
+function syncHours() {
+  const hours = (process.env.SUPPLIER_SYNC_HOURS ?? "6,18")
+    .split(",")
+    .map((h) => Number.parseInt(h.trim(), 10))
+    .filter((h) => Number.isInteger(h) && h >= 0 && h < 24);
+  return hours.length ? hours : [6, 18];
+}
 
 function trDayKey(d: Date) {
   return new Date(d.getTime() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -36,7 +49,7 @@ export default async function DashboardPage() {
   const startOfTrDay = new Date(`${trDayKey(now)}T00:00:00${TR_OFFSET}`);
   const daysAgo = (n: number) => new Date(startOfTrDay.getTime() - n * 86400_000);
 
-  const [today, week, month, statusRows, daily, recent, productStats, tenantCount, lastRuns] = await Promise.all([
+  const [today, week, month, statusRows, daily, recent, productStats, tenantCount, feeds, runs] = await Promise.all([
     revenueSince(startOfTrDay),
     revenueSince(daysAgo(6)),
     revenueSince(daysAgo(29)),
@@ -55,10 +68,12 @@ export default async function DashboardPage() {
         total: count(),
         active: sql<number>`sum(${products.status} = 'active')`,
         oos: sql<number>`sum(${products.stockStatus} = 'out_of_stock')`,
+        fresh24: sql<number>`sum(${products.updatedAt} >= now() - interval 24 hour)`,
       })
       .from(products),
     db.select({ n: count() }).from(tenants),
-    db.select().from(xmlImportRuns).orderBy(desc(xmlImportRuns.createdAt)).limit(5),
+    db.select({ id: xmlFeeds.id, name: xmlFeeds.name, isActive: xmlFeeds.isActive }).from(xmlFeeds),
+    db.select().from(xmlImportRuns).orderBy(desc(xmlImportRuns.createdAt)).limit(40),
   ]);
 
   const byStatus = Object.fromEntries(statusRows.map((r) => [r.status, r.n]));
@@ -67,6 +82,31 @@ export default async function DashboardPage() {
   const toShip = byStatus.preparing ?? 0;
   const inTransit = byStatus.shipped ?? 0;
   const p = productStats[0];
+
+  const isSuccess = (s: string) => s === "completed" || s === "completed_with_warnings";
+  const feedStatus = feeds
+    .filter((f) => f.isActive)
+    .map((f) => {
+      const feedRuns = runs.filter((r) => r.feedId === f.id);
+      const latest = feedRuns[0];
+      const lastOk = feedRuns.find((r) => isSuccess(r.status) && r.finishedAt);
+      const running =
+        latest?.status === "running" && !!latest.startedAt && now.getTime() - Date.parse(latest.startedAt) < RUN_STALE_MS;
+      const durationMs =
+        lastOk?.startedAt && lastOk.finishedAt ? Date.parse(lastOk.finishedAt) - Date.parse(lastOk.startedAt) : null;
+      return { feed: f, latest, lastOk, running, durationMs };
+    })
+    .filter((f) => f.latest);
+  const lastSuccessMs = Math.max(0, ...feedStatus.map((f) => (f.lastOk?.finishedAt ? Date.parse(f.lastOk.finishedAt) : 0)));
+  const anyRunning = feedStatus.some((f) => f.running);
+  const ageH = lastSuccessMs ? (now.getTime() - lastSuccessMs) / 3600_000 : Infinity;
+  const freshness = anyRunning
+    ? { tone: "info" as const, label: "Güncelleniyor", note: "Tedarikçi verileri şu an işleniyor." }
+    : ageH <= SYNC_INTERVAL_H + 1
+      ? { tone: "ok" as const, label: "Güncel", note: "Fiyat ve stoklar planlandığı gibi güncelleniyor." }
+      : ageH <= SYNC_INTERVAL_H * 2 + 1
+        ? { tone: "warn" as const, label: "Bir senkron atlandı", note: "Son planlı güncelleme çalışmamış görünüyor; cron kaydını kontrol edin." }
+        : { tone: "bad" as const, label: "Güncel değil", note: "Uzun süredir başarılı güncelleme yok. Fiyat/stoklar eski olabilir; cron ve tedarikçi erişimini kontrol edin." };
 
   const dailyBy = new Map(daily.map((d) => [d.day, Number(d.total ?? 0)]));
   const series = Array.from({ length: DAYS }, (_, i) => {
@@ -115,6 +155,110 @@ export default async function DashboardPage() {
           href="/orders"
         />
       </div>
+
+      <Panel
+        title="Ürün güncelliği"
+        description="Tedarikçi fiyat ve stok senkronu"
+        action={
+          <div className="row-actions" style={{ alignItems: "center" }}>
+            <StatusBadge tone={freshness.tone}>{freshness.label}</StatusBadge>
+            <Link className="btn btn-ghost btn-sm" href="/integrations/xml">
+              <IconRefresh />
+              Detay
+            </Link>
+          </div>
+        }
+      >
+        {feedStatus.length === 0 ? (
+          <EmptyState title="Henüz senkron çalışmadı" description="İlk tedarikçi senkronu bittiğinde burada görünür." icon={IconRefresh} />
+        ) : (
+          <div className="sync-grid">
+            <div className="sync-summary">
+              <SyncClock
+                lastSuccessIso={lastSuccessMs ? new Date(lastSuccessMs).toISOString() : null}
+                hours={syncHours()}
+                running={anyRunning}
+                initialNow={now.toISOString()}
+              />
+              {freshness.tone === "ok" ? null : (
+                <p className={`sync-note is-${freshness.tone}`}>
+                  <IconAlert width={15} height={15} />
+                  {freshness.note}
+                </p>
+              )}
+              <dl className="dl-rows">
+                <div>
+                  <dt>Son 24 saatte değişen ürün</dt>
+                  <dd>{Number(p?.fresh24 ?? 0).toLocaleString("tr-TR")}</dd>
+                </div>
+                <div>
+                  <dt>Vitrinde aktif / toplam</dt>
+                  <dd>
+                    {Number(p?.active ?? 0).toLocaleString("tr-TR")} / {Number(p?.total ?? 0).toLocaleString("tr-TR")}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Tedarikçi</th>
+                    <th>Son başarılı</th>
+                    <th className="num">Ürün</th>
+                    <th className="num">Değişen</th>
+                    <th className="num">Kaldırılan</th>
+                    <th>Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedStatus.map(({ feed, latest, lastOk, running, durationMs }) => {
+                    const run = lastOk ?? latest!;
+                    const failedNow = latest!.status === "failed" && !running;
+                    return (
+                      <tr key={feed.id}>
+                        <td>
+                          {FEED_LABELS[feed.name] ?? feed.name}
+                          <span className="sub">{durationMs ? `Süre ${formatDuration(durationMs)}` : "—"}</span>
+                        </td>
+                        <td>
+                          {lastOk?.finishedAt ? formatDate(lastOk.finishedAt) : "Yok"}
+                          {lastOk?.finishedAt ? (
+                            <span className="sub">{formatDuration(now.getTime() - Date.parse(lastOk.finishedAt))} önce</span>
+                          ) : null}
+                        </td>
+                        <td className="num">{run.total.toLocaleString("tr-TR")}</td>
+                        <td className="num">
+                          {(run.createdCount + run.updatedCount).toLocaleString("tr-TR")}
+                          {run.failedCount ? (
+                            <span className="sub" style={{ color: "var(--a-bad)" }}>
+                              {run.failedCount} hatalı
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="num">{run.inactivatedCount.toLocaleString("tr-TR")}</td>
+                        <td>
+                          {running ? (
+                            <StatusBadge tone="info">Çalışıyor</StatusBadge>
+                          ) : failedNow ? (
+                            <StatusBadge tone="bad">
+                              <span title={latest!.errorMessage ?? undefined}>Son deneme başarısız</span>
+                            </StatusBadge>
+                          ) : (
+                            <StatusBadge tone={run.status === "completed" ? "ok" : "warn"}>
+                              {run.status === "completed" ? "Başarılı" : "Uyarılı"}
+                            </StatusBadge>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Panel>
 
       <div className="grid-2">
         <div>
@@ -227,40 +371,6 @@ export default async function DashboardPage() {
                 Ürünleri yönet
               </Link>
             </div>
-          </Panel>
-
-          <Panel
-            title="XML senkron"
-            action={
-              <Link className="btn btn-ghost btn-sm" href="/integrations/xml">
-                <IconRefresh />
-                Detay
-              </Link>
-            }
-          >
-            {lastRuns.length === 0 ? (
-              <EmptyState title="Henüz çalışma yok" icon={IconRefresh} />
-            ) : (
-              <div className="todo-list">
-                {lastRuns.map((r) => (
-                  <div key={r.id} className="todo">
-                    <div>
-                      <strong>
-                        <StatusBadge tone={statusTone(r.status)}>{r.status}</StatusBadge>
-                      </strong>
-                      <small>
-                        {formatDate(r.createdAt)} · {r.createdCount} yeni · {r.updatedCount} güncel
-                      </small>
-                    </div>
-                    {r.failedCount ? (
-                      <em style={{ color: "var(--a-bad)" }} title="Hatalı kayıt">
-                        <IconAlert width={14} height={14} style={{ verticalAlign: "-2px" }} /> {r.failedCount}
-                      </em>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
           </Panel>
         </div>
       </div>
