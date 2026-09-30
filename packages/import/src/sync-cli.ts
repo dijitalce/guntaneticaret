@@ -10,13 +10,13 @@
  */
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { mkdir, open, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, open, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchEryazXml, eryazConfigFromEnv } from "./eryaz-fetch";
 import { basbugConfigFromEnv, fetchBasbugCatalog } from "./basbug-fetch";
 import { loadSyncEnv, syncHomeDir } from "./sync-env";
+import { SYNC_LOCK_PATH, clearDeadSyncLock, startLockHeartbeat } from "./sync-lock";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../../..");
@@ -24,8 +24,7 @@ const loadedEnvFiles = loadSyncEnv(root);
 
 const SKIP_FETCH = process.argv.includes("--skip-fetch");
 const ONLY_FEED = process.argv.find((a) => a.startsWith("--feed="))?.slice("--feed=".length) || null;
-const LOCK_PATH = join(tmpdir(), "guntan-supplier-sync.lock");
-const STALE_LOCK_MS = 6 * 60 * 60 * 1000;
+const LOCK_PATH = SYNC_LOCK_PATH;
 
 const altayPath = process.env.ALTAY_XML_PATH || join(root, "products.xml");
 const basbugPath = process.env.BASBUG_JSON_PATH || join(root, "data/basbug/all_products.json");
@@ -70,10 +69,9 @@ async function acquireLock(): Promise<boolean> {
     await handle.close();
     return true;
   } catch {
-    const { mtimeMs } = await stat(LOCK_PATH);
-    if (Date.now() - mtimeMs < STALE_LOCK_MS) return false;
-    log("Eski kilit dosyası bulundu (6 saatten eski), siliniyor.");
-    await rm(LOCK_PATH, { force: true });
+    // Süreci ölmüş (ör. deploy ile kesilmiş) bir senkronun kilidi yeni çalışmayı engellemesin.
+    if (!clearDeadSyncLock(LOCK_PATH)) return false;
+    log("Yarıda kesilmiş önceki senkronun kilidi bulundu, siliniyor.");
     return acquireLock();
   }
 }
@@ -107,6 +105,7 @@ async function main() {
     log("Başka bir senkron hâlâ çalışıyor, atlanıyor.");
     return 0;
   }
+  startLockHeartbeat(LOCK_PATH);
   const startedAt = new Date().toISOString();
   writeStatus({ state: "running", startedAt, pid: process.pid });
   log(`Senkron başladı (${TRIGGER}). Ayar dosyası: ${loadedEnvFiles.join(", ") || "yok (yalnızca ortam değişkenleri)"}`);

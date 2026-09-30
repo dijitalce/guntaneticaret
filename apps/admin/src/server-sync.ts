@@ -1,9 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
+import { clearDeadSyncLock, readSyncLock } from "@guntan/import/sync-lock";
 import { dirname, join, resolve } from "node:path";
 
-const LOCK_PATH = join(tmpdir(), "guntan-supplier-sync.lock");
 const LOG_FILE = process.env.SYNC_LOG_FILE || join(homedir(), "guntan-sync.log");
 const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(homedir(), "guntan-sync-status.json");
 const ENV_FILE = process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync.env");
@@ -73,7 +73,10 @@ export function readServerSync() {
   } catch {
     logTail = [];
   }
-  const lock = fileInfo(LOCK_PATH);
+  const lock = readSyncLock();
+  const running = lock.exists && lock.alive;
+  // Kilit ölü ama durum dosyası "çalışıyor" diyorsa senkron yarıda kesilmiştir.
+  const interrupted = !running && status?.state === "running";
   const keys = envKeys(ENV_FILE);
   const altayPath = process.env.ALTAY_XML_PATH || (root ? join(root, "products.xml") : "");
   const basbugPath = process.env.BASBUG_JSON_PATH || (root ? join(root, "data/basbug/all_products.json") : "");
@@ -82,8 +85,9 @@ export function readServerSync() {
     status,
     logTail,
     logFile: LOG_FILE,
-    running: lock.exists && Boolean(lock.mtime && Date.now() - lock.mtime.getTime() < 6 * 3600_000),
-    lockSince: lock.mtime,
+    running,
+    interrupted,
+    lockSince: running ? (status?.state === "running" && status.startedAt ? new Date(status.startedAt) : lock.since) : null,
     envFile: { path: ENV_FILE, exists: existsSync(ENV_FILE) },
     processEnvReady: Object.keys(process.env).some((k) => (k.startsWith("ERYAZ_") || k.startsWith("BASBUG_")) && Boolean(process.env[k])),
     eryazReady: ["ERYAZ_USERNAME", "ERYAZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])) || keys.some((k) => k.startsWith("ERYAZ_")),
@@ -113,6 +117,7 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean; fe
   if (!root) return { ok: false, error: "Senkron betiği sunucuda bulunamadı." };
   const state = readServerSync();
   if (state.running) return { ok: false, error: "Şu anda çalışan bir senkron var." };
+  clearDeadSyncLock();
   const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
   try {
     const out = openSync(LOG_FILE, "a");

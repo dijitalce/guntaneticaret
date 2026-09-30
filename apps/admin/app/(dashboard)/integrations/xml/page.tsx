@@ -95,10 +95,12 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
     ...customFeeds.filter((f) => f.isActive).map((f) => `${f.name} (XML kaynağı)`),
     "Başbuğ import",
   ];
-  const stateTone = server.running ? "info" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
+  const stateTone = server.running ? "info" : server.interrupted ? "bad" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
   const stateLabel = server.running
     ? "Çalışıyor"
-    : status?.state === "ok"
+    : server.interrupted
+      ? "Yarıda kesildi"
+      : status?.state === "ok"
       ? "Başarılı"
       : status?.state === "warning"
         ? "Uyarılarla bitti"
@@ -133,6 +135,12 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
       {sp.ok === "saatler" ? <Alert tone="ok">Zamanlanmış görev saatleri kaydedildi.</Alert> : null}
       {sp.ok === "kaynak-silindi" ? <Alert tone="ok">XML kaynağı silindi; ürünleri satıştan kaldırıldı.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
+      {server.interrupted ? (
+        <Alert tone="warn">
+          Son senkron tamamlanmadan durdu (genelde site güncellemesi sırasında olur). Kaldığı yerden devam etmez; &quot;Sunucuda şimdi
+          senkronize et&quot; ile yeniden başlatın. İndirilmiş dosyalar duruyorsa &quot;Yalnızca içe aktar&quot; daha hızlıdır.
+        </Alert>
+      ) : null}
       {!server.envFile.exists && !server.processEnvReady ? (
         <Alert tone="warn">
           Eryaz ve Başbuğ kullanıcı bilgileri bulunamadı. Bunları hPanel ortam değişkenlerine (ERYAZ_*, BASBUG_*) ekleyin; yoksa senkron indirme
