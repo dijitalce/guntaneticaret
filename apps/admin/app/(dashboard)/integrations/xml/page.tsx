@@ -7,7 +7,8 @@ import { withBase } from "@/src/paths";
 import { feedFileInfo, readServerSync } from "@/src/server-sync";
 import { IconAlert, IconCheckCircle, IconClock, IconPlus, IconRefresh } from "@/src/icons";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
-import { relativeTime } from "@/src/ui-ext";
+import { TabNav, relativeTime } from "@/src/ui-ext";
+import { CatalogExportTab } from "@/src/catalog-export-tab";
 import { AutoRefresh } from "@/src/auto-refresh";
 import { SyncLogView } from "@/src/sync-log-view";
 
@@ -43,8 +44,34 @@ function formatBytes(n: number) {
   return n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`;
 }
 
-export default async function XmlPage({ searchParams }: { searchParams: Promise<{ ok?: string; hata?: string }> }) {
+function XmlTabs({ active }: { active: "senkron" | "disa-aktar" }) {
+  return (
+    <TabNav
+      label="XML bölümleri"
+      active={active}
+      items={[
+        { key: "senkron", label: "Tedarikçi senkronu", href: "/integrations/xml" },
+        { key: "disa-aktar", label: "Dışa aktarım linkleri", href: "/integrations/xml?sekme=disa-aktar" },
+      ]}
+    />
+  );
+}
+
+export default async function XmlPage({ searchParams }: { searchParams: Promise<{ ok?: string; hata?: string; sekme?: string; site?: string }> }) {
   const sp = await searchParams;
+  if (sp.sekme === "disa-aktar") {
+    return (
+      <>
+        <PageHeader
+          title="XML senkron"
+          description="Birleştirilmiş kataloğunuzu parçalı ve her zaman güncel XML linkleriyle dışarıya verin."
+        />
+        <XmlTabs active="disa-aktar" />
+        {sp.hata ? <Alert>{sp.hata}</Alert> : null}
+        <CatalogExportTab site={sp.site} ok={sp.ok} />
+      </>
+    );
+  }
   const [feeds, runs, errors] = await Promise.all([
     db.select().from(xmlFeeds),
     db
@@ -96,6 +123,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
           </>
         }
       />
+      <XmlTabs active="senkron" />
       {sp.ok === "basladi" ? (
         <Alert tone="ok">Senkron sunucuda başlatıldı. Büyük katalogda 10-40 dakika sürebilir; bu sayfayı yenileyerek ilerlemeyi izleyebilirsiniz.</Alert>
       ) : null}
