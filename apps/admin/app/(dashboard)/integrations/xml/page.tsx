@@ -145,7 +145,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
         </Alert>
       ) : null}
 
-      {server.running ? <AutoRefresh everyMs={4000} /> : null}
+      {server.running ? <AutoRefresh everyMs={8000} /> : null}
       <Panel
         title={server.running ? "Senkron canlı takip" : "Son senkron"}
         description={server.running ? "Sayfa kendiliğinden yenilenir; her adımın ilerlemesi burada görünür." : "Hangi adımın ne kadar sürdüğü ve ne yaptığı"}

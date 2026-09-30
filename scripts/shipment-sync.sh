@@ -21,5 +21,8 @@ if ESB="$("$NODE" "$ROOT/scripts/ensure-esbuild.cjs" 2>>"$LOG")" && [[ -n "$ESB"
   export ESBUILD_BINARY_PATH="$ESB"
 fi
 
+# Barındırma süreç sınırı iş parçacıklarını da sayar; esbuild (Go) varsayılan olarak çekirdek sayısı kadar açar.
+export GOMAXPROCS="${GOMAXPROCS:-2}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2}"
+
 cd "$ROOT/packages/import"
-"$NODE" --import tsx src/shipment-sync-cli.ts "$@" >> "$LOG" 2>&1
+"$NODE" --v8-pool-size=2 --import tsx src/shipment-sync-cli.ts "$@" >> "$LOG" 2>&1

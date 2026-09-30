@@ -104,6 +104,9 @@ function ensureEsbuild(root: string, logFd: number): string {
   }
 }
 
+// Barındırma süreç sınırı iş parçacıklarını da sayar; esbuild (Go) varsayılan olarak çekirdek sayısı kadar açar.
+const LOW_THREAD_ENV = { GOMAXPROCS: "2", UV_THREADPOOL_SIZE: "2" };
+
 /** Senkronu sunucuda ayrı bir süreç olarak başlatır; panel isteği beklemez. */
 export function startServerSync(opts: { trigger: string; skipFetch?: boolean; feedId?: string }): { ok: true } | { ok: false; error: string } {
   const root = findRepoRoot();
@@ -113,10 +116,10 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean; fe
   const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
   try {
     const out = openSync(LOG_FILE, "a");
-    const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production", SYNC_STDOUT_IS_LOG: "1", SYNC_LOG_FILE: LOG_FILE, SYNC_STATUS_FILE: STATUS_FILE };
+    const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production", SYNC_STDOUT_IS_LOG: "1", SYNC_LOG_FILE: LOG_FILE, SYNC_STATUS_FILE: STATUS_FILE, ...LOW_THREAD_ENV };
     const esbuild = ensureEsbuild(root, out);
     if (esbuild) env.ESBUILD_BINARY_PATH = esbuild;
-    const child = spawn(process.execPath, ["--import", "tsx", ...args], {
+    const child = spawn(process.execPath, ["--v8-pool-size=2", "--import", "tsx", ...args], {
       cwd: join(root, "packages/import"),
       env,
       detached: true,

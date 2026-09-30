@@ -80,9 +80,10 @@ async function acquireLock(): Promise<boolean> {
 
 function runScript(file: string, env: Record<string, string>, args: string[] = []): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--import", "tsx", join(here, file), ...args], {
+    const child = spawn(process.execPath, ["--v8-pool-size=2", "--import", "tsx", join(here, file), ...args], {
       cwd: join(here, ".."),
-      env: { ...process.env, ...env },
+      // Barındırma süreç sınırı iş parçacıklarını da sayar; esbuild (Go) varsayılan olarak çekirdek sayısı kadar açar.
+      env: { ...process.env, GOMAXPROCS: process.env.GOMAXPROCS || "2", UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || "2", ...env },
       stdio: STDOUT_IS_LOG ? "inherit" : ["ignore", "pipe", "pipe"],
     });
     if (!STDOUT_IS_LOG) {
