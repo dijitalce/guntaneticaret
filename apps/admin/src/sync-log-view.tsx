@@ -219,7 +219,7 @@ function RunCard({ run, planned, running, now, previous, live }: { run: LogRun; 
   );
 }
 
-export function SyncLogView({ lines, planned, running, logFile, now = new Date() }: { lines: string[]; planned: string[]; running: boolean; logFile: string; now?: Date }): ReactNode {
+export function SyncLogView({ lines, planned, running, now = new Date() }: { lines: string[]; planned: string[]; running: boolean; now?: Date }): ReactNode {
   const runs = parseSyncLog(lines).filter((r) => r.entries.length);
   if (!runs.length) return <EmptyState title="Henüz kayıt yok" description="Sunucuda ilk senkron çalıştığında ilerleme burada görünür." />;
   const ordered = [...runs].reverse();
@@ -251,7 +251,7 @@ export function SyncLogView({ lines, planned, running, logFile, now = new Date()
         </div>
       ) : null}
       <details className="sync-more">
-        <summary>Ham log · {logFile}</summary>
+        <summary>Ham log</summary>
         <pre className="log-view">{lines.map(shortenPaths).join("\n")}</pre>
       </details>
     </div>

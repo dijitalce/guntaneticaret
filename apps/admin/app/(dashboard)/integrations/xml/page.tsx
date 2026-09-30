@@ -9,8 +9,10 @@ import { IconAlert, IconCheckCircle, IconClock, IconPlus, IconRefresh } from "@/
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { TabNav, relativeTime } from "@/src/ui-ext";
 import { CatalogExportTab } from "@/src/catalog-export-tab";
+import { describeHours, getSyncHours } from "@/src/sync-schedule";
 import { AutoRefresh } from "@/src/auto-refresh";
 import { SyncLogView } from "@/src/sync-log-view";
+import { shortenPaths } from "@/src/sync-log";
 
 export const metadata = { title: "XML senkron" };
 export const dynamic = "force-dynamic";
@@ -83,6 +85,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
     db.select().from(xmlImportRowErrors).orderBy(desc(xmlImportRowErrors.createdAt)).limit(20),
   ]);
   const server = readServerSync();
+  const syncHours = await getSyncHours();
   const customFeeds = feeds.filter((f) => isCustomFeed(f.mapping));
   const status = server.status;
   const plannedStages = [
@@ -127,6 +130,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
       {sp.ok === "basladi" ? (
         <Alert tone="ok">Senkron sunucuda başlatıldı. Büyük katalogda 10-40 dakika sürebilir; bu sayfayı yenileyerek ilerlemeyi izleyebilirsiniz.</Alert>
       ) : null}
+      {sp.ok === "saatler" ? <Alert tone="ok">Zamanlanmış görev saatleri kaydedildi.</Alert> : null}
       {sp.ok === "kaynak-silindi" ? <Alert tone="ok">XML kaynağı silindi; ürünleri satıştan kaldırıldı.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {!server.envFile.exists && !server.processEnvReady ? (
@@ -136,8 +140,8 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
         </Alert>
       ) : !server.envFile.exists ? (
         <Alert tone="warn">
-          Tedarikçi bilgileri ortam değişkenlerinde var; panelden başlatılan senkron çalışır. Zamanlanmış görev için{" "}
-          <code>{server.envFile.path}</code> dosyası yazılamadı; site yeniden başladığında tekrar denenecek.
+          Tedarikçi bilgileri ortam değişkenlerinde var; panelden başlatılan senkron çalışır. Zamanlanmış görevin kullandığı ayar dosyası
+          sunucuya yazılamadı; site yeniden başladığında tekrar denenecek.
         </Alert>
       ) : null}
 
@@ -146,12 +150,12 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
         title={server.running ? "Senkron canlı takip" : "Son senkron"}
         description={server.running ? "Sayfa kendiliğinden yenilenir; her adımın ilerlemesi burada görünür." : "Hangi adımın ne kadar sürdüğü ve ne yaptığı"}
       >
-        <SyncLogView lines={server.logTail} planned={plannedStages} running={server.running} logFile={server.logFile} />
+        <SyncLogView lines={server.logTail} planned={plannedStages} running={server.running} />
       </Panel>
 
       <div className="grid-2">
         <div>
-          <Panel title="Sunucu senkronu" description="Zamanlanmış görev (12 saatte bir) ve panelden başlatılan çalışmalar">
+          <Panel title="Sunucu senkronu" description={`Zamanlanmış görev ${describeHours(syncHours)} (Türkiye saati) ve panelden başlatılan çalışmalar`}>
             <div className="sync-status">
               <div className="sync-status-main">
                 <span className={`sync-state is-${stateTone}`}>
@@ -172,7 +176,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                 <ul className="note-list">
                   {status.errors.map((e) => (
                     <li key={e} className="text-bad">
-                      {e}
+                      {shortenPaths(e)}
                     </li>
                   ))}
                 </ul>
@@ -309,12 +313,22 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                     <span className="text-warn text-sm">
                       Son içe aktarma bir bilgisayardan yapılmış. Sunucudaki ilk senkronla kaynak otomatik olarak sunucuya geçer.
                     </span>
-                  ) : f.filePath ? (
-                    <span className="mono text-sm">{f.filePath}</span>
                   ) : null}
                 </li>
               ))}
             </ul>
+          </Panel>
+          <Panel title="Zamanlanmış görev saatleri" padded>
+            <p className="muted text-sm" style={{ marginTop: 0 }}>
+              hPanel&apos;deki cron görevinin çalıştığı saatleri Türkiye saatiyle yazın (ör. <code>12</code> veya <code>6,18</code>). Özet ekranındaki
+              &quot;sonraki güncelleme&quot; sayacı ve &quot;senkron atlandı&quot; uyarısı bu saatlere göre hesaplanır.
+            </p>
+            <form action={withBase("/api/sync/schedule")} method="post" className="toolbar">
+              <input className="input" name="hours" defaultValue={syncHours.join(",")} aria-label="Cron saatleri" style={{ maxWidth: 160 }} />
+              <button className="btn btn-secondary" type="submit">
+                Kaydet
+              </button>
+            </form>
           </Panel>
           <Panel title="Diğer işlem" padded>
             <p className="muted text-sm" style={{ marginTop: 0 }}>

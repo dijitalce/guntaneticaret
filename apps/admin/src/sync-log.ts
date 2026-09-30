@@ -175,10 +175,9 @@ export function runProgress(run: LogRun, opts: { planned: string[]; running: boo
 }
 
 /** Sunucu yollarını kısaltır: /home/u…/hbuilds/versions/<id>/nodejs/node_modules/... → …/node_modules/... */
+/** Sunucu dosya yollarını yalnızca dosya adına indirir; URL'lere dokunmaz. */
 export function shortenPaths(line: string) {
-  return line
-    .replace(/\/home\/[^\s/]+\/domains\/[^\s/]+\/hbuilds\/(?:versions\/[^\s/]+|current)\/nodejs/g, "…")
-    .replace(/\/home\/[^\s/]+\/domains\/[^\s/]+/g, "~");
+  return line.replace(/file:\/\/(?=\/)/g, "").replace(/(?<![\w:/.~-])(?:~|\.{1,2})?(?:\/[\w.@+-]+)+\/([\w.@+-]+)/g, "$1");
 }
 
 /** Senkron log dosyasını (düz ve JSON satırlar karışık) çalışmalara ve adımlara ayırır. */

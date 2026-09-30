@@ -13,6 +13,7 @@ import {
 } from "@/src/icons";
 import { SyncClock } from "@/src/sync-status";
 import { formatDuration } from "@/src/sync-time";
+import { getSyncHours, syncIntervalHours } from "@/src/sync-schedule";
 import { EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Özet" };
@@ -20,17 +21,9 @@ export const metadata = { title: "Özet" };
 const REVENUE_STATUSES = ["paid", "preparing", "shipped", "completed"];
 const TR_OFFSET = "+03:00";
 const DAYS = 14;
-const SYNC_INTERVAL_H = 12;
 const RUN_STALE_MS = 6 * 3600_000;
 const FEED_LABELS: Record<string, string> = { "Güntan ürün XML": "Altay (XML)" };
 
-function syncHours() {
-  const hours = (process.env.SUPPLIER_SYNC_HOURS ?? "6,18")
-    .split(",")
-    .map((h) => Number.parseInt(h.trim(), 10))
-    .filter((h) => Number.isInteger(h) && h >= 0 && h < 24);
-  return hours.length ? hours : [6, 18];
-}
 
 function trDayKey(d: Date) {
   return new Date(d.getTime() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -99,12 +92,14 @@ export default async function DashboardPage() {
     .filter((f) => f.latest);
   const lastSuccessMs = Math.max(0, ...feedStatus.map((f) => (f.lastOk?.finishedAt ? Date.parse(f.lastOk.finishedAt) : 0)));
   const anyRunning = feedStatus.some((f) => f.running);
+  const syncHours = await getSyncHours();
+  const intervalH = syncIntervalHours(syncHours);
   const ageH = lastSuccessMs ? (now.getTime() - lastSuccessMs) / 3600_000 : Infinity;
   const freshness = anyRunning
     ? { tone: "info" as const, label: "Güncelleniyor", note: "Tedarikçi verileri şu an işleniyor." }
-    : ageH <= SYNC_INTERVAL_H + 1
+    : ageH <= intervalH + 1
       ? { tone: "ok" as const, label: "Güncel", note: "Fiyat ve stoklar planlandığı gibi güncelleniyor." }
-      : ageH <= SYNC_INTERVAL_H * 2 + 1
+      : ageH <= intervalH * 2 + 1
         ? { tone: "warn" as const, label: "Bir senkron atlandı", note: "Son planlı güncelleme çalışmamış görünüyor; cron kaydını kontrol edin." }
         : { tone: "bad" as const, label: "Güncel değil", note: "Uzun süredir başarılı güncelleme yok. Fiyat/stoklar eski olabilir; cron ve tedarikçi erişimini kontrol edin." };
 
@@ -176,7 +171,7 @@ export default async function DashboardPage() {
             <div className="sync-summary">
               <SyncClock
                 lastSuccessIso={lastSuccessMs ? new Date(lastSuccessMs).toISOString() : null}
-                hours={syncHours()}
+                hours={syncHours}
                 running={anyRunning}
                 initialNow={now.toISOString()}
               />
