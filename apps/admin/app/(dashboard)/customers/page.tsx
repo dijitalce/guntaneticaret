@@ -3,7 +3,7 @@ import { customerKpis, listCustomers } from "@guntan/db";
 import { IconDownload, IconSearch } from "@/src/icons";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry } from "@/src/ui";
-import { Pager, TabNav, buildHref, pageNumber, percent, relativeTime } from "@/src/ui-ext";
+import { Pager, TabNav, buildHref, initials, pageNumber, percent, relativeTime } from "@/src/ui-ext";
 
 export const metadata = { title: "Müşteriler" };
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ const SORTS = [
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; filtre?: string; sirala?: string; sayfa?: string; ok?: string }>;
+  searchParams: Promise<{ q?: string; filtre?: string; sirala?: string; sayfa?: string; ok?: string; hata?: string }>;
 }) {
   const sp = await searchParams;
   const page = pageNumber(sp.sayfa);
@@ -51,6 +51,7 @@ export default async function CustomersPage({
       />
       {sp.ok === "silindi" ? <Alert tone="ok">Müşteri silindi.</Alert> : null}
       {sp.ok === "anonim" ? <Alert tone="ok">Müşterinin siparişleri olduğu için hesap anonimleştirildi; sipariş kayıtları korundu.</Alert> : null}
+      {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       <div className="kpis">
         <Kpi label="Toplam müşteri" value={kpis.total.toLocaleString("tr-TR")} />
         <Kpi label="Son 30 gün" value={kpis.new30.toLocaleString("tr-TR")} hint="yeni kayıt" tone="info" />
@@ -65,23 +66,31 @@ export default async function CustomersPage({
       <Panel>
         <form className="toolbar filter-bar" method="get">
           {sp.filtre ? <input type="hidden" name="filtre" value={sp.filtre} /> : null}
-          <label className="search-field">
+          <div className="search-field">
             <IconSearch />
-            <input name="q" defaultValue={sp.q ?? ""} placeholder="Ad, e-posta veya telefon ara" />
-          </label>
-          <select className="input" name="sirala" defaultValue={sp.sirala ?? ""} aria-label="Sıralama">
+            <input className="input" name="q" defaultValue={sp.q ?? ""} placeholder="Ad, e-posta, telefon veya firma ara" aria-label="Müşteri ara" />
+          </div>
+          <select className="select" name="sirala" defaultValue={sp.sirala ?? ""} aria-label="Sıralama">
             {SORTS.map((s) => (
               <option key={s.key} value={s.key}>
                 {s.label}
               </option>
             ))}
           </select>
-          <button className="btn btn-primary" type="submit">
+          <button className="btn btn-secondary" type="submit">
             Ara
           </button>
+          {sp.q || sp.sirala ? (
+            <Link className="btn btn-ghost" href={buildHref("/customers", { filtre: sp.filtre })}>
+              Temizle
+            </Link>
+          ) : null}
+          <span className="muted text-sm" style={{ marginLeft: "auto", alignSelf: "center" }}>
+            {total.toLocaleString("tr-TR")} müşteri
+          </span>
         </form>
         {rows.length === 0 ? (
-          <EmptyState title="Müşteri bulunamadı" description={sp.q ? "Aramayı değiştirmeyi deneyin." : "Henüz kayıtlı müşteri yok."} />
+          <EmptyState title="Müşteri bulunamadı" description={sp.q || sp.filtre ? "Aramayı veya filtreyi değiştirmeyi deneyin." : "Henüz kayıtlı müşteri yok."} />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -99,38 +108,44 @@ export default async function CustomersPage({
                 {rows.map((c) => (
                   <tr key={c.id}>
                     <td>
-                      <Link href={`/customers/${c.id}`}>
-                        <strong>
-                          {c.first_name} {c.last_name}
-                        </strong>
-                      </Link>
-                      {c.invoice_type === "corporate" ? (
-                        <>
-                          {" "}
-                          <StatusBadge tone="info">Kurumsal</StatusBadge>
-                        </>
-                      ) : null}
-                      {c.is_blocked ? (
-                        <>
-                          {" "}
-                          <StatusBadge tone="bad">Engelli</StatusBadge>
-                        </>
-                      ) : null}
-                      <div className="muted text-sm">{c.email}</div>
-                      {c.tags.length ? (
-                        <div className="tag-list">
-                          {c.tags.map((t) => (
-                            <span key={t} className="tag">
-                              {t}
+                      <div className="customer-cell">
+                        <span className="customer-avatar" aria-hidden>
+                          {initials(`${c.first_name} ${c.last_name}`)}
+                        </span>
+                        <div>
+                          <Link href={`/customers/${c.id}`}>
+                            <strong>
+                              {c.first_name} {c.last_name}
+                            </strong>
+                          </Link>
+                          {c.invoice_type === "corporate" || c.is_blocked ? (
+                            <span className="badges">
+                              {c.invoice_type === "corporate" ? <StatusBadge tone="info">Kurumsal</StatusBadge> : null}
+                              {c.is_blocked ? <StatusBadge tone="bad">Engelli</StatusBadge> : null}
                             </span>
-                          ))}
+                          ) : null}
+                          <span className="muted text-sm email" title={c.email}>
+                            {c.email}
+                          </span>
+                          {c.company_name ? <span className="muted text-sm email">{c.company_name}</span> : null}
+                          {c.tags.length ? (
+                            <div className="tag-list">
+                              {c.tags.map((t) => (
+                                <span key={t} className="tag">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
+                      </div>
                     </td>
-                    <td className="text-sm">{c.phone ?? "—"}</td>
+                    <td className="text-sm" style={{ whiteSpace: "nowrap" }}>
+                      {c.phone ?? <span className="muted">—</span>}
+                    </td>
                     <td>{Number(c.orders)}</td>
                     <td>
-                      <strong>{c.spent ? formatTry(c.spent) : "—"}</strong>
+                      {c.spent ? <strong>{formatTry(c.spent)}</strong> : <span className="muted">—</span>}
                     </td>
                     <td className="text-sm">{c.last_order_at ? relativeTime(c.last_order_at) : <span className="muted">—</span>}</td>
                     <td className="text-sm muted">{formatDate(c.created_at, false)}</td>

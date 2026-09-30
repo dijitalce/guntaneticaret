@@ -23,8 +23,8 @@ import { AuditTable } from "@/src/audit-table";
 import { ConfirmButton } from "@/src/form-fields";
 import { IconTrash } from "@/src/icons";
 import { withBase } from "@/src/paths";
-import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
-import { StatRow, relativeTime } from "@/src/ui-ext";
+import { Alert, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
+import { StatRow, initials, relativeTime } from "@/src/ui-ext";
 
 export const metadata = { title: "Müşteri" };
 export const dynamic = "force-dynamic";
@@ -110,7 +110,7 @@ export default async function CustomerDetailPage({
         <StatRow
           items={[
             { label: "Sipariş", value: valid.length, hint: orderRows.length > valid.length ? `${orderRows.length - valid.length} iptal/başarısız` : undefined },
-            { label: "Toplam harcama", value: formatTry(spent) },
+            { label: "Toplam harcama", value: valid.length ? formatTry(spent) : "—" },
             { label: "Ortalama sepet", value: valid.length ? formatTry(spent / valid.length) : "—" },
             { label: "Son sipariş", value: orderRows[0] ? relativeTime(orderRows[0].createdAt) : "—" },
             { label: "Açık sepet", value: cartRows.length ? formatTry(cartTotal) : "—", hint: cartRows.length ? `${cartRows.length} ürün` : undefined },
@@ -123,14 +123,14 @@ export default async function CustomerDetailPage({
         <div>
           <Panel title="Siparişler" description={tenantCount > 1 ? `${tenantCount} farklı sitede` : undefined}>
             {orderRows.length === 0 ? (
-              <EmptyState title="Henüz sipariş yok" />
+              <p className="panel-empty">Henüz sipariş yok.</p>
             ) : (
               <div className="table-wrap">
                 <table className="table">
                   <thead>
                     <tr>
                       <th>Sipariş</th>
-                      <th>Site</th>
+                      {tenantCount > 1 ? <th>Site</th> : null}
                       <th>Durum</th>
                       <th>Tutar</th>
                       <th>Tarih</th>
@@ -144,12 +144,14 @@ export default async function CustomerDetailPage({
                             {o.orderNo}
                           </Link>
                         </td>
-                        <td className="text-sm">{o.tenantName ?? "—"}</td>
+                        {tenantCount > 1 ? <td className="text-sm">{o.tenantName ?? "—"}</td> : null}
                         <td>
                           <StatusBadge tone={statusTone(o.status)}>{orderStatusLabel(o.status)}</StatusBadge>
                         </td>
-                        <td>{formatTry(o.grandTotal)}</td>
-                        <td className="text-sm muted">{formatDate(o.createdAt)}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>{formatTry(o.grandTotal)}</td>
+                        <td className="text-sm muted" style={{ whiteSpace: "nowrap" }}>
+                          {formatDate(o.createdAt)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -160,7 +162,7 @@ export default async function CustomerDetailPage({
 
           <Panel title="Sepetindeki ürünler" description={cartRows[0] ? `Son güncelleme ${relativeTime(cartRows[0].updatedAt)}` : undefined}>
             {cartRows.length === 0 ? (
-              <EmptyState title="Sepet boş" />
+              <p className="panel-empty">Sepet boş.</p>
             ) : (
               <div className="table-wrap">
                 <table className="table">
@@ -168,7 +170,7 @@ export default async function CustomerDetailPage({
                     <tr>
                       <th>Ürün</th>
                       <th>Adet</th>
-                      <th>Fiyat</th>
+                      <th>Tutar</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -179,7 +181,7 @@ export default async function CustomerDetailPage({
                           <div className="muted mono text-sm">{r.sku}</div>
                         </td>
                         <td>{r.qty}</td>
-                        <td>{formatTry(Number(r.price) * r.qty)}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>{formatTry(Number(r.price) * r.qty)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -190,13 +192,14 @@ export default async function CustomerDetailPage({
 
           <Panel title="Adresler">
             {addresses.length === 0 ? (
-              <EmptyState title="Kayıtlı adres yok" />
+              <p className="panel-empty">Kayıtlı adres yok.</p>
             ) : (
               <div className="address-grid panel-pad">
                 {addresses.map((a) => (
                   <div key={a.id} className="address-card">
                     <strong>
-                      {a.title} {a.isDefault ? <StatusBadge tone="ok">Varsayılan</StatusBadge> : null}{" "}
+                      {a.title}
+                      {a.isDefault ? <StatusBadge tone="ok">Varsayılan</StatusBadge> : null}
                       {a.kind === "billing" ? <StatusBadge tone="info">Fatura</StatusBadge> : null}
                     </strong>
                     <span>{a.fullName}</span>
@@ -205,31 +208,88 @@ export default async function CustomerDetailPage({
                     <span>
                       {a.district} / {a.city} {a.postalCode ?? ""}
                     </span>
-                    <span className="muted">{a.phone}</span>
+                    {a.phone ? <span className="muted">{a.phone}</span> : null}
                   </div>
                 ))}
               </div>
             )}
           </Panel>
 
-          <Panel title="Araçları">
+          <Panel title="Araçlar">
             {vehicles.length === 0 ? (
-              <EmptyState title="Kayıtlı araç yok" />
+              <p className="panel-empty">Kayıtlı araç yok.</p>
             ) : (
-              <ul className="link-list">
+              <ul className="link-list panel-pad" style={{ listStyle: "none", margin: 0 }}>
                 {vehicles.map((v) => (
                   <li key={v.id}>
-                    <span>
-                      <strong>
-                        {v.brand ?? "?"} {v.model ?? ""}
-                      </strong>{" "}
-                      {v.year ? <span className="muted">{v.year}</span> : null}
-                    </span>
-                    {v.label ? <span className="muted text-sm">{v.label}</span> : null}
+                    <strong>
+                      {v.brand ?? "?"} {v.model ?? ""}
+                    </strong>{" "}
+                    {v.year ? <span className="muted">{v.year}</span> : null}
+                    {v.label ? <span className="muted text-sm"> · {v.label}</span> : null}
                   </li>
                 ))}
               </ul>
             )}
+          </Panel>
+
+          <Panel title="Müşteri bilgileri" padded>
+            <form action={action} method="post" className="form-stack">
+              <input type="hidden" name="_action" value="save" />
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="c-fn">Ad</label>
+                  <input id="c-fn" className="input" name="firstName" required defaultValue={customer.firstName} />
+                </div>
+                <div className="field">
+                  <label htmlFor="c-ln">Soyad</label>
+                  <input id="c-ln" className="input" name="lastName" required defaultValue={customer.lastName} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="c-em">E-posta</label>
+                  <input id="c-em" className="input" type="email" name="email" required defaultValue={customer.email} />
+                </div>
+                <div className="field">
+                  <label htmlFor="c-ph">Telefon</label>
+                  <input id="c-ph" className="input" type="tel" name="phone" defaultValue={customer.phone ?? ""} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="c-it">Fatura tipi</label>
+                  <select id="c-it" className="select" name="invoiceType" defaultValue={customer.invoiceType}>
+                    <option value="individual">Bireysel</option>
+                    <option value="corporate">Kurumsal</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="c-ni">TC kimlik no</label>
+                  <input id="c-ni" className="input mono" name="nationalId" inputMode="numeric" maxLength={11} defaultValue={customer.nationalId ?? ""} />
+                </div>
+              </div>
+              <div className="field">
+                <label htmlFor="c-cn">Firma adı</label>
+                <input id="c-cn" className="input" name="companyName" defaultValue={customer.companyName ?? ""} />
+                <small className="field-hint">Kurumsal fatura için firma adı, vergi dairesi ve vergi numarası gerekir.</small>
+              </div>
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="c-to">Vergi dairesi</label>
+                  <input id="c-to" className="input" name="taxOffice" defaultValue={customer.taxOffice ?? ""} />
+                </div>
+                <div className="field">
+                  <label htmlFor="c-tn">Vergi no</label>
+                  <input id="c-tn" className="input mono" name="taxNumber" inputMode="numeric" maxLength={11} defaultValue={customer.taxNumber ?? ""} />
+                </div>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  Bilgileri kaydet
+                </button>
+              </div>
+            </form>
           </Panel>
 
           {history.length ? (
@@ -240,6 +300,58 @@ export default async function CustomerDetailPage({
         </div>
 
         <div>
+          <Panel title="Müşteri" padded>
+            <div className="customer-box" style={{ marginBottom: "1rem" }}>
+              <span className="customer-avatar" aria-hidden>
+                {initials(`${customer.firstName} ${customer.lastName}`)}
+              </span>
+              <div>
+                <strong>
+                  {customer.firstName} {customer.lastName}
+                </strong>
+                <span className="muted text-sm">{valid.length ? `${valid.length} sipariş · ${formatTry(spent)}` : "Henüz siparişi yok"}</span>
+              </div>
+            </div>
+            <dl className="dl">
+              <div>
+                <dt>E-posta</dt>
+                <dd>
+                  <a href={`mailto:${customer.email}`}>{customer.email}</a>
+                </dd>
+              </div>
+              <div>
+                <dt>Telefon</dt>
+                <dd>{customer.phone ? <a href={`tel:${customer.phone.replace(/\s+/g, "")}`}>{customer.phone}</a> : "—"}</dd>
+              </div>
+              <div>
+                <dt>Fatura</dt>
+                <dd>
+                  {customer.invoiceType === "corporate"
+                    ? [customer.companyName, [customer.taxOffice, customer.taxNumber].filter(Boolean).join(" · ")].filter(Boolean).join(" — ") || "Kurumsal"
+                    : customer.nationalId
+                      ? `Bireysel · TC ${customer.nationalId}`
+                      : "Bireysel"}
+                </dd>
+              </div>
+              <div>
+                <dt>Kayıt tarihi</dt>
+                <dd>{formatDate(customer.createdAt)}</dd>
+              </div>
+              {meta.tags.length ? (
+                <div>
+                  <dt>Etiketler</dt>
+                  <dd className="tag-list" style={{ marginTop: 0 }}>
+                    {meta.tags.map((t) => (
+                      <span key={t} className="tag">
+                        {t}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </Panel>
+
           <Panel title="Etiketler ve not" padded>
             <form action={action} method="post" className="form-stack">
               <input type="hidden" name="_action" value="meta" />
@@ -263,60 +375,6 @@ export default async function CustomerDetailPage({
             </form>
           </Panel>
 
-          <Panel title="Müşteri bilgileri" padded>
-            <form action={action} method="post" className="form-stack">
-              <input type="hidden" name="_action" value="save" />
-              <div className="form-row">
-                <div className="field">
-                  <label htmlFor="c-fn">Ad</label>
-                  <input id="c-fn" className="input" name="firstName" required defaultValue={customer.firstName} />
-                </div>
-                <div className="field">
-                  <label htmlFor="c-ln">Soyad</label>
-                  <input id="c-ln" className="input" name="lastName" required defaultValue={customer.lastName} />
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="c-em">E-posta</label>
-                <input id="c-em" className="input" type="email" name="email" required defaultValue={customer.email} />
-              </div>
-              <div className="field">
-                <label htmlFor="c-ph">Telefon</label>
-                <input id="c-ph" className="input" name="phone" defaultValue={customer.phone ?? ""} />
-              </div>
-              <div className="field">
-                <label htmlFor="c-it">Fatura tipi</label>
-                <select id="c-it" className="input" name="invoiceType" defaultValue={customer.invoiceType}>
-                  <option value="individual">Bireysel</option>
-                  <option value="corporate">Kurumsal</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="c-cn">Firma adı</label>
-                <input id="c-cn" className="input" name="companyName" defaultValue={customer.companyName ?? ""} />
-              </div>
-              <div className="form-row">
-                <div className="field">
-                  <label htmlFor="c-to">Vergi dairesi</label>
-                  <input id="c-to" className="input" name="taxOffice" defaultValue={customer.taxOffice ?? ""} />
-                </div>
-                <div className="field">
-                  <label htmlFor="c-tn">Vergi no</label>
-                  <input id="c-tn" className="input" name="taxNumber" defaultValue={customer.taxNumber ?? ""} />
-                </div>
-              </div>
-              <div className="field">
-                <label htmlFor="c-ni">TC kimlik no</label>
-                <input id="c-ni" className="input" name="nationalId" defaultValue={customer.nationalId ?? ""} />
-              </div>
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">
-                  Bilgileri kaydet
-                </button>
-              </div>
-            </form>
-          </Panel>
-
           <Panel title="Şifre belirle" padded>
             <form action={action} method="post" className="form-stack">
               <input type="hidden" name="_action" value="password" />
@@ -333,23 +391,21 @@ export default async function CustomerDetailPage({
             </form>
           </Panel>
 
-          <Panel padded>
-            <form action={action} method="post" className="danger-zone">
-              <input type="hidden" name="_action" value="delete" />
-              <div>
-                <strong>Müşteriyi sil</strong>
-                <small>
-                  {orderRows.length
-                    ? "Siparişi olduğu için hesap anonimleştirilir (KVKK); sipariş kayıtları korunur."
-                    : "Hesap, adresler, araçlar ve sepet kalıcı olarak silinir."}
-                </small>
-              </div>
-              <ConfirmButton className="btn btn-danger btn-sm" message="Müşteri silinsin mi? Bu işlem geri alınamaz.">
-                <IconTrash />
-                Sil
-              </ConfirmButton>
-            </form>
-          </Panel>
+          <form action={action} method="post" className="danger-zone" style={{ marginTop: 0 }}>
+            <input type="hidden" name="_action" value="delete" />
+            <div>
+              <strong>Müşteriyi sil</strong>
+              <small>
+                {orderRows.length
+                  ? "Siparişi olduğu için hesap anonimleştirilir (KVKK); sipariş kayıtları korunur."
+                  : "Hesap, adresler, araçlar ve sepet kalıcı olarak silinir."}
+              </small>
+            </div>
+            <ConfirmButton className="btn btn-danger btn-sm" message="Müşteri silinsin mi? Bu işlem geri alınamaz.">
+              <IconTrash />
+              Sil
+            </ConfirmButton>
+          </form>
         </div>
       </div>
     </>

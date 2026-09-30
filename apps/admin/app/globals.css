@@ -618,7 +618,10 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
   color: var(--a-faint);
   pointer-events: none;
 }
-.search-field .input { padding-left: 2.2rem; }
+.search-field .input,
+.admin-body .search-field .input { width: 100%; padding-left: 2.2rem; }
+.toolbar > .select,
+.toolbar > .input { width: auto; max-width: 100%; }
 
 .admin-body .input,
 .admin-body .select,
@@ -1597,7 +1600,20 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
 .journey-type { padding: 0.06rem 0.45rem; font-size: 0.7rem; font-weight: 650; border-radius: 5px; background: var(--a-info-50); color: var(--a-info); white-space: nowrap; }
 .journey-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .address-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
-.address-card { padding: 0.8rem 0.9rem; border: 1px solid var(--a-border); border-radius: var(--a-radius-sm); font-size: 0.82rem; line-height: 1.5; }
+.address-card { display: grid; align-content: start; gap: 0.1rem; padding: 0.8rem 0.9rem; border: 1px solid var(--a-border); border-radius: var(--a-radius-sm); font-size: 0.82rem; line-height: 1.5; }
+.address-card strong { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem; }
+.customer-cell { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.customer-cell .customer-avatar { width: 34px; height: 34px; font-size: 0.78rem; }
+.customer-cell > div { min-width: 0; }
+.customer-cell .badges { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-left: 0.35rem; vertical-align: middle; }
+.customer-cell .email { display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .kpis .kpi { padding: 0.8rem 0.9rem; }
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .customer-cell .email { max-width: 200px; }
+}
+.panel-empty { margin: 0; padding: 1rem 1.2rem; font-size: 0.84rem; color: var(--a-muted); }
 .diff-table td { vertical-align: top; word-break: break-word; }
 .diff-table tr.is-changed { background: var(--a-warn-50); }
 .diff-before { color: var(--a-bad); text-decoration: line-through; text-decoration-color: rgba(180, 35, 24, 0.35); }

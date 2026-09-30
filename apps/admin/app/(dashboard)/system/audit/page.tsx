@@ -62,11 +62,11 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       </div>
       <Panel>
         <form className="toolbar filter-bar" method="get">
-          <label className="search-field">
+          <div className="search-field">
             <IconSearch />
-            <input name="q" defaultValue={sp.q ?? ""} placeholder="Kayıt no, e-posta, IP veya içerik ara" />
-          </label>
-          <select className="input" name="kullanici" defaultValue={sp.kullanici ?? ""} aria-label="Kullanıcı">
+            <input className="input" name="q" defaultValue={sp.q ?? ""} placeholder="Kayıt no, e-posta, IP veya içerik ara" />
+          </div>
+          <select className="select" name="kullanici" defaultValue={sp.kullanici ?? ""} aria-label="Kullanıcı">
             <option value="">Tüm kullanıcılar</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
@@ -74,7 +74,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
               </option>
             ))}
           </select>
-          <select className="input" name="kayit" defaultValue={sp.kayit ?? ""} aria-label="Kayıt türü">
+          <select className="select" name="kayit" defaultValue={sp.kayit ?? ""} aria-label="Kayıt türü">
             <option value="">Tüm kayıt türleri</option>
             {entities.map((e) => (
               <option key={e.entity} value={e.entity}>
@@ -82,7 +82,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
               </option>
             ))}
           </select>
-          <select className="input" name="islem" defaultValue={sp.islem ?? ""} aria-label="İşlem">
+          <select className="select" name="islem" defaultValue={sp.islem ?? ""} aria-label="İşlem">
             <option value="">Tüm işlemler</option>
             {actions.map((a) => (
               <option key={a.action} value={a.action}>

@@ -140,6 +140,17 @@ export function Toggle({ name, defaultChecked, label, hint }: { name: string; de
   );
 }
 
+export function initials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toLocaleUpperCase("tr-TR"))
+      .join("") || "?"
+  );
+}
+
 export function percent(part: number, whole: number) {
   if (!whole) return "0%";
   return `${((part / whole) * 100).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%`;

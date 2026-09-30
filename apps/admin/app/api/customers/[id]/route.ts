@@ -88,6 +88,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (!next.firstName || !next.lastName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next.email)) {
     return redirectTo(request, back, { hata: "Ad, soyad ve geçerli bir e-posta girin." });
   }
+  if (next.nationalId && !/^\d{11}$/.test(next.nationalId)) return redirectTo(request, back, { hata: "TC kimlik no 11 haneli olmalı." });
+  if (next.taxNumber && !/^\d{10,11}$/.test(next.taxNumber)) return redirectTo(request, back, { hata: "Vergi no 10 (şahıs şirketinde 11) haneli olmalı." });
   try {
     await db.update(customers).set(next).where(eq(customers.id, id));
   } catch (err) {

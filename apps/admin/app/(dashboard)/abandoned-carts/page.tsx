@@ -74,13 +74,13 @@ export default async function AbandonedCartsPage({
         <form className="toolbar filter-bar" method="get">
           {tab ? <input type="hidden" name="sekme" value={tab} /> : null}
           {tab !== "kurtarilan" ? (
-            <label className="search-field">
+            <div className="search-field">
               <IconSearch />
-              <input name="q" defaultValue={sp.q ?? ""} placeholder="Ad veya e-posta ara" />
-            </label>
+              <input className="input" name="q" defaultValue={sp.q ?? ""} placeholder="Ad veya e-posta ara" />
+            </div>
           ) : null}
           {tenantRows.length > 1 ? (
-            <select className="input" name="site" defaultValue={tenantId ?? ""} aria-label="Site">
+            <select className="select" name="site" defaultValue={tenantId ?? ""} aria-label="Site">
               <option value="">Tüm siteler</option>
               {tenantRows.map((t) => (
                 <option key={t.id} value={t.id}>

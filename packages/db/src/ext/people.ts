@@ -58,6 +58,7 @@ export type CustomerListRow = {
   last_name: string;
   phone: string | null;
   invoice_type: string | null;
+  company_name: string | null;
   created_at: Date;
   orders: number;
   spent: string | null;
@@ -76,7 +77,7 @@ export async function listCustomers(opts: {
   await ensureExtTables();
   const q = opts.q?.trim() ? `%${opts.q.trim()}%` : null;
   const where = sql`where 1 = 1
-    ${q ? sql`and (c.email like ${q} or c.first_name like ${q} or c.last_name like ${q} or concat(c.first_name, ' ', c.last_name) like ${q} or c.phone like ${q})` : sql``}
+    ${q ? sql`and (c.email like ${q} or c.first_name like ${q} or c.last_name like ${q} or concat(c.first_name, ' ', c.last_name) like ${q} or c.phone like ${q} or c.company_name like ${q})` : sql``}
     ${opts.filter === "buyers" ? sql`and s.orders > 0` : sql``}
     ${opts.filter === "no_orders" ? sql`and coalesce(s.orders, 0) = 0` : sql``}
     ${opts.filter === "corporate" ? sql`and c.invoice_type = 'corporate'` : sql``}
@@ -92,9 +93,9 @@ export async function listCustomers(opts: {
           : sql`order by c.created_at desc`;
   const from = sql`from customers c
     left join (select customer_id, count(*) orders, sum(grand_total) spent, max(created_at) last_order_at from orders
-      where customer_id is not null and status not in ('cancelled','refunded') group by customer_id) s on s.customer_id = c.id
+      where customer_id is not null and status not in ('cancelled','refunded','failed','expired') group by customer_id) s on s.customer_id = c.id
     left join customer_meta m on m.customer_id = c.id`;
-  const list = await rows<CustomerListRow>(sql`select c.id, c.email, c.first_name, c.last_name, c.phone, c.invoice_type, c.created_at,
+  const list = await rows<CustomerListRow>(sql`select c.id, c.email, c.first_name, c.last_name, c.phone, c.invoice_type, c.company_name, c.created_at,
       coalesce(s.orders, 0) orders, s.spent, s.last_order_at, m.tags, m.is_blocked
     ${from} ${where} ${order} limit ${opts.limit} offset ${opts.offset}`);
   const [count] = await rows<{ c: number }>(sql`select count(*) c ${from} ${where}`);
@@ -106,7 +107,7 @@ export async function customerKpis() {
   const [row] = await rows<{ total: number; new30: number; buyers: number; repeat_buyers: number }>(sql`select
     (select count(*) from customers) total,
     (select count(*) from customers where created_at > now() - interval 30 day) new30,
-    (select count(distinct customer_id) from orders where customer_id is not null and status not in ('cancelled','refunded')) buyers,
-    (select count(*) from (select customer_id from orders where customer_id is not null and status not in ('cancelled','refunded') group by customer_id having count(*) > 1) x) repeat_buyers`);
+    (select count(distinct customer_id) from orders where customer_id is not null and status not in ('cancelled','refunded','failed','expired')) buyers,
+    (select count(*) from (select customer_id from orders where customer_id is not null and status not in ('cancelled','refunded','failed','expired') group by customer_id having count(*) > 1) x) repeat_buyers`);
   return { total: Number(row?.total ?? 0), new30: Number(row?.new30 ?? 0), buyers: Number(row?.buyers ?? 0), repeat: Number(row?.repeat_buyers ?? 0) };
 }
