@@ -8,6 +8,66 @@ function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 }
 
+/** Baştaki 0/+90 atılmış 10 haneli numara. */
+function phoneDigits(raw: string) {
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("90") && d.length > 10) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+  return d.slice(0, 10);
+}
+
+/** "5321234567" → "0 (532) 123 45 67" (yazarken kısmi) */
+function formatPhone(raw: string) {
+  const d = phoneDigits(raw);
+  if (!d) return "";
+  let out = `0 (${d.slice(0, 3)}`;
+  if (d.length > 3) out += `) ${d.slice(3, 6)}`;
+  if (d.length > 6) out += ` ${d.slice(6, 8)}`;
+  if (d.length > 8) out += ` ${d.slice(8, 10)}`;
+  return out;
+}
+
+const PHONE_PATTERN = "0 \\([2-5][0-9]{2}\\) [0-9]{3} [0-9]{2} [0-9]{2}";
+
+function PhoneInput({ name, autoComplete, defaultValue }: { name: string; autoComplete: string; defaultValue?: string }) {
+  const [value, setValue] = useState(() => formatPhone(defaultValue ?? ""));
+  return (
+    <input
+      className="input"
+      name={name}
+      type="tel"
+      autoComplete={autoComplete}
+      inputMode="tel"
+      required
+      placeholder="0 (5xx) xxx xx xx"
+      maxLength={17}
+      pattern={PHONE_PATTERN}
+      title="10 haneli telefon numarası, örn. 0 (532) 123 45 67"
+      value={value}
+      onChange={(e) => setValue(formatPhone(e.target.value))}
+    />
+  );
+}
+
+function NationalIdInput({ defaultValue }: { defaultValue?: string }) {
+  const [value, setValue] = useState(() => (defaultValue ?? "").replace(/\D/g, "").slice(0, 11));
+  return (
+    <input
+      className="input"
+      name="nationalId"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="11 haneli T.C. kimlik no"
+      minLength={11}
+      maxLength={11}
+      pattern="[1-9][0-9]{10}"
+      title="T.C. kimlik numarası 11 haneli olmalı"
+      value={value}
+      onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 11))}
+    />
+  );
+}
+
 export type CheckoutLine = {
   id: string;
   name: string;
@@ -89,7 +149,7 @@ export function CheckoutForm({
                 </label>
                 <label>
                   Telefon
-                  <input className="input" name="phone" autoComplete="tel" inputMode="tel" required defaultValue={defaults?.phone ?? ""} />
+                  <PhoneInput name="phone" autoComplete="tel" defaultValue={defaults?.phone} />
                 </label>
               </div>
             </div>
@@ -142,7 +202,7 @@ export function CheckoutForm({
               ) : (
                 <label>
                   T.C. kimlik no <span className="checkout-optional">(isteğe bağlı)</span>
-                  <input className="input" name="nationalId" inputMode="numeric" autoComplete="off" maxLength={11} defaultValue={defaults?.nationalId ?? ""} />
+                  <NationalIdInput defaultValue={defaults?.nationalId} />
                 </label>
               )}
 
@@ -190,7 +250,7 @@ export function CheckoutForm({
                 </label>
                 <label>
                   Teslimat telefonu
-                  <input className="input" name="shipPhone" autoComplete="shipping tel" inputMode="tel" required defaultValue={defaults?.shipPhone ?? ""} />
+                  <PhoneInput name="shipPhone" autoComplete="shipping tel" defaultValue={defaults?.shipPhone} />
                 </label>
                 <div className="checkout-form-row">
                   <label>

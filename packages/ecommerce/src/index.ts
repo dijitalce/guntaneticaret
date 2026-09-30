@@ -269,6 +269,14 @@ export async function getCartView(cartId: string) {
   };
 }
 
+/** Baştaki 0 / +90 hariç 10 hane; alan kodu 2–5 ile başlar (sabit hat veya cep). */
+export function isValidTrPhone(raw: string): boolean {
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("90") && d.length === 12) d = d.slice(2);
+  if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+  return /^[2-5]\d{9}$/.test(d);
+}
+
 function nextOrderNo(): string {
   return `GNT-${Date.now().toString(36).toUpperCase()}`;
 }
@@ -318,6 +326,10 @@ export async function checkout(input: {
       throw new Error("Kurumsal fatura bilgileri eksik.");
     }
   }
+  if (!isValidTrPhone(input.phone)) throw new Error("Telefon numarası geçersiz.");
+  if (input.shipping.phone && !isValidTrPhone(input.shipping.phone)) throw new Error("Teslimat telefonu geçersiz.");
+  const nationalId = input.nationalId?.trim() ?? "";
+  if (nationalId && !/^[1-9]\d{10}$/.test(nationalId)) throw new Error("T.C. kimlik no 11 haneli olmalı.");
 
   for (const item of view.items) {
     if (availableStock(item.stockQty, item.reservedQty) < item.qty) {

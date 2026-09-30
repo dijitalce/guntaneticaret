@@ -135,7 +135,8 @@ export default async function CheckoutPage({
 
       {sp.hata === "1" && (
         <p className="account-alert is-bad" role="alert">
-          Sipariş oluşturulamadı. Adres, fatura bilgileri, stok ve yasal onayları kontrol edip tekrar dene.
+          Sipariş oluşturulamadı. Telefon, T.C. kimlik no, adres, fatura bilgileri, stok ve yasal onayları kontrol edip
+          tekrar dene.
         </p>
       )}
       {sp.hata === "kart" && (
