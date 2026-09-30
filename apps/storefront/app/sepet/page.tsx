@@ -5,7 +5,6 @@ import { COOKIE_CART } from "@guntan/config";
 import { getCartSummary, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
-import { FreeShippingBar } from "../../src/cart-drawer";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -68,15 +67,6 @@ export default async function CartPage({
             : "Giriş yaptın. Sepetin hesabına bağlandı."}
         </p>
       )}
-
-      <div className="cart-ship-banner">
-        <FreeShippingBar
-          subtotal={view.subtotal}
-          freeShippingMin={view.freeShippingMin}
-          remainingForFreeShipping={view.remainingForFreeShipping}
-          freeShippingUnlocked={view.freeShippingUnlocked}
-        />
-      </div>
 
       {sp.hata === "stok" && (
         <p className="account-alert is-bad" role="alert">
@@ -148,7 +138,7 @@ export default async function CartPage({
             </div>
             <div>
               <dt>Kargo</dt>
-              <dd>{view.shippingAmount <= 0 ? "Ücretsiz" : money(view.shippingAmount)}</dd>
+              <dd>{money(view.shippingAmount)}</dd>
             </div>
             <div className="is-total">
               <dt>Ödenecek</dt>
@@ -165,7 +155,6 @@ export default async function CartPage({
           <ul className="cart-trust">
             <li>KDV dahil fiyat</li>
             <li>Havale / EFT güvenli ödeme</li>
-            <li>{view.freeShippingMin.toLocaleString("tr-TR")} TL üzeri ücretsiz kargo</li>
           </ul>
         </aside>
       </div>

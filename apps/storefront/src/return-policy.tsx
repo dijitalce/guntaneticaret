@@ -16,7 +16,7 @@ const highlights = [
     icon: "box",
   },
   {
-    title: "Ücretsiz İade Kargosu",
+    title: "İade Kargosu",
     lead: null,
     text: "Güntan Oto Yedek Parça iade gönderi koduyla iadenizi kolayca gönderebilirsiniz.",
     icon: "truck",
@@ -110,9 +110,7 @@ export function ReturnPolicy() {
           Kargo Ücreti
         </h2>
         <p className="return-note">
-          Keyfi iade (ürün kusuru olmayan iade) durumlarında kargo ücreti müşteriye aittir. İade sonrasında
-          siparişinizin toplam tutarı ücretsiz kargo limitinin altına düşerse, gidiş-dönüş kargo ücreti alıcıdan
-          tahsil edilir.
+          Keyfi iade (ürün kusuru olmayan iade) durumlarında kargo ücreti müşteriye aittir.
         </p>
       </section>
 

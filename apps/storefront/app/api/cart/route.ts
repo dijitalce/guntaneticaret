@@ -88,7 +88,7 @@ export async function GET() {
   const tenant = await resolveTenantByHost(host);
   if (!tenant) {
     return NextResponse.json(
-      { qty: 0, items: [], subtotal: 0, shippingAmount: 0, freeShippingMin: 2500, remainingForFreeShipping: 2500, freeShippingUnlocked: false },
+      { qty: 0, items: [], subtotal: 0, shippingAmount: 0 },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   }

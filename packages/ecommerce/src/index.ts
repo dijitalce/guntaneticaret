@@ -15,12 +15,7 @@ import {
   tenantSeesAllCatalog,
 } from "@guntan/db";
 import { getPaymentProvider } from "@guntan/payments";
-import {
-  FREE_SHIPPING_MIN,
-  getShippingProvider,
-  remainingForFreeShipping,
-  shippingAmountForSubtotal,
-} from "@guntan/shipping";
+import { getShippingProvider, shippingAmountForSubtotal } from "@guntan/shipping";
 import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, type OrderStatus } from "@guntan/types";
 
 export function availableStock(stockQty: number, reservedQty: number): number {
@@ -205,9 +200,6 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
     qty: 0,
     subtotal: 0,
     shippingAmount: shippingAmountForSubtotal(0),
-    freeShippingMin: FREE_SHIPPING_MIN,
-    remainingForFreeShipping: remainingForFreeShipping(0),
-    freeShippingUnlocked: false,
     items: [] as Array<{
       id: string;
       name: string;
@@ -225,14 +217,10 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
   const view = await getCartView(cartId);
   const qty = view.items.reduce((sum, i) => sum + i.qty, 0);
   const shippingAmount = shippingAmountForSubtotal(view.subtotal);
-  const remaining = remainingForFreeShipping(view.subtotal);
   return {
     qty,
     subtotal: view.subtotal,
     shippingAmount,
-    freeShippingMin: FREE_SHIPPING_MIN,
-    remainingForFreeShipping: remaining,
-    freeShippingUnlocked: remaining <= 0 && view.subtotal > 0,
     items: view.items.map((i) => ({
       id: i.id,
       name: i.name,

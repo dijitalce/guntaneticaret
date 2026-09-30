@@ -4,15 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconCart, IconClose, IconTruck } from "./icons";
+import { IconCart, IconClose } from "./icons";
 
 export type CartSummaryPayload = {
   qty: number;
   subtotal: number;
   shippingAmount: number;
-  freeShippingMin: number;
-  remainingForFreeShipping: number;
-  freeShippingUnlocked: boolean;
   items: Array<{
     id: string;
     name: string;
@@ -28,47 +25,10 @@ function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 }
 
-export function FreeShippingBar({
-  subtotal,
-  freeShippingMin,
-  remainingForFreeShipping,
-  freeShippingUnlocked,
-}: {
-  subtotal: number;
-  freeShippingMin: number;
-  remainingForFreeShipping: number;
-  freeShippingUnlocked: boolean;
-}) {
-  const progress = Math.min(100, Math.max(4, freeShippingMin > 0 ? (subtotal / freeShippingMin) * 100 : 0));
-  return (
-    <div className={`free-ship-bar${freeShippingUnlocked ? " is-unlocked" : ""}`}>
-      <div className="free-ship-bar-head">
-        <IconTruck />
-        {freeShippingUnlocked ? (
-          <strong>Ücretsiz kargo kazandın</strong>
-        ) : (
-          <strong>Ücretsiz kargoya {money(remainingForFreeShipping)} kaldı</strong>
-        )}
-      </div>
-      <div className="free-ship-track" aria-hidden>
-        <span style={{ width: `${freeShippingUnlocked ? 100 : progress}%` }} />
-      </div>
-      <p>
-        {freeShippingUnlocked
-          ? `${money(freeShippingMin)} ve üzeri siparişlerde kargo bedava.`
-          : `${money(freeShippingMin)} üzeri alışverişlerde kargo ücretsiz.`}
-      </p>
-    </div>
-  );
-}
-
 const emptyCart: CartSummaryPayload = {
   qty: 0,
   subtotal: 0,
   shippingAmount: 0,
-  freeShippingMin: 2500,
-  remainingForFreeShipping: 2500,
-  freeShippingUnlocked: false,
   items: [],
 };
 
@@ -187,15 +147,6 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                 </button>
               </header>
 
-              <div className="cart-drawer-ship">
-                <FreeShippingBar
-                  subtotal={cart.subtotal}
-                  freeShippingMin={cart.freeShippingMin}
-                  remainingForFreeShipping={cart.remainingForFreeShipping}
-                  freeShippingUnlocked={cart.freeShippingUnlocked}
-                />
-              </div>
-
               <div className="cart-drawer-body">
                 {cart.items.length === 0 ? (
                   <div className="cart-drawer-empty">
@@ -269,7 +220,7 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                     </div>
                     <div>
                       <dt>Kargo</dt>
-                      <dd>{cart.shippingAmount <= 0 ? "Ücretsiz" : money(cart.shippingAmount)}</dd>
+                      <dd>{money(cart.shippingAmount)}</dd>
                     </div>
                     <div className="is-total">
                       <dt>Toplam</dt>
