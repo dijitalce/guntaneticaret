@@ -202,8 +202,12 @@ export async function resolveTenantByHostOrThrow(rawHost: string): Promise<Tenan
     gaId: settings?.gaId ?? null,
     gtmId: settings?.gtmId ?? null,
     customScripts: settings?.customScripts ?? null,
+    headerHtml: settings?.headerHtml ?? null,
+    footerHtml: settings?.footerHtml ?? null,
     allCatalogUrl: settings?.socialJson?.allCatalogUrl ?? null,
     seoContent: settings?.seoContent ?? null,
+    seoTitleTemplate: settings?.seoTitleTemplate ?? null,
+    social: settings?.socialJson ?? {},
   };
 
   memSet(hostname, config);

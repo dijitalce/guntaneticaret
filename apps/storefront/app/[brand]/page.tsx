@@ -7,6 +7,7 @@ import { CatalogListing } from "../../src/catalog-listing";
 import {
   JsonLd,
   absoluteUrl,
+  pageTitle,
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
@@ -19,12 +20,12 @@ export async function generateMetadata({ params }: { params: Promise<{ brand: st
   const tenant = await getTenant();
   const row = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!row) return {};
-  const title = `${row.name} Yedek Parça | ${tenant.siteName}`;
+  const title = pageTitle(tenant, `${row.name} Yedek Parça`);
   const description =
     row.seoContent?.slice(0, 160) ??
     `${row.name} modelleri için yedek parça. Fren, motor, filtre ve bakım ürünleri — ${tenant.siteName}.`;
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, `/${row.slug}`) },
     openGraph: {

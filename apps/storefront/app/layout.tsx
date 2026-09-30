@@ -6,14 +6,15 @@ import { redirect } from "next/navigation";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
-import { metadataBaseForHost } from "../src/seo";
+import { metadataBaseForHost, pageTitle, tenantNoIndex, tenantVerification } from "../src/seo";
+import { Analytics, CustomScripts } from "../src/analytics";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
-import { TENANT_STATUS } from "@guntan/types";
+import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 
 const font = DM_Sans({
@@ -30,17 +31,31 @@ export async function generateMetadata(): Promise<Metadata> {
   if (!tenant) {
     return { metadataBase, title: "Sayfa bulunamadı", robots: { index: false, follow: false } };
   }
+  const defaultTitle = tenant.defaultMetaTitle ?? tenant.siteName;
+  const noindex = tenantNoIndex(tenant);
+  const twitterHandle = tenant.social?.[SEO_SOCIAL_KEYS.twitterHandle];
   return {
     metadataBase,
-    title: tenant.defaultMetaTitle ?? tenant.siteName,
+    title: { default: defaultTitle, template: pageTitle(tenant, "%s") },
     description: tenant.defaultMetaDescription ?? undefined,
+    applicationName: tenant.siteName,
     icons: [
       { rel: "icon", url: tenant.faviconUrl ?? "/favicon.png" },
-      { rel: "apple-touch-icon", url: "/apple-touch-icon.png" },
+      { rel: "apple-touch-icon", url: tenant.faviconUrl ?? "/apple-touch-icon.png" },
     ],
+    robots: noindex ? { index: false, follow: false } : { index: true, follow: true },
+    verification: tenantVerification(tenant),
     openGraph: {
-      title: tenant.defaultMetaTitle ?? tenant.siteName,
+      title: defaultTitle,
       description: tenant.defaultMetaDescription ?? undefined,
+      siteName: tenant.siteName,
+      locale: "tr_TR",
+      type: "website",
+      images: tenant.ogImageUrl ? [tenant.ogImageUrl] : undefined,
+    },
+    twitter: {
+      card: tenant.ogImageUrl ? "summary_large_image" : "summary",
+      site: twitterHandle || undefined,
       images: tenant.ogImageUrl ? [tenant.ogImageUrl] : undefined,
     },
   };
@@ -79,6 +94,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="tr" className={font.className}>
       <body style={cssVars(themeToCssVars(tenant.theme))}>
         <a className="sr-only" href="#main">İçeriğe geç</a>
+        {tenant.headerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.headerHtml }} /> : null}
         <div className="topbar">
           <div className="container topbar-inner">
             {tenant.whatsapp ? (
@@ -189,9 +205,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <p className="footer-copy">© {new Date().getFullYear()} {tenant.siteName}</p>
           </div>
         </footer>
-        {tenant.gaId && (
-          <script dangerouslySetInnerHTML={{ __html: `window.GA_ID=${JSON.stringify(tenant.gaId)}` }} />
-        )}
+        {tenant.footerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.footerHtml }} /> : null}
+        <Analytics gaId={tenant.gaId} gtmId={tenant.gtmId} />
+        {tenant.customScripts ? <CustomScripts html={tenant.customScripts} /> : null}
       </body>
     </html>
   );

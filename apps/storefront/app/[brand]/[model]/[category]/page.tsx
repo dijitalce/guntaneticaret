@@ -17,6 +17,7 @@ import { sentenceCaseTr } from "../../../../src/format";
 import {
   JsonLd,
   absoluteUrl,
+  pageTitle,
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
@@ -37,13 +38,13 @@ export async function generateMetadata({
   if (!m) return {};
   const cat = await cachedCategoryBySlug(category);
   if (!cat) return {};
-  const title = `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça | ${tenant.siteName}`;
+  const title = pageTitle(tenant, `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça`);
   const description =
     cat.seoContent?.slice(0, 160) ??
     `${b.name} ${m.name} için ${sentenceCaseTr(cat.name).toLocaleLowerCase("tr-TR")} yedek parçaları. KDV dahil fiyat.`;
   const path = `/${b.slug}/${m.slug}/${cat.slug}`;
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, path) },
     openGraph: { title, description, url: absoluteUrl(tenant.tenant.canonicalHost, path), type: "website" },

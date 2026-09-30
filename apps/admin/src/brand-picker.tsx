@@ -1,12 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BrandLogo } from "./brand-logo";
 
 export type PickerBrand = { id: string; name: string; logo: string | null; isActive: boolean };
 
-export function BrandPicker({ brands, selected }: { brands: PickerBrand[]; selected: string[] }) {
+export function BrandPicker({
+  brands,
+  selected,
+  name = "brandIds",
+  onChange,
+  emptyText = "Henüz marka seçilmedi.",
+}: {
+  brands: PickerBrand[];
+  selected: string[];
+  name?: string;
+  onChange?: (ids: string[]) => void;
+  emptyText?: string;
+}) {
   const [picked, setPicked] = useState(() => new Set(selected));
+  useEffect(() => {
+    onChange?.([...picked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
   const [q, setQ] = useState("");
   const [onlyPicked, setOnlyPicked] = useState(false);
 
@@ -37,7 +53,7 @@ export function BrandPicker({ brands, selected }: { brands: PickerBrand[]; selec
   return (
     <div className="brand-picker">
       {[...picked].map((id) => (
-        <input key={id} type="hidden" name="brandIds" value={id} />
+        <input key={id} type="hidden" name={name} value={id} />
       ))}
       <div className="brand-picker-bar">
         <input
@@ -66,7 +82,7 @@ export function BrandPicker({ brands, selected }: { brands: PickerBrand[]; selec
 
       {visible.length === 0 ? (
         <p className="muted text-sm" style={{ padding: "1.5rem", textAlign: "center", margin: 0 }}>
-          {onlyPicked ? "Henüz marka seçilmedi." : "Eşleşen marka yok."}
+          {onlyPicked ? emptyText : "Eşleşen marka yok."}
         </p>
       ) : (
         <div className="brand-picker-grid">

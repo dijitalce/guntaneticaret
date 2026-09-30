@@ -1,3 +1,33 @@
+import { SEO_SOCIAL_KEYS, SOCIAL_LINKS, applySeoTitleTemplate, type TenantPublicConfig } from "@guntan/types";
+
+/** Sitenin başlık şablonunu ({page} | {siteName}) uygular. */
+export function pageTitle(tenant: TenantPublicConfig, page: string) {
+  return applySeoTitleTemplate(tenant.seoTitleTemplate, page, tenant.siteName);
+}
+
+export function socialProfileUrls(tenant: TenantPublicConfig): string[] | undefined {
+  const social = tenant.social ?? {};
+  const urls = SOCIAL_LINKS.map((s) => social[s.key]).filter((u): u is string => !!u && /^https?:\/\//i.test(u));
+  return urls.length ? urls : undefined;
+}
+
+export function tenantNoIndex(tenant: TenantPublicConfig) {
+  return tenant.social?.[SEO_SOCIAL_KEYS.noindex] === "1";
+}
+
+export function tenantVerification(tenant: TenantPublicConfig) {
+  const s = tenant.social ?? {};
+  const google = s[SEO_SOCIAL_KEYS.googleVerification];
+  const bing = s[SEO_SOCIAL_KEYS.bingVerification];
+  const yandex = s[SEO_SOCIAL_KEYS.yandexVerification];
+  if (!google && !bing && !yandex) return undefined;
+  return {
+    google: google || undefined,
+    yandex: yandex || undefined,
+    other: bing ? { "msvalidate.01": bing } : undefined,
+  };
+}
+
 export function absoluteUrl(host: string, path: string) {
   const base = host.startsWith("http") ? host : `https://${host}`;
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;

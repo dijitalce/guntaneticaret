@@ -14,6 +14,7 @@ import { CatalogListing } from "../../../src/catalog-listing";
 import {
   JsonLd,
   absoluteUrl,
+  pageTitle,
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
@@ -28,11 +29,11 @@ export async function generateMetadata({ params }: { params: Promise<{ brand: st
   if (!b) return {};
   const m = await cachedModelBySlug(b.id, model);
   const modelLabel = m?.name ?? model.toUpperCase();
-  const title = `${b.name} ${modelLabel} Yedek Parça | ${tenant.siteName}`;
+  const title = pageTitle(tenant, `${b.name} ${modelLabel} Yedek Parça`);
   const description = `${b.name} ${modelLabel} uyumlu yedek parçalar. Fren, motor, filtre ve bakım ürünleri — ${tenant.siteName}.`;
   const path = `/${brand}/${model}`;
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, path) },
     openGraph: { title, description, url: absoluteUrl(tenant.tenant.canonicalHost, path), type: "website" },

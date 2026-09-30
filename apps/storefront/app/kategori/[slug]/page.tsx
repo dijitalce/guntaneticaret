@@ -21,6 +21,7 @@ import { sentenceCaseTr } from "../../../src/format";
 import {
   JsonLd,
   absoluteUrl,
+  pageTitle,
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
@@ -37,20 +38,18 @@ export async function generateMetadata({
   const tenant = await getTenant();
   const cat = await cachedCategoryBySlug(slug);
   if (!cat) return {};
-  const title = cat.seoContent
-    ? undefined
-    : `${sentenceCaseTr(cat.name)} Yedek Parça | ${tenant.siteName}`;
+  const title = pageTitle(tenant, `${sentenceCaseTr(cat.name)} Yedek Parça`);
   const description =
     cat.seoContent?.slice(0, 160) ??
     `${sentenceCaseTr(cat.name)} kategorisinde ${tenant.siteName} stoklarındaki yedek parçaları incele. KDV dahil fiyat, hızlı tedarik.`;
   return {
-    title: title ?? `${sentenceCaseTr(cat.name)} Yedek Parça | ${tenant.siteName}`,
+    title: { absolute: title },
     description,
     alternates: {
       canonical: absoluteUrl(tenant.tenant.canonicalHost, `/kategori/${cat.slug}`),
     },
     openGraph: {
-      title: `${sentenceCaseTr(cat.name)} Yedek Parça | ${tenant.siteName}`,
+      title,
       description,
       url: absoluteUrl(tenant.tenant.canonicalHost, `/kategori/${cat.slug}`),
       type: "website",

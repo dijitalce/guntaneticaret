@@ -208,9 +208,40 @@ export type TenantPublicConfig = {
   gaId: string | null;
   gtmId: string | null;
   customScripts: string | null;
+  headerHtml?: string | null;
+  footerHtml?: string | null;
   allCatalogUrl: string | null;
   seoContent: string | null;
+  /** Önbellekteki eski kayıtlarda bulunmayabilir. */
+  seoTitleTemplate?: string | null;
+  social?: Record<string, string>;
 };
+
+/** tenant_settings.social_json içindeki sosyal medya anahtarları. */
+export const SOCIAL_LINKS = [
+  { key: "instagram", label: "Instagram", placeholder: "https://instagram.com/…" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/…" },
+  { key: "x", label: "X (Twitter)", placeholder: "https://x.com/…" },
+  { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@…" },
+  { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@…" },
+  { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/company/…" },
+] as const;
+
+/** tenant_settings.social_json içindeki SEO anahtarları. */
+export const SEO_SOCIAL_KEYS = {
+  googleVerification: "googleVerification",
+  bingVerification: "bingVerification",
+  yandexVerification: "yandexVerification",
+  noindex: "noindex",
+  twitterHandle: "twitterHandle",
+} as const;
+
+export const DEFAULT_SEO_TITLE_TEMPLATE = "{page} | {siteName}";
+
+export function applySeoTitleTemplate(template: string | null | undefined, page: string, siteName: string) {
+  const t = template && template.includes("{page}") ? template : DEFAULT_SEO_TITLE_TEMPLATE;
+  return t.replaceAll("{page}", page).replaceAll("{siteName}", siteName).trim();
+}
 
 export const XML_FIELD_KEYS = [
   "externalId",

@@ -1,68 +1,84 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_ADMIN_SESSION } from "@guntan/config";
-import { getAdminBySession } from "@guntan/auth";
-import { compileVisibility, db, newId, tenantBankAccounts, tenantCatalogRules, tenantDomains, tenantSettings, tenants } from "@guntan/db";
-import { DEFAULT_THEME_TOKENS } from "@guntan/types";
+import { eq } from "drizzle-orm";
+import { db, newId, tenantBankAccounts, tenantDomains, tenantSettings, tenants } from "@guntan/db";
+import { DEFAULT_THEME_TOKENS, TENANT_STATUS } from "@guntan/types";
 import { writeAudit } from "@guntan/observability";
-import { CATALOG_RULE_KIND } from "@guntan/types";
-import { adminRedirect } from "../../../src/paths";
+import { apiAdminSession, isDuplicateError, redirectTo, slugify, text } from "../../../src/api-helpers";
+import {
+  compileInBackground,
+  mergeSocial,
+  parseCatalog,
+  parseContact,
+  parseSeo,
+  parseTheme,
+  replaceCatalogRules,
+} from "../../../src/tenant-form";
+import { formatIban, isValidIban, normalizeHostname, normalizeIban } from "../../../src/tenant-seo";
 
 export async function POST(request: Request) {
-  const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
-  const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
+  const session = await apiAdminSession();
+  if (!session) return redirectTo(request, "/login");
   const form = await request.formData();
-  const name = String(form.get("name"));
-  const slug = String(form.get("slug"));
-  const hostname = String(form.get("hostname")).toLowerCase();
-  const visibilityMode = String(form.get("visibilityMode") ?? "GROUPS");
+  const fail = (hata: string) => redirectTo(request, "/tenants/new", { hata });
+
+  const name = text(form, "name");
+  const slug = slugify(text(form, "slug") || name);
+  const hostname = normalizeHostname(text(form, "hostname"));
+  const status = text(form, "status") === TENANT_STATUS.ACTIVE ? TENANT_STATUS.ACTIVE : TENANT_STATUS.DRAFT;
+  if (!name || !slug) return fail("Site adı zorunlu.");
+  if (!hostname) return fail("Geçerli bir alan adı girin (örn. ornekotoparca.com).");
+
+  const [slugTaken] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, slug)).limit(1);
+  if (slugTaken) return fail(`“${slug}” kodu başka bir sitede kullanılıyor.`);
+  const [hostTaken] = await db.select({ id: tenantDomains.id }).from(tenantDomains).where(eq(tenantDomains.hostname, hostname)).limit(1);
+  if (hostTaken) return fail(`${hostname} başka bir siteye bağlı.`);
+
+  const contact = parseContact(form);
+  if (!contact.ok) return fail(contact.error);
+  const seo = parseSeo(form);
+  if (!seo.ok) return fail(seo.error);
+  const catalog = parseCatalog(form);
+  if (catalog.visibilityMode !== "ALL" && catalog.selectedCount === 0) {
+    return fail("Seçili markalar modunda en az bir grup veya marka seçmelisiniz.");
+  }
+  const iban = normalizeIban(text(form, "iban"));
+  if (iban && !isValidIban(iban)) return fail("IBAN geçersiz. TR ile başlayan 26 karakterlik IBAN girin.");
+
   const tenantId = newId();
-  await db.insert(tenants).values({
-    id: tenantId,
-    name,
-    slug,
-    status: "active",
-    visibilityMode,
-  });
+  try {
+    await db.insert(tenants).values({ id: tenantId, name, slug, status, visibilityMode: catalog.visibilityMode });
+  } catch (err) {
+    if (isDuplicateError(err)) return fail(`“${slug}” kodu başka bir sitede kullanılıyor.`);
+    throw err;
+  }
   await db.insert(tenantDomains).values({ tenantId, hostname, isPrimary: true });
   await db.insert(tenantSettings).values({
     tenantId,
-    siteName: name,
-    phone: String(form.get("phone") ?? ""),
-    whatsapp: String(form.get("whatsapp") ?? ""),
-    email: String(form.get("email") ?? "") || null,
-    defaultMetaTitle: String(form.get("defaultMetaTitle") ?? name),
-    defaultMetaDescription: String(form.get("defaultMetaDescription") ?? ""),
-    themeTokens: {
-      ...DEFAULT_THEME_TOKENS,
-      primary: String(form.get("primary") || DEFAULT_THEME_TOKENS.primary),
-      secondary: String(form.get("secondary") || DEFAULT_THEME_TOKENS.secondary),
-    },
+    siteName: text(form, "siteName") || name,
+    ...contact.value.settings,
+    ...seo.value.settings,
+    socialJson: mergeSocial({}, { ...contact.value.social, ...seo.value.social }),
+    themeTokens: parseTheme(form, DEFAULT_THEME_TOKENS),
+    logoUrl: "/brand/logo.png",
+    faviconUrl: "/favicon.png",
+    placeholderImageUrl: "/placeholder-product.jpg",
   });
-  const groupIds = form.getAll("groupIds").map(String);
-  if (groupIds.length) {
-    await db.insert(tenantCatalogRules).values(
-      groupIds.map((targetId) => ({ tenantId, kind: CATALOG_RULE_KIND.INCLUDE_GROUP, targetId })),
-    );
-  }
-  const iban = String(form.get("iban") ?? "");
+  await replaceCatalogRules(tenantId, catalog.rules);
   if (iban) {
     await db.insert(tenantBankAccounts).values({
       tenantId,
-      bankName: String(form.get("bankName") ?? "Banka"),
-      accountHolder: String(form.get("accountHolder") ?? name),
-      iban,
+      bankName: text(form, "bankName") || "Banka",
+      accountHolder: text(form, "accountHolder") || name,
+      iban: formatIban(iban),
     });
   }
-  await compileVisibility(db, tenantId);
+  compileInBackground(tenantId);
   await writeAudit({
     actorId: session.user.id,
     actorEmail: session.user.email,
     entity: "tenant",
     entityId: tenantId,
     action: "create",
-    after: { name, hostname, visibilityMode },
+    after: { name, slug, hostname, status, visibilityMode: catalog.visibilityMode },
   });
-  return NextResponse.redirect(adminRedirect(`/tenants/${tenantId}`, request), 303);
+  return redirectTo(request, `/tenants/${tenantId}`, { ok: "olusturuldu" });
 }

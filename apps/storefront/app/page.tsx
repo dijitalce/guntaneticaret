@@ -14,6 +14,7 @@ import {
   absoluteUrl,
   itemListJsonLd,
   metadataBaseForHost,
+  socialProfileUrls,
 } from "../src/seo";
 
 export const revalidate = 60;
@@ -26,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
     `${tenant.siteName} — araç marka ve modeline uygun yedek parça. KDV dahil fiyat, stokta ürün, hızlı tedarik.`;
   return {
     metadataBase: metadataBaseForHost(tenant.tenant.canonicalHost),
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, "/") },
     openGraph: {
@@ -73,7 +74,10 @@ export default async function HomePage() {
             "@type": "Organization",
             name: tenant.siteName,
             url: absoluteUrl(host, "/"),
-            logo: tenant.logoUrl ? absoluteUrl(host, tenant.logoUrl) : undefined,
+            logo: tenant.logoUrl
+              ? /^https?:\/\//i.test(tenant.logoUrl) ? tenant.logoUrl : absoluteUrl(host, tenant.logoUrl)
+              : undefined,
+            sameAs: socialProfileUrls(tenant),
             telephone: tenant.phone ?? undefined,
             email: tenant.email ?? undefined,
             address: tenant.address

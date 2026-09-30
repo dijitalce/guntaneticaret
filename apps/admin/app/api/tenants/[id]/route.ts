@@ -1,63 +1,94 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
-import { COOKIE_ADMIN_SESSION } from "@guntan/config";
-import { getAdminBySession } from "@guntan/auth";
-import { compileVisibility, db, tenantCatalogRules, tenantSettings, tenants } from "@guntan/db";
-import { CATALOG_RULE_KIND, DEFAULT_THEME_TOKENS } from "@guntan/types";
-import { invalidateTenantCache } from "@guntan/tenant";
-import { db as database, tenantDomains } from "@guntan/db";
+import { db, tenantSettings, tenants } from "@guntan/db";
+import { DEFAULT_THEME_TOKENS, TENANT_STATUS } from "@guntan/types";
 import { writeAudit } from "@guntan/observability";
-import { adminRedirect } from "../../../../src/paths";
+import { apiAdminSession, redirectTo, text } from "../../../../src/api-helpers";
+import {
+  compileInBackground,
+  mergeSocial,
+  parseAdvanced,
+  parseBranding,
+  parseCatalog,
+  parseContact,
+  parseSeo,
+  parseTheme,
+  refreshTenantCache,
+  replaceCatalogRules,
+} from "../../../../src/tenant-form";
+
+const SECTIONS = ["genel", "gorunum", "iletisim", "seo", "katalog", "gelismis"] as const;
+type Section = (typeof SECTIONS)[number];
+const STATUSES: string[] = Object.values(TENANT_STATUS);
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
-  const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
+  const session = await apiAdminSession();
+  if (!session) return redirectTo(request, "/login");
   const { id } = await ctx.params;
   const form = await request.formData();
-  const [before] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
-  await db.update(tenants).set({
-    name: String(form.get("name")),
-    status: String(form.get("status")),
-    visibilityMode: String(form.get("visibilityMode")),
-  }).where(eq(tenants.id, id));
-  const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, id)).limit(1);
-  if (settings) {
-    await db.update(tenantSettings).set({
-      logoUrl: String(form.get("logoUrl") ?? "") || null,
-      phone: String(form.get("phone") ?? "") || null,
-      themeTokens: {
-        ...DEFAULT_THEME_TOKENS,
-        ...(settings.themeTokens as object),
-        primary: String(form.get("primary") || DEFAULT_THEME_TOKENS.primary),
-      },
-    }).where(eq(tenantSettings.id, settings.id));
+  const section = (SECTIONS as readonly string[]).includes(text(form, "_section")) ? (text(form, "_section") as Section) : "genel";
+  const back = `/tenants/${id}`;
+  const fail = (hata: string) => redirectTo(request, back, { sekme: section, hata });
+
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+  if (!tenant) return redirectTo(request, "/tenants", { hata: "Site bulunamadı." });
+  let [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, id)).limit(1);
+  if (!settings) {
+    await db.insert(tenantSettings).values({ tenantId: id, siteName: tenant.name, themeTokens: { ...DEFAULT_THEME_TOKENS } });
+    [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, id)).limit(1);
   }
-  await db.delete(tenantCatalogRules).where(eq(tenantCatalogRules.tenantId, id));
-  const groupIds = form.getAll("groupIds").map(String);
-  if (groupIds.length) {
-    await db.insert(tenantCatalogRules).values(
-      groupIds.map((targetId) => ({ tenantId: id, kind: CATALOG_RULE_KIND.INCLUDE_GROUP, targetId })),
-    );
+  if (!settings) return fail("Site ayarları oluşturulamadı.");
+
+  let after: Record<string, unknown> = {};
+  let ok = "kaydedildi";
+
+  if (section === "genel") {
+    const name = text(form, "name");
+    const siteName = text(form, "siteName") || name;
+    const status = text(form, "status");
+    if (!name) return fail("Site adı zorunlu.");
+    if (!STATUSES.includes(status)) return fail("Geçersiz durum.");
+    await db.update(tenants).set({ name, status }).where(eq(tenants.id, id));
+    await db.update(tenantSettings).set({ siteName }).where(eq(tenantSettings.id, settings.id));
+    after = { name, siteName, status };
+  } else if (section === "gorunum") {
+    const patch = { ...parseBranding(form), themeTokens: parseTheme(form, settings.themeTokens) };
+    await db.update(tenantSettings).set(patch).where(eq(tenantSettings.id, settings.id));
+    after = patch;
+  } else if (section === "iletisim") {
+    const parsed = parseContact(form);
+    if (!parsed.ok) return fail(parsed.error);
+    const socialJson = mergeSocial(settings.socialJson, parsed.value.social);
+    await db.update(tenantSettings).set({ ...parsed.value.settings, socialJson }).where(eq(tenantSettings.id, settings.id));
+    after = { ...parsed.value.settings, socialJson };
+  } else if (section === "seo") {
+    const parsed = parseSeo(form);
+    if (!parsed.ok) return fail(parsed.error);
+    const socialJson = mergeSocial(settings.socialJson, parsed.value.social);
+    await db.update(tenantSettings).set({ ...parsed.value.settings, socialJson }).where(eq(tenantSettings.id, settings.id));
+    after = { ...parsed.value.settings, socialJson };
+  } else if (section === "katalog") {
+    const { visibilityMode, rules, selectedCount } = parseCatalog(form);
+    if (visibilityMode !== "ALL" && selectedCount === 0) return fail("Seçili markalar modunda en az bir grup veya marka seçmelisiniz.");
+    await replaceCatalogRules(id, rules);
+    await db.update(tenants).set({ visibilityMode }).where(eq(tenants.id, id));
+    compileInBackground(id);
+    after = { visibilityMode, rules: rules.length };
+    ok = "derleniyor";
+  } else if (section === "gelismis") {
+    const patch = parseAdvanced(form);
+    await db.update(tenantSettings).set(patch).where(eq(tenantSettings.id, settings.id));
+    after = { headerHtml: !!patch.headerHtml, footerHtml: !!patch.footerHtml, customScripts: !!patch.customScripts };
   }
-  const excludeBrandIds = form.getAll("excludeBrandIds").map(String);
-  if (excludeBrandIds.length) {
-    await db.insert(tenantCatalogRules).values(
-      excludeBrandIds.map((targetId) => ({ tenantId: id, kind: CATALOG_RULE_KIND.EXCLUDE_BRAND, targetId })),
-    );
-  }
-  await compileVisibility(db, id);
-  const domains = await database.select().from(tenantDomains).where(eq(tenantDomains.tenantId, id));
-  await invalidateTenantCache(id, domains.map((d) => d.hostname));
+
+  await refreshTenantCache(id);
   await writeAudit({
     actorId: session.user.id,
     actorEmail: session.user.email,
     entity: "tenant",
     entityId: id,
-    action: "update",
-    before,
-    after: { visibilityMode: form.get("visibilityMode") },
+    action: `update:${section}`,
+    before: section === "genel" || section === "katalog" ? tenant : undefined,
+    after,
   });
-  return NextResponse.redirect(adminRedirect(`/tenants/${id}`, request), 303);
+  return redirectTo(request, back, { sekme: section, ok });
 }

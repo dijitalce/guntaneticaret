@@ -81,8 +81,21 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
     ogImageUrl: "/brand/mark.png",
     socialJson: { allCatalogUrl: ALL_CATALOG_URL },
   };
-  if (settings) await db.update(tenantSettings).set(payload).where(eq(tenantSettings.id, settings.id));
-  else await db.insert(tenantSettings).values({ tenantId, ...payload });
+  if (!settings) {
+    await db.insert(tenantSettings).values({ tenantId, ...payload });
+    return;
+  }
+  // Panelden düzenlenen ayarlar (SEO, iletişim, tema) ezilmesin: yalnızca boş alanları doldur.
+  const current = settings as Record<string, unknown>;
+  const fill: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "socialJson" || key === "themeTokens") continue;
+    const v = current[key];
+    if (v == null || v === "") fill[key] = value;
+  }
+  fill.socialJson = { ...payload.socialJson, ...(settings.socialJson ?? {}) };
+  if (!settings.themeTokens || Object.keys(settings.themeTokens).length === 0) fill.themeTokens = payload.themeTokens;
+  await db.update(tenantSettings).set(fill).where(eq(tenantSettings.id, settings.id));
 }
 
 async function ensureBank(tenantId: string, accountHolder: string) {

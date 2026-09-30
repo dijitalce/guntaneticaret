@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
+import { pageTitle } from "../../../src/seo";
 import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
@@ -17,10 +18,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const tenant = await getTenant();
   const product = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!product) return {};
+  const title = pageTitle(tenant, product.product.name);
+  const description =
+    product.product.description?.slice(0, 160) ??
+    `${product.product.name} — KDV dahil fiyat, stok durumu ve araç uyumluluğu. ${tenant.siteName}.`;
+  const url = `https://${tenant.tenant.canonicalHost}/urun/${product.product.slug}`;
+  const image = product.images[0]?.url;
   return {
-    title: `${product.product.name} | ${tenant.siteName}`,
-    description: product.product.description ?? undefined,
-    alternates: { canonical: `https://${tenant.tenant.canonicalHost}/urun/${product.product.slug}` },
+    title: { absolute: title },
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "website", images: image ? [image] : undefined },
   };
 }
 
