@@ -136,8 +136,38 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <Card title="Google Merchant Center" subtitle="Google Alışveriş ve Performance Max için ürün feed’i" logo="M" connected={social.merchantFeed === "1"}>
             <Toggle name="merchantFeed" defaultChecked={social.merchantFeed === "1"} label="Merchant feed’ini yayınla" />
             <CopyUrl url={`${site}/feeds/google.xml`} />
-            <Toggle name="feedAllProducts" defaultChecked={social.feedAllProducts === "1"} label="Stokta olmayanları da ekle" hint="Kapalıyken yalnızca stoktaki ürünler feed’e girer." />
+            <Toggle name="feedAllProducts" defaultChecked={social.feedAllProducts === "1"} label="Stokta olmayanları da ekle" hint="Tüm ürün feed’lerine uygulanır. Kapalıyken yalnızca stoktaki ürünler feed’e girer." />
             <small className="field-hint">Merchant Center → Ürünler → Feed’ler → Planlanmış getirme ile bu adresi ekleyin.</small>
+          </Card>
+
+          <Card title="ChatGPT ürün kataloğu" subtitle="ChatGPT alışveriş sonuçlarında ürünlerinizin görünmesi için OpenAI biçiminde (JSONL) feed" logo="AI" connected={social.chatgptFeed === "1"}>
+            <Toggle name="chatgptFeed" defaultChecked={social.chatgptFeed === "1"} label="ChatGPT feed’ini yayınla" />
+            <CopyUrl url={`${site}/feeds/chatgpt.jsonl`} />
+            <small className="field-hint">
+              chatgpt.com/merchants üzerinden satıcı başvurusu yapıp bu adresi (veya indirilen dosyayı) ürün kaynağı olarak verin. Görseli ve fiyatı olmayan ürünler feed’e alınmaz. ChatGPT sitenizi ayrıca OAI-SearchBot ile tarar; robots.txt buna izin veriyor.
+            </small>
+            <a className="btn btn-secondary btn-sm" href="https://chatgpt.com/merchants" target="_blank" rel="noreferrer">
+              <IconExternal width={14} height={14} />
+              ChatGPT satıcı başvurusu
+            </a>
+          </Card>
+
+          <Card title="TikTok ürün kataloğu" subtitle="TikTok Shop ve katalog reklamları için ürün feed’i" logo="♪" connected={social.tiktokFeed === "1"}>
+            <Toggle name="tiktokFeed" defaultChecked={social.tiktokFeed === "1"} label="TikTok feed’ini yayınla" />
+            <CopyUrl url={`${site}/feeds/tiktok.xml`} />
+            <small className="field-hint">TikTok Ads Manager → Varlıklar → Kataloglar → Ürün ekle → Veri akışı (zamanlanmış) ile bu adresi ekleyin.</small>
+          </Card>
+
+          <Card title="Pinterest ürün kataloğu" subtitle="Pinterest alışveriş pinleri ve reklamları için ürün feed’i" logo="P" connected={social.pinterestFeed === "1"}>
+            <Toggle name="pinterestFeed" defaultChecked={social.pinterestFeed === "1"} label="Pinterest feed’ini yayınla" />
+            <CopyUrl url={`${site}/feeds/pinterest.xml`} />
+            <small className="field-hint">Pinterest Business → Kataloglar → Veri kaynağı oluştur → bu adresi girin (para birimi TRY).</small>
+          </Card>
+
+          <Card title="Microsoft Merchant Center (Bing)" subtitle="Bing Alışveriş ve Microsoft reklamları için ürün feed’i" logo="B" connected={social.bingFeed === "1"}>
+            <Toggle name="bingFeed" defaultChecked={social.bingFeed === "1"} label="Microsoft feed’ini yayınla" />
+            <CopyUrl url={`${site}/feeds/bing.xml`} />
+            <small className="field-hint">Microsoft Merchant Center → Mağaza → Feed’ler → Zamanlanmış indirme ile bu adresi ekleyin.</small>
           </Card>
 
           <Card title="Google Tag Manager" subtitle="Etiketleri tek yerden yönetin; dataLayer e-ticaret olayları gönderilir" logo="GTM" connected={Boolean(settings?.gtmId)}>

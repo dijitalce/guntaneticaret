@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -93,20 +93,32 @@ export function readServerSync() {
   };
 }
 
+/** Dağıtımda çalıştırma izni düşen esbuild ikilisini onarır; kullanılacak yolu döner. */
+function ensureEsbuild(root: string, logFd: number): string {
+  const script = join(root, "scripts/ensure-esbuild.cjs");
+  if (!existsSync(script)) return "";
+  try {
+    return execFileSync(process.execPath, [script], { encoding: "utf8", timeout: 60_000, stdio: ["ignore", "pipe", logFd] }).trim();
+  } catch {
+    return "";
+  }
+}
+
 /** Senkronu sunucuda ayrı bir süreç olarak başlatır; panel isteği beklemez. */
 export function startServerSync(opts: { trigger: string; skipFetch?: boolean; feedId?: string }): { ok: true } | { ok: false; error: string } {
   const root = findRepoRoot();
   if (!root) return { ok: false, error: "Senkron betiği sunucuda bulunamadı." };
   const state = readServerSync();
   if (state.running) return { ok: false, error: "Şu anda çalışan bir senkron var." };
-  const tsxBin = join(root, "node_modules/.bin/tsx");
   const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
   try {
     const out = openSync(LOG_FILE, "a");
-    const useBin = existsSync(tsxBin);
-    const child = spawn(useBin ? tsxBin : process.execPath, useBin ? args : ["--import", "tsx", ...args], {
+    const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production" };
+    const esbuild = ensureEsbuild(root, out);
+    if (esbuild) env.ESBUILD_BINARY_PATH = esbuild;
+    const child = spawn(process.execPath, ["--import", "tsx", ...args], {
       cwd: join(root, "packages/import"),
-      env: { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production" },
+      env,
       detached: true,
       stdio: ["ignore", out, out],
     });

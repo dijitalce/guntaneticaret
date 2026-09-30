@@ -17,5 +17,9 @@ if [[ -z "$NODE" ]]; then
   exit 1
 fi
 
+if ESB="$("$NODE" "$ROOT/scripts/ensure-esbuild.cjs" 2>>"$LOG")" && [[ -n "$ESB" ]]; then
+  export ESBUILD_BINARY_PATH="$ESB"
+fi
+
 cd "$ROOT/packages/import"
 "$NODE" --import tsx src/shipment-sync-cli.ts "$@" >> "$LOG" 2>&1

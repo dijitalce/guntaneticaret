@@ -20,13 +20,63 @@ function plain(html: string | null, fallback: string) {
   return (text || fallback).slice(0, 4900);
 }
 
-function itemXml(p: FeedProduct, base: string, siteName: string) {
+export type FeedKind = "google" | "meta" | "tiktok" | "pinterest" | "bing" | "chatgpt";
+
+const FEED_FLAG: Record<FeedKind, string> = {
+  google: "merchantFeed",
+  meta: "metaFeed",
+  tiktok: "tiktokFeed",
+  pinterest: "pinterestFeed",
+  bing: "bingFeed",
+  chatgpt: "chatgptFeed",
+};
+
+export function validGtin(code: string) {
+  if (!/^(\d{8}|\d{12,14})$/.test(code)) return false;
+  const digits = [...code].map(Number);
+  const check = digits.pop()!;
+  const sum = digits.reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+function productFields(p: FeedProduct, base: string, siteName: string) {
   const price = Number(p.price);
   const compare = Number(p.compare_at_price ?? 0);
   const onSale = compare > price;
   const image = p.image ? (/^https?:\/\//.test(p.image) ? p.image : `${base}${p.image.startsWith("/") ? "" : "/"}${p.image}`) : "";
-  const gtin = p.barcode && /^\d{8,14}$/.test(p.barcode) ? p.barcode : "";
+  const gtin = p.barcode && validGtin(p.barcode) ? p.barcode : "";
   const brand = p.brand?.trim() || siteName;
+  return { price, compare, onSale, image, gtin, brand };
+}
+
+/** OpenAI (ChatGPT alışveriş) ürün beslemesi: satır başına bir JSON kaydı. */
+function itemJsonl(p: FeedProduct, base: string, siteName: string) {
+  const { price, compare, onSale, image, gtin, brand } = productFields(p, base, siteName);
+  if (!image || !(price > 0)) return "";
+  const record: Record<string, string | boolean> = {
+    item_id: p.id,
+    title: p.name.slice(0, 150),
+    description: plain(p.description, p.name),
+    url: `${base}/urun/${p.slug}`,
+    brand,
+    seller_name: siteName,
+    seller_url: base,
+    image_url: image,
+    availability: p.available > 0 ? "in_stock" : "out_of_stock",
+    price: `${(onSale ? compare : price).toFixed(2)} TRY`,
+    is_eligible_search: true,
+    is_eligible_checkout: false,
+    condition: "new",
+    product_category: "Otomotiv > Oto Yedek Parça",
+  };
+  if (onSale) record.sale_price = `${price.toFixed(2)} TRY`;
+  if (gtin) record.gtin = gtin;
+  if (p.sku) record.mpn = p.sku;
+  return `${JSON.stringify(record)}\n`;
+}
+
+function itemXml(p: FeedProduct, base: string, siteName: string) {
+  const { price, compare, onSale, image, gtin, brand } = productFields(p, base, siteName);
   const parts = [
     `<g:id>${xml(p.id)}</g:id>`,
     `<title>${xml(p.name.slice(0, 150))}</title>`,
@@ -47,13 +97,16 @@ function itemXml(p: FeedProduct, base: string, siteName: string) {
   return `<item>${parts.join("")}</item>\n`;
 }
 
-/** Google Merchant Center ve Meta katalog için RSS 2.0 (g: alanları) ürün beslemesi; akış halinde üretilir. */
-export async function productFeedResponse(kind: "google" | "meta") {
+/**
+ * Katalog beslemesi; akış halinde üretilir. ChatGPT için OpenAI JSONL biçimi,
+ * diğerleri (Google, Meta, TikTok, Pinterest, Microsoft) için RSS 2.0 (g: alanları).
+ */
+export async function productFeedResponse(kind: FeedKind) {
   const tenant = await tenantFromRequest();
   if (!tenant) return new Response("Site bulunamadı", { status: 404 });
   const social = (tenant.social ?? {}) as Record<string, string>;
-  const enabled = kind === "google" ? social.merchantFeed === "1" : social.metaFeed === "1";
-  if (!enabled) return new Response("Bu besleme panelden etkinleştirilmemiş.", { status: 404 });
+  if (social[FEED_FLAG[kind]] !== "1") return new Response("Bu besleme panelden etkinleştirilmemiş.", { status: 404 });
+  const jsonl = kind === "chatgpt";
   const inStockOnly = social.feedAllProducts !== "1";
   const host = await requestHost();
   const base = `https://${host.split(":")[0]}`;
@@ -61,18 +114,21 @@ export async function productFeedResponse(kind: "google" | "meta") {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(
-        encoder.encode(
-          `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel><title>${xml(tenant.siteName)}</title><link>${xml(base)}</link><description>${xml(`${tenant.siteName} ürün kataloğu`)}</description>\n`,
-        ),
-      );
+      if (!jsonl) {
+        controller.enqueue(
+          encoder.encode(
+            `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0"><channel><title>${xml(tenant.siteName)}</title><link>${xml(base)}</link><description>${xml(`${tenant.siteName} ürün kataloğu`)}</description>\n`,
+          ),
+        );
+      }
+      const render = jsonl ? itemJsonl : itemXml;
       let afterId = "";
       let count = 0;
       try {
         while (count < MAX_ITEMS) {
           const page = await feedProductsPage({ tenantId: tenant.tenant.id, seesAll, afterId, limit: PAGE, inStockOnly });
           if (!page.length) break;
-          controller.enqueue(encoder.encode(page.map((p) => itemXml(p, base, tenant.siteName)).join("")));
+          controller.enqueue(encoder.encode(page.map((p) => render(p, base, tenant.siteName)).join("")));
           count += page.length;
           afterId = page[page.length - 1]!.id;
           if (page.length < PAGE) break;
@@ -80,13 +136,13 @@ export async function productFeedResponse(kind: "google" | "meta") {
       } catch {
         /* yarım besleme yine de kapatılır */
       }
-      controller.enqueue(encoder.encode("</channel></rss>\n"));
+      if (!jsonl) controller.enqueue(encoder.encode("</channel></rss>\n"));
       controller.close();
     },
   });
   return new Response(stream, {
     headers: {
-      "Content-Type": "application/xml; charset=utf-8",
+      "Content-Type": jsonl ? "application/x-ndjson; charset=utf-8" : "application/xml; charset=utf-8",
       "Cache-Control": "public, max-age=3600",
     },
   });
