@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { formatCardFitments, productImageUrl } from "./index";
+import { formatCardFitments, productImageUrl, stemToken } from "./index";
+
+describe("stemToken", () => {
+  it("strips common Turkish suffixes", () => {
+    expect(stemToken("diski")).toBe("disk");
+    expect(stemToken("DİSKİ")).toBe("disk");
+    expect(stemToken("balatası")).toBe("balata");
+    expect(stemToken("balatasi")).toBe("balata");
+    expect(stemToken("filtresi")).toBe("filtre");
+    expect(stemToken("hortumu")).toBe("hortum");
+    expect(stemToken("balataları")).toBe("balata");
+  });
+
+  it("keeps vehicle names and short words intact", () => {
+    expect(stemToken("qashqai")).toBe("qashqai");
+    expect(stemToken("megane")).toBe("megane");
+    expect(stemToken("fren")).toBe("fren");
+    expect(stemToken("clio")).toBe("clio");
+    expect(stemToken("mini")).toBe("mini");
+  });
+});
 
 describe("productImageUrl", () => {
   it("uses product image first", () => {

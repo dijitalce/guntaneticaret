@@ -41,6 +41,10 @@ export default async function ProductPage({
   const disc = discountPercent(product.price, product.compareAtPrice);
   const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
   const fit = data.fitments[0];
+  const inStock = product.stockStatus === "in_stock";
+  const whatsappHref = tenant.whatsapp
+    ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
+    : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -52,7 +56,7 @@ export default async function ProductPage({
       "@type": "Offer",
       priceCurrency: "TRY",
       price: product.price,
-      availability: product.stockStatus === "in_stock" ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },
   };
 
@@ -92,8 +96,8 @@ export default async function ProductPage({
             <small>KDV dahil</small>
             {disc != null && <span className="badge">%{disc}</span>}
           </p>
-          <p className={product.stockStatus === "in_stock" ? "badge badge-stock" : "badge badge-out"}>
-            {product.stockStatus === "in_stock" ? "Stokta" : "Stokta yok"}
+          <p className={inStock ? "badge badge-stock" : "badge badge-out"}>
+            {inStock ? "Stokta" : "Stokta yok"}
           </p>
           {sp.sepet === "ok" && (
             <p className="account-alert" role="status">
@@ -105,27 +109,37 @@ export default async function ProductPage({
               Sepete eklenemedi. Stok durumunu kontrol edin.
             </p>
           )}
-          <AddToCartForm className="pdp-cart" slug={product.slug}>
-            <label>
-              Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} />
-            </label>
-            <div className="pdp-actions">
-              <button className="btn btn-primary" type="submit">
-                Sepete ekle
-              </button>
-              <Link className="btn btn-secondary" href="/odeme">
-                Hemen al
-              </Link>
-              {tenant.whatsapp && (
-                <a
-                  className="btn btn-ghost"
-                  href={`https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`}
-                >
-                  WhatsApp ile sor
-                </a>
+          {inStock ? (
+            <AddToCartForm className="pdp-cart" slug={product.slug}>
+              <label>
+                Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} />
+              </label>
+              <div className="pdp-actions">
+                <button className="btn btn-primary" type="submit">
+                  Sepete ekle
+                </button>
+                <Link className="btn btn-secondary" href="/odeme">
+                  Hemen al
+                </Link>
+                {whatsappHref && (
+                  <a className="btn btn-ghost" href={whatsappHref}>
+                    WhatsApp ile sor
+                  </a>
+                )}
+              </div>
+            </AddToCartForm>
+          ) : (
+            <div className="pdp-cart">
+              <p className="muted">Bu ürün şu an stokta yok. Tedarik durumu için bize ulaşın.</p>
+              {whatsappHref && (
+                <div className="pdp-actions">
+                  <a className="btn btn-primary" href={whatsappHref}>
+                    WhatsApp ile stok sor
+                  </a>
+                </div>
               )}
             </div>
-          </AddToCartForm>
+          )}
           <p className="pdp-ship">Teslimat bilgisi sipariş sonrası SMS veya e-posta ile iletilir.</p>
         </div>
       </div>
@@ -155,7 +169,7 @@ export default async function ProductPage({
             {related.map((p) => (
               <ProductCard
                 key={p.id}
-                product={{ ...p, stockStatus: "in_stock" }}
+                product={p}
                 placeholder={tenant.placeholderImageUrl}
               />
             ))}

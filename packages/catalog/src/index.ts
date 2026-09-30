@@ -727,6 +727,7 @@ export async function relatedProducts(tenantId: string, productId: string, model
       slug: products.slug,
       price: products.price,
       compareAtPrice: products.compareAtPrice,
+      stockStatus: products.stockStatus,
     })
     .from(productFitments)
     .innerJoin(products, eq(products.id, productFitments.productId))
@@ -810,13 +811,53 @@ export function searchTokens(q: string): string[] {
     .slice(0, 6);
 }
 
+const CONSONANT_END = /[bcçdfgğhjklmnprsştvyzqwx]$/;
+
+/**
+ * Türkçe ek budama: "diski" → "disk", "balatası" → "balata", "hortumu" → "hortum".
+ * Kök her zaman kelimenin önekidir; LIKE '%kök%' aramayı sadece genişletir.
+ */
+export function stemToken(token: string): string {
+  const t = token.toLocaleLowerCase("tr-TR");
+  if (t.length > 6 && /(ları|leri|lari)$/.test(t)) return t.slice(0, -4);
+  if (t.length >= 6 && /(sı|si|su|sü)$/.test(t)) return t.slice(0, -2);
+  if (t.length >= 5 && /[ıiuü]$/.test(t) && CONSONANT_END.test(t.slice(0, -1))) return t.slice(0, -1);
+  return t;
+}
+
+/** Kelime başında eşleşen araç markası/modeli ve üretici id'leri (çok genel kelimeler atlanır). */
+async function entityIdsForToken(token: string) {
+  if (token.length < 3) return { brandIds: [], modelIds: [], mfrIds: [] };
+  const starts = `${token}%`;
+  const wordStarts = `% ${token}%`;
+  const [brands, models, mfrs] = await Promise.all([
+    db.select({ id: vehicleBrands.id }).from(vehicleBrands)
+      .where(or(sql`${vehicleBrands.name} like ${starts}`, sql`${vehicleBrands.name} like ${wordStarts}`))
+      .limit(21),
+    db.select({ id: vehicleModels.id }).from(vehicleModels)
+      .where(or(sql`${vehicleModels.name} like ${starts}`, sql`${vehicleModels.name} like ${wordStarts}`))
+      .limit(201),
+    db.select({ id: manufacturers.id }).from(manufacturers)
+      .where(or(sql`${manufacturers.name} like ${starts}`, sql`${manufacturers.name} like ${wordStarts}`))
+      .limit(21),
+  ]);
+  return {
+    brandIds: brands.length <= 20 ? brands.map((r) => r.id) : [],
+    modelIds: models.length <= 200 ? models.map((r) => r.id) : [],
+    mfrIds: mfrs.length <= 20 ? mfrs.map((r) => r.id) : [],
+  };
+}
+
 export async function searchCatalog(tenantId: string, q: string, limit = 8) {
   const query = q.trim();
   if (query.length < 2) return [];
   const tokens = searchTokens(query);
   if (tokens.length === 0) return [];
 
-  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const [seesAll, entityIds] = await Promise.all([
+    tenantSeesAllCatalog(tenantId),
+    Promise.all(tokens.map((t) => entityIdsForToken(t))),
+  ]);
   const oemNorm = query.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   const matchOem =
     oemNorm.length >= 5
@@ -827,16 +868,34 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
         )`
       : sql`false`;
 
-  // Her kelime ad veya SKU içinde geçmeli (sıra önemli değil).
-  // Eski `name LIKE 'sorgu%'` yalnızca önek eşleştirdiği için
-  // "linea fren balata" kaçırılıp "fren balata linea" bulunuyordu.
-  const tokenConds = tokens.map((token) => {
-    const pattern = `%${token}%`;
-    return sql`(
-      ${products.name} like ${pattern}
-      or ${products.sku} like ${pattern}
-    )`;
+  // Her kelime (sıra önemsiz) ad/SKU'da geçmeli ya da ürünün uyumlu olduğu
+  // araç markası/modeli veya üretici markası olmalı. Başbuğ adlarında model,
+  // Altay adlarında marka ("NISSAN") yazmadığı için ad tek başına yetmiyor.
+  const namePatterns = tokens.map((token) => `%${stemToken(token)}%`);
+  const tokenConds = tokens.map((_, i) => {
+    const pattern = namePatterns[i]!;
+    const { brandIds, modelIds, mfrIds } = entityIds[i]!;
+    const conds = [
+      sql`${products.name} like ${pattern}`,
+      sql`${products.sku} like ${pattern}`,
+    ];
+    if (brandIds.length) {
+      conds.push(sql`${products.id} in (
+        select pf.product_id from product_fitments pf where pf.vehicle_brand_id in (${sql.join(brandIds.map((id) => sql`${id}`), sql`, `)})
+      )`);
+    }
+    if (modelIds.length) {
+      conds.push(sql`${products.id} in (
+        select pf.product_id from product_fitments pf where pf.vehicle_model_id in (${sql.join(modelIds.map((id) => sql`${id}`), sql`, `)})
+      )`);
+    }
+    if (mfrIds.length) conds.push(inArray(products.manufacturerId, mfrIds));
+    return or(...conds)!;
   });
+  const nameHits = sql.join(
+    namePatterns.map((p) => sql`(case when ${products.name} like ${p} then 1 else 0 end)`),
+    sql` + `,
+  );
 
   return db
     .select({
@@ -846,6 +905,7 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       sku: products.sku,
       price: products.price,
       manufacturer: manufacturers.name,
+      stockStatus: products.stockStatus,
     })
     .from(products)
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
@@ -857,7 +917,8 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       ),
     )
     .orderBy(
-      sql`case when ${products.name} like ${`${tokens[0]}%`} then 0 else 1 end`,
+      sql`(${nameHits}) desc`,
+      sql`case when ${products.name} like ${`${stemToken(tokens[0]!)}%`} then 0 else 1 end`,
       desc(products.stockQty),
       asc(products.name),
     )

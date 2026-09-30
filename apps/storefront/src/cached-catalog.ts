@@ -145,7 +145,7 @@ export function cachedProductBySlug(tenantId: string, slug: string) {
 export function cachedRelatedProducts(tenantId: string, productId: string, modelId: string | undefined, limit = 8) {
   return unstable_cache(
     () => relatedProducts(tenantId, productId, modelId, limit),
-    ["related-products-fitv1", tenantId, productId, modelId ?? "", String(limit)],
+    ["related-products-fitv2", tenantId, productId, modelId ?? "", String(limit)],
     { revalidate: PRODUCT_CACHE_TTL_SECONDS },
   )();
 }

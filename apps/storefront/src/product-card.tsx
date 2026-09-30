@@ -69,7 +69,7 @@ export function ProductCard({
         )}
         <div className="product-card-foot">
           <span className={inStock ? "badge badge-stock" : "badge badge-out"}>
-            {inStock ? "Stokta" : "Tükendi"}
+            {inStock ? "Stokta" : "Stokta yok"}
           </span>
           {inStock && product.slug && (
             <AddToCartForm slug={product.slug}>

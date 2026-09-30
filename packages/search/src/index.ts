@@ -142,6 +142,7 @@ export async function searchProducts(tenantId: string, q: string, limit = 8) {
     sku: string;
     manufacturer: string;
     price?: number;
+    in_stock?: boolean;
     thumbnail?: string;
   }>;
 }

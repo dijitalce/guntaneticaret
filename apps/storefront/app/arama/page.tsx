@@ -26,6 +26,7 @@ export default async function SearchPage({
         sku: h.sku,
         manufacturer: h.manufacturer ?? "",
         price: h.price,
+        in_stock: h.stockStatus === "in_stock",
       }));
   const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
   const fitBy = hits.length > 0 ? await cardFitmentsByProductIds(hits.map((h) => h.id)) : new Map();
@@ -48,7 +49,7 @@ export default async function SearchPage({
                   price: "price" in h && h.price != null ? String(h.price) : undefined,
                   manufacturerName: h.manufacturer,
                   imageUrl: "thumbnail" in h && h.thumbnail ? String(h.thumbnail) : null,
-                  stockStatus: "in_stock",
+                  stockStatus: h.in_stock === false ? "out_of_stock" : "in_stock",
                   fitments: fit?.items,
                   fitmentExtra: fit?.extra,
                 }}
