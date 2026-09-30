@@ -83,6 +83,12 @@ async function main() {
     }
   };
 
+  // db istemcisi env yüklendikten sonra oluşmalı; bu yüzden dinamik import.
+  const tierStore = await import("./price-tier-store").catch(() => null);
+  const tiers = tierStore ? await tierStore.loadPriceTiers().then((s) => s.tiers).catch(() => null) : null;
+  let altayImported = false;
+  let basbugImported = false;
+
   try {
     let altayReady = existsSync(altayPath);
     let basbugReady = existsSync(basbugPath);
@@ -110,12 +116,15 @@ async function main() {
       }
     }
 
-    if (altayReady) await step("Altay import", () => runScript("cli.ts", { ALTAY_XML_PATH: altayPath }));
+    if (altayReady) altayImported = await step("Altay import", () => runScript("cli.ts", { ALTAY_XML_PATH: altayPath }));
     if (basbugReady) {
       // basbug-cli sonunda dedupe + görünürlük derlemesini de yapar.
-      await step("Başbuğ import", () => runScript("basbug-cli.ts", { BASBUG_JSON_PATH: basbugPath }));
+      basbugImported = await step("Başbuğ import", () => runScript("basbug-cli.ts", { BASBUG_JSON_PATH: basbugPath }));
     } else if (altayReady) {
       await step("Dedupe + görünürlük", () => runScript("dedupe-cli.ts", {}));
+    }
+    if (tierStore && tiers && altayImported && basbugImported && !errors.length) {
+      await tierStore.markPriceTiersApplied(tiers).catch((err) => log(`Uygulanan dilimler kaydedilemedi: ${err}`));
     }
   } finally {
     await rm(LOCK_PATH, { force: true });

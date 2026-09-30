@@ -22,6 +22,8 @@ import {
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS } from "@guntan/types";
 import { contentHash, mapRaw, normalizeOem, parseProductXml } from "./index";
 import { inferFitments } from "./fitment-from-name";
+import { useStoredPriceTiers } from "./price-tier-store";
+import { toStoredTiers } from "./price-tiers";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
 
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
@@ -85,6 +87,7 @@ async function upsertNamed<T extends { id: string; slug: string }>(
 }
 
 async function main() {
+  console.log("Fiyat dilimleri:", JSON.stringify(toStoredTiers(await useStoredPriceTiers())));
   const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
   const filePath = process.env.ALTAY_XML_PATH || join(root, "products.xml");
   console.log("Parsing", filePath);

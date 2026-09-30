@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, asc, count, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { db, productImages, productOems, products } from "@guntan/db";
-import { IconBox, IconSearch } from "@/src/icons";
+import { IconBox, IconSearch, IconWallet } from "@/src/icons";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, PageHeader, Panel, formatDate } from "@/src/ui";
 
@@ -97,6 +97,12 @@ export default async function ProductsPage({
       <PageHeader
         title="Ürünler"
         description="Fiyat, stok ve yayın durumunu satırdan hızlıca güncelleyin. XML kaynaklı ürünlerde değişiklikler bir sonraki senkronda ezilebilir."
+        actions={
+          <Link className="btn btn-secondary" href="/catalog/pricing">
+            <IconWallet />
+            Fiyat oranları
+          </Link>
+        }
       />
 
       {sp.ok === "1" && <Alert tone="ok">Ürün güncellendi.</Alert>}

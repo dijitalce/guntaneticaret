@@ -29,6 +29,8 @@ import {
   type BasbugRaw,
 } from "./basbug-map";
 import { runDedupeCheapest } from "./dedupe-cheapest";
+import { useStoredPriceTiers } from "./price-tier-store";
+import { toStoredTiers } from "./price-tiers";
 import { resolveFxRates, type FxRates } from "./fx";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
 
@@ -68,6 +70,7 @@ async function upsertNamed(
 }
 
 async function main() {
+  console.log("Fiyat dilimleri:", JSON.stringify(toStoredTiers(await useStoredPriceTiers())));
   const filePath = process.env.BASBUG_JSON_PATH || DEFAULT_PATH;
   console.log("Loading", filePath);
   const rawJson = JSON.parse(await readFile(filePath, "utf8")) as BasbugFile;

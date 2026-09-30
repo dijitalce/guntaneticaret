@@ -19,12 +19,14 @@ import {
   marginPercentForPrice,
   percentConsistentWithSale,
 } from "./price-tiers";
+import { useStoredPriceTiers } from "./price-tier-store";
 
 const APPLY = process.env.APPLY_PRICE_TIERS === "1" || process.argv.includes("--apply");
 const FROM_COST = process.argv.includes("--from-cost") || process.env.PRICE_TIERS_FROM_COST === "1";
 const BATCH = Number(process.env.PRICE_TIER_BATCH || 500);
 
 async function main() {
+  await useStoredPriceTiers();
   console.log(APPLY ? "APPLY mode — fiyatlar güncellenecek" : "DRY-RUN — değişiklik yazılmaz (APPLY_PRICE_TIERS=1 ile uygula)");
   console.log(FROM_COST ? "Kaynak: tedarikçi maliyeti (--from-cost)" : "Kaynak: satış zaten marjlı; liste fiyatına aynı yüzde");
 

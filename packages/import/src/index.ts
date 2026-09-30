@@ -23,6 +23,28 @@ import {
 } from "@guntan/db";
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type XmlFieldMapping } from "@guntan/types";
 import { applyMarginToAmount, applyMarginToPrice } from "./price-tiers";
+import { useStoredPriceTiers } from "./price-tier-store";
+
+export {
+  DEFAULT_PRICE_TIERS,
+  marginPercentForPrice,
+  normalizePriceTiers,
+  sameTiers,
+  toStoredTiers,
+  type PriceTier,
+  type StoredPriceTier,
+} from "./price-tiers";
+export {
+  getRepriceJob,
+  isRepriceRunning,
+  loadAppliedPriceTiers,
+  loadPriceTiers,
+  markPriceTiersApplied,
+  runRepriceJob,
+  savePriceTiers,
+  useStoredPriceTiers,
+  type RepriceJob,
+} from "./price-tier-store";
 
 export type MappedProduct = {
   externalId: string;
@@ -321,6 +343,7 @@ async function processBatch(supplierId: string, batch: MappedProduct[], stats: I
 }
 
 export async function runXmlImport(feedId: string) {
+  await useStoredPriceTiers();
   const [feed] = await db.select().from(xmlFeeds).where(eq(xmlFeeds.id, feedId)).limit(1);
   if (!feed) throw new Error("Feed bulunamadı.");
   const runId = newId();

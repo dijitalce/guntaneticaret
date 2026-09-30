@@ -94,7 +94,9 @@ Kurlar (EUR/USD → TL): Başbuğ API'nin kendi satış kuru, yoksa TCMB. Elle s
 3. Sadece değişen/yeni ürünleri import eder
 4. Aynı OE+marka için stoktaki en ucuz ürünü aktif bırakır, görünürlüğü derler
 
-Marj her seferinde tedarikçinin ham fiyatından hesaplanır (`price-tiers.ts`), tekrar çalıştırmak marjı ikilemez.
+Marj her seferinde tedarikçinin ham fiyatından hesaplanır, tekrar çalıştırmak marjı ikilemez.
+Marj dilimleri admin → Katalog → Fiyat oranları'ndan düzenlenir (`app_settings` tablosu, ilk erişimde otomatik oluşur);
+kayıt yoksa `price-tiers.ts` içindeki varsayılanlar kullanılır.
 **Senkron açıkken `pnpm import:price-tiers --from-cost` çalıştırma** — marj üstüne marj biner.
 
 Kurulum:

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "
 import { withBase } from "./paths";
 import {
   IconBox,
+  IconWallet,
   IconCar,
   IconCart,
   IconExternal,
@@ -48,6 +49,7 @@ const GROUPS: NavGroup[] = [
     label: "Katalog",
     items: [
       { href: "/catalog/products", label: "Ürünler", icon: IconBox },
+      { href: "/catalog/pricing", label: "Fiyat oranları", icon: IconWallet },
       { href: "/catalog/brands", label: "Araç markaları", icon: IconCar },
       { href: "/catalog/models", label: "Modeller", icon: IconLayers },
       { href: "/catalog/groups", label: "Marka grupları", icon: IconTag },
