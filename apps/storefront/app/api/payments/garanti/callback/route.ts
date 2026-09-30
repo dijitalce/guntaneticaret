@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { publicRedirect } from "@guntan/config";
-import { confirmCardPayment, failCardPayment } from "@guntan/ecommerce";
-import { garantiConfigFromEnv, parseCallback } from "@guntan/payments";
+import { confirmCardPayment, failCardPayment, garantiConfigFromEnv, parseCallback } from "@guntan/ecommerce";
 
 export const dynamic = "force-dynamic";
 

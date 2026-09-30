@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@guntan/db": "workspace:*",
-    "@guntan/ecommerce": "workspace:*",
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "saxes": "^6.0.0"

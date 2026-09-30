@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
-import { checkout, getOrCreateCart } from "@guntan/ecommerce";
+import { buildOosPayForm, checkout, garantiConfigFromEnv, getOrCreateCart } from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { getCustomerBySession } from "@guntan/auth";
 import { sendOrderReceivedEmail } from "@guntan/email";
-import { buildOosPayForm, garantiConfigFromEnv } from "@guntan/payments";
 import { autoPostHtml, clientIp } from "../../../src/garanti-redirect";
 
 function field(form: FormData, key: string) {

@@ -5,7 +5,7 @@ import { db, orderItems, orders, payments, shipments, tenantBankAccounts } from 
 import { getTenant } from "../../../../src/tenant";
 import { getCurrentCustomer } from "../../../../src/customer";
 import { formatDateTr, formatMoney, orderStatusLabel, orderStatusTone } from "../../../../src/order-labels";
-import { arasTrackingUrl } from "@guntan/shipping";
+import { arasTrackingUrl } from "@guntan/ecommerce";
 
 const SHIPMENT_STATUS: Record<string, string> = { pending: "Hazırlanıyor", shipped: "Kargoda", delivered: "Teslim edildi" };
 

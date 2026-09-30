@@ -2,10 +2,14 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { asc, eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
-import { getCartView, getOrCreateCart } from "@guntan/ecommerce";
+import {
+  garantiConfigFromEnv,
+  getCartView,
+  getOrCreateCart,
+  installmentOptions,
+  shippingAmountForSubtotal,
+} from "@guntan/ecommerce";
 import { customerAddresses, db } from "@guntan/db";
-import { garantiConfigFromEnv, installmentOptions } from "@guntan/payments";
-import { shippingAmountForSubtotal } from "@guntan/shipping";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
 import { CheckoutForm } from "./form";

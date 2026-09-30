@@ -2,8 +2,7 @@ import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, productOems, tenants } from "@guntan/db";
-import { getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
-import { arasConfigFromEnv, arasTrackingUrl } from "@guntan/shipping";
+import { arasConfigFromEnv, arasTrackingUrl, getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
 import { withBase } from "@/src/paths";
 import { PageHeader, Panel, StatusBadge, formatTry, statusTone } from "@/src/ui";
 

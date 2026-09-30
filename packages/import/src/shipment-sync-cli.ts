@@ -20,7 +20,14 @@ function log(message: string) {
   console.log(`[${new Date().toISOString()}] ${message}`);
 }
 
-const { expireStaleCardOrders, syncArasShipments } = await import("@guntan/ecommerce");
+// Paket bağımlılığı yerine göreli yol: deploy'daki eski node_modules yeni workspace linkini içermeyebilir.
+const ecommercePath = join(here, "../../ecommerce/src/index.ts");
+const { expireStaleCardOrders, syncArasShipments } = (await import(ecommercePath)) as {
+  expireStaleCardOrders: () => Promise<number>;
+  syncArasShipments: (
+    log: (msg: string) => void,
+  ) => Promise<{ checked: number; tracked: number; delivered: number; errors: number }>;
+};
 
 let exitCode = 0;
 try {
