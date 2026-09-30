@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { db, xmlFeeds, xmlImportRowErrors, xmlImportRuns } from "@guntan/db";
+import { customFeedPath, feedConfigFromRow, isCustomFeed, maskFeedUrl } from "@guntan/import";
+import { mappingIsComplete } from "@/src/feed-source";
 import { withBase } from "@/src/paths";
-import { readServerSync } from "@/src/server-sync";
-import { IconAlert, IconCheckCircle, IconClock, IconRefresh } from "@/src/icons";
+import { feedFileInfo, readServerSync } from "@/src/server-sync";
+import { IconAlert, IconCheckCircle, IconClock, IconPlus, IconRefresh } from "@/src/icons";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { relativeTime } from "@/src/ui-ext";
 
@@ -23,7 +26,8 @@ const FEED_SOURCE: Record<string, string> = {
   basbug: "Başbuğ API'sinden JSON olarak çekilir",
 };
 
-function feedSource(name: string) {
+function feedSource(name: string, mapping: unknown) {
+  if (isCustomFeed(mapping)) return "Panelden eklenen XML adresinden indirilir";
   const key = name.toLowerCase().includes("başbuğ") || name.toLowerCase().includes("basbug") ? "basbug" : "altay";
   return FEED_SOURCE[key];
 }
@@ -50,6 +54,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
     db.select().from(xmlImportRowErrors).orderBy(desc(xmlImportRowErrors.createdAt)).limit(20),
   ]);
   const server = readServerSync();
+  const customFeeds = feeds.filter((f) => isCustomFeed(f.mapping));
   const status = server.status;
   const stateTone = server.running ? "info" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
   const stateLabel = server.running
@@ -68,17 +73,24 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
         title="XML senkron"
         description="Tedarikçi ürün, fiyat ve stok senkronu tamamen sunucuda çalışır; bilgisayarınızın açık olması gerekmez."
         actions={
+          <>
+          <Link className="btn btn-secondary" href="/integrations/xml/sources/new">
+            <IconPlus />
+            Yeni XML kaynağı
+          </Link>
           <form action={withBase("/api/sync/run")} method="post">
             <button className="btn btn-primary" type="submit" disabled={server.running}>
               <IconRefresh />
               {server.running ? "Senkron çalışıyor…" : "Sunucuda şimdi senkronize et"}
             </button>
           </form>
+          </>
         }
       />
       {sp.ok === "basladi" ? (
         <Alert tone="ok">Senkron sunucuda başlatıldı. Büyük katalogda 10-40 dakika sürebilir; bu sayfayı yenileyerek ilerlemeyi izleyebilirsiniz.</Alert>
       ) : null}
+      {sp.ok === "kaynak-silindi" ? <Alert tone="ok">XML kaynağı silindi; ürünleri satıştan kaldırıldı.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {!server.envFile.exists ? (
         <Alert tone="warn">
@@ -143,6 +155,29 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                     <td className="mono text-sm">{server.basbug?.exists ? formatBytes(server.basbug.size) : "Henüz indirilmedi"}</td>
                     <td>{server.basbug?.mtime ? formatDate(server.basbug.mtime) : "—"}</td>
                   </tr>
+                  {customFeeds.map((f) => {
+                    const file = feedFileInfo(customFeedPath(f.id));
+                    return (
+                      <tr key={f.id}>
+                        <td>
+                          <Link href={`/integrations/xml/sources/${f.id}`}>
+                            <strong>{f.name}</strong>
+                          </Link>
+                        </td>
+                        <td>
+                          {f.isActive ? (
+                            <StatusBadge tone="ok">Aktif</StatusBadge>
+                          ) : mappingIsComplete(feedConfigFromRow(f.url, f.mapping)) ? (
+                            <StatusBadge tone="neutral">Pasif</StatusBadge>
+                          ) : (
+                            <StatusBadge tone="warn">Kurulum bekliyor</StatusBadge>
+                          )}
+                        </td>
+                        <td className="mono text-sm">{file.exists ? formatBytes(file.size) : "Henüz indirilmedi"}</td>
+                        <td>{file.mtime ? formatDate(file.mtime) : "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -205,13 +240,30 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
         </div>
 
         <div>
-          <Panel title="Tedarikçi kaynakları" padded>
+          <Panel
+            title="Tedarikçi kaynakları"
+            padded
+            action={
+              <Link className="btn btn-secondary btn-sm" href="/integrations/xml/sources/new">
+                <IconPlus width={14} height={14} />
+                Ekle
+              </Link>
+            }
+          >
             <ul className="link-list">
               {feeds.map((f) => (
                 <li key={f.id}>
-                  <strong>{f.name}</strong>
-                  <span className="muted text-sm">{feedSource(f.name)}</span>
-                  {isLocalPath(f.filePath) ? (
+                  {isCustomFeed(f.mapping) ? (
+                    <Link href={`/integrations/xml/sources/${f.id}`}>
+                      <strong>{f.name}</strong>
+                    </Link>
+                  ) : (
+                    <strong>{f.name}</strong>
+                  )}
+                  <span className="muted text-sm">{feedSource(f.name, f.mapping)}</span>
+                  {isCustomFeed(f.mapping) ? (
+                    <span className="mono text-sm">{maskFeedUrl(f.url)}</span>
+                  ) : isLocalPath(f.filePath) ? (
                     <span className="text-warn text-sm">
                       Son içe aktarma bir bilgisayardan yapılmış. Sunucudaki ilk senkronla kaynak otomatik olarak sunucuya geçer.
                     </span>

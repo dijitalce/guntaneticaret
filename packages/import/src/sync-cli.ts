@@ -26,6 +26,7 @@ for (const envFile of [process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync
 }
 
 const SKIP_FETCH = process.argv.includes("--skip-fetch");
+const ONLY_FEED = process.argv.find((a) => a.startsWith("--feed="))?.slice("--feed=".length) || null;
 const LOCK_PATH = join(tmpdir(), "guntan-supplier-sync.lock");
 const STALE_LOCK_MS = 6 * 60 * 60 * 1000;
 
@@ -71,9 +72,9 @@ async function acquireLock(): Promise<boolean> {
   }
 }
 
-function runScript(file: string, env: Record<string, string>): Promise<void> {
+function runScript(file: string, env: Record<string, string>, args: string[] = []): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--import", "tsx", join(here, file)], {
+    const child = spawn(process.execPath, ["--import", "tsx", join(here, file), ...args], {
       cwd: join(here, ".."),
       env: { ...process.env, ...env },
       stdio: "inherit",
@@ -111,8 +112,28 @@ async function main() {
   const tiers = tierStore ? await tierStore.loadPriceTiers().then((s) => s.tiers).catch(() => null) : null;
   let altayImported = false;
   let basbugImported = false;
+  const customFeeds = await listCustomFeeds().catch((err) => {
+    log(`Özel XML kaynakları okunamadı: ${err instanceof Error ? err.message : err}`);
+    return [] as { id: string; name: string }[];
+  });
+  const runCustomFeeds = async () => {
+    let any = false;
+    for (const feed of customFeeds) {
+      const ok = await step(`${feed.name} (XML kaynağı)`, () => runScript("custom-feed-cli.ts", {}, [feed.id, ...(SKIP_FETCH ? ["--skip-fetch"] : [])]));
+      any ||= ok;
+    }
+    return any;
+  };
 
   try {
+    if (ONLY_FEED) {
+      const feed = customFeeds.find((f) => f.id === ONLY_FEED);
+      if (!feed) throw new Error("Kaynak bulunamadı veya pasif.");
+      customFeeds.splice(0, customFeeds.length, feed);
+      if (await runCustomFeeds()) await step("Dedupe + görünürlük", () => runScript("dedupe-cli.ts", {}));
+      return finish(startedAt, errors);
+    }
+
     let altayReady = existsSync(altayPath);
     let basbugReady = existsSync(basbugPath);
 
@@ -140,10 +161,11 @@ async function main() {
     }
 
     if (altayReady) altayImported = await step("Altay import", () => runScript("cli.ts", { ALTAY_XML_PATH: altayPath }));
+    const customImported = await runCustomFeeds();
     if (basbugReady) {
       // basbug-cli sonunda dedupe + görünürlük derlemesini de yapar.
       basbugImported = await step("Başbuğ import", () => runScript("basbug-cli.ts", { BASBUG_JSON_PATH: basbugPath }));
-    } else if (altayReady) {
+    } else if (altayReady || customImported) {
       await step("Dedupe + görünürlük", () => runScript("dedupe-cli.ts", {}));
     }
     if (tierStore && tiers && altayImported && basbugImported && !errors.length) {
@@ -152,7 +174,10 @@ async function main() {
   } finally {
     await rm(LOCK_PATH, { force: true });
   }
+  return finish(startedAt, errors);
+}
 
+function finish(startedAt: string, errors: string[]) {
   writeStatus({ state: errors.length ? "warning" : "ok", startedAt, finishedAt: new Date().toISOString(), errors });
   if (errors.length) {
     log(`Senkron uyarılarla bitti:\n  - ${errors.join("\n  - ")}`);
@@ -160,6 +185,12 @@ async function main() {
   }
   log("Senkron tamamlandı.");
   return 0;
+}
+
+async function listCustomFeeds(): Promise<{ id: string; name: string }[]> {
+  const [{ db, xmlFeeds }, { eq }, { isCustomFeed }] = await Promise.all([import("@guntan/db"), import("drizzle-orm"), import("./custom-feed")]);
+  const rows = await db.select().from(xmlFeeds).where(eq(xmlFeeds.isActive, 1));
+  return rows.filter((r) => isCustomFeed(r.mapping)).map((r) => ({ id: r.id, name: r.name }));
 }
 
 main()

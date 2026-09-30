@@ -26,6 +26,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   integration: "Eklenti",
   supplier_sync: "Tedarikçi senkronu",
   abandoned_cart: "Terk edilmiş sepet",
+  xml_source: "XML kaynağı",
 };
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -49,6 +50,8 @@ export const ACTION_LABELS: Record<string, string> = {
   deactivate: "Pasif etti",
   run_full: "Tam senkron başlattı",
   run_import_only: "İçe aktarma başlattı",
+  connect: "Bağlantıyı test etti",
+  run_feed: "Kaynağı çalıştırdı",
   send: "Gönderdi",
   test: "Test gönderdi",
   remind: "Hatırlatma gönderdi",
@@ -94,6 +97,8 @@ export function entityHref(entity: string, id: string): string | null {
       return `/marketing/campaigns/${id}`;
     case "popup":
       return `/marketing/popups/${id}`;
+    case "xml_source":
+      return `/integrations/xml/sources/${id}`;
     default:
       return null;
   }

@@ -429,3 +429,5 @@ export async function runXmlImport(feedId: string) {
     throw err;
   }
 }
+export * from "./custom-feed";
+export { resolveFxRates } from "./fx";

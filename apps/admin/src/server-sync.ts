@@ -88,13 +88,13 @@ export function readServerSync() {
 }
 
 /** Senkronu sunucuda ayrı bir süreç olarak başlatır; panel isteği beklemez. */
-export function startServerSync(opts: { trigger: string; skipFetch?: boolean }): { ok: true } | { ok: false; error: string } {
+export function startServerSync(opts: { trigger: string; skipFetch?: boolean; feedId?: string }): { ok: true } | { ok: false; error: string } {
   const root = findRepoRoot();
   if (!root) return { ok: false, error: "Senkron betiği sunucuda bulunamadı." };
   const state = readServerSync();
   if (state.running) return { ok: false, error: "Şu anda çalışan bir senkron var." };
   const tsxBin = join(root, "node_modules/.bin/tsx");
-  const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : [])];
+  const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
   try {
     const out = openSync(LOG_FILE, "a");
     const useBin = existsSync(tsxBin);
@@ -109,4 +109,8 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean }):
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+export function feedFileInfo(path: string) {
+  return fileInfo(path);
 }

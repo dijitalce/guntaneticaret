@@ -160,6 +160,24 @@ export const saveMarketingSettings = (v: MarketingSettings) => save("marketing.s
 export const getIntegrationSecrets = (tenantId: string) => load(`integrations.secret.${tenantId}`, DEFAULT_SECRETS);
 export const saveIntegrationSecrets = (tenantId: string, v: IntegrationSecrets) => save(`integrations.secret.${tenantId}`, v);
 
+export type FeedSecret = { username: string; password: string; headerName: string; headerValue: string };
+export const DEFAULT_FEED_SECRET: FeedSecret = { username: "", password: "", headerName: "", headerValue: "" };
+export const getFeedSecret = (feedId: string) => load(`xmlfeed.secret.${feedId}`, DEFAULT_FEED_SECRET);
+export const saveFeedSecret = (feedId: string, v: FeedSecret) => save(`xmlfeed.secret.${feedId}`, v);
+
+export type FeedProbe = {
+  probedAt: string;
+  ok: boolean;
+  error?: string;
+  itemTag?: string;
+  itemCount?: number;
+  bytes?: number;
+  fields?: { path: string; samples: string[] }[];
+  items?: Record<string, string>[];
+};
+export const getFeedProbe = (feedId: string) => load<Partial<FeedProbe>>(`xmlfeed.probe.${feedId}`, {});
+export const saveFeedProbe = (feedId: string, v: FeedProbe) => save(`xmlfeed.probe.${feedId}`, v);
+
 export type TemplateOverride = { email?: boolean; sms?: boolean; subject?: string; body?: string; smsBody?: string };
 export const getTemplateOverrides = () => load<Record<string, TemplateOverride>>("notify.templates", {});
 export const saveTemplateOverrides = (v: Record<string, TemplateOverride>) => save("notify.templates", v);
