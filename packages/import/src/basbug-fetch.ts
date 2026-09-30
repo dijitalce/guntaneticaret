@@ -146,7 +146,7 @@ export async function fetchBasbugCatalog(
 
     const all: BasbugRaw[] = [];
     const seen = new Set<string>();
-    for (const group of groups) {
+    for (const [index, group] of groups.entries()) {
       const { malzemeListesi } = await client.get<{ malzemeListesi: BasbugRaw[] }>("MalzemeleriGetir", {
         ListeGrubu: group.kod,
       });
@@ -178,7 +178,9 @@ export async function fetchBasbugCatalog(
           _listeGrubuAd: group.ad,
         });
       }
-      console.log(`Basbug ${group.kod}: ${malzemeListesi?.length ?? 0} malzeme, ${fiyatListesi.length} fiyat, ${stokListesi.length} stok`);
+      console.log(
+        `Başbuğ grup ${index + 1} / ${groups.length} (${group.kod}): ${malzemeListesi?.length ?? 0} malzeme, ${fiyatListesi.length} fiyat, ${stokListesi.length} stok`,
+      );
     }
 
     if (all.length < minItems) {

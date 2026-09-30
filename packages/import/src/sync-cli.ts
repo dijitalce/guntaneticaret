@@ -37,15 +37,22 @@ const LOG_FILE = process.env.SYNC_LOG_FILE || join(SYNC_HOME, "guntan-sync.log")
 const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(SYNC_HOME, "guntan-sync-status.json");
 const TRIGGER = process.env.SYNC_TRIGGER || "cron";
 
-function log(message: string) {
-  const line = `[${new Date().toISOString()}] ${message}`;
-  console.log(line);
+// Panel senkronu başlatırken stdout'u zaten log dosyasına bağlar; o durumda dosyaya ikinci kez yazılmaz.
+const STDOUT_IS_LOG = process.env.SYNC_STDOUT_IS_LOG === "1";
+
+function appendLog(text: string) {
   try {
     if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > 2_000_000) renameSync(LOG_FILE, `${LOG_FILE}.old`);
-    appendFileSync(LOG_FILE, `${line}\n`);
+    appendFileSync(LOG_FILE, text);
   } catch {
     /* log dosyası yazılamazsa senkron devam eder */
   }
+}
+
+function log(message: string) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
+  if (!STDOUT_IS_LOG) appendLog(`${line}\n`);
 }
 
 function writeStatus(status: Record<string, unknown>) {
@@ -76,8 +83,19 @@ function runScript(file: string, env: Record<string, string>, args: string[] = [
     const child = spawn(process.execPath, ["--import", "tsx", join(here, file), ...args], {
       cwd: join(here, ".."),
       env: { ...process.env, ...env },
-      stdio: "inherit",
+      stdio: STDOUT_IS_LOG ? "inherit" : ["ignore", "pipe", "pipe"],
     });
+    if (!STDOUT_IS_LOG) {
+      // İlerleme satırları (Imported x / y) panelin okuduğu log dosyasına da düşsün.
+      child.stdout?.on("data", (chunk: Buffer) => {
+        process.stdout.write(chunk);
+        appendLog(chunk.toString());
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        process.stderr.write(chunk);
+        appendLog(chunk.toString());
+      });
+    }
     child.on("error", reject);
     child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${file} çıkış kodu ${code}`))));
   });

@@ -69,7 +69,7 @@ export function readServerSync() {
   let logTail: string[] = [];
   try {
     const raw = readFileSync(LOG_FILE, "utf8");
-    logTail = raw.trimEnd().split("\n").slice(-120);
+    logTail = raw.slice(-400_000).trimEnd().split("\n").slice(-1500);
   } catch {
     logTail = [];
   }
@@ -113,7 +113,7 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean; fe
   const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
   try {
     const out = openSync(LOG_FILE, "a");
-    const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production" };
+    const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production", SYNC_STDOUT_IS_LOG: "1", SYNC_LOG_FILE: LOG_FILE, SYNC_STATUS_FILE: STATUS_FILE };
     const esbuild = ensureEsbuild(root, out);
     if (esbuild) env.ESBUILD_BINARY_PATH = esbuild;
     const child = spawn(process.execPath, ["--import", "tsx", ...args], {

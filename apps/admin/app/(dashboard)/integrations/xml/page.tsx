@@ -8,6 +8,8 @@ import { feedFileInfo, readServerSync } from "@/src/server-sync";
 import { IconAlert, IconCheckCircle, IconClock, IconPlus, IconRefresh } from "@/src/icons";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { relativeTime } from "@/src/ui-ext";
+import { AutoRefresh } from "@/src/auto-refresh";
+import { SyncLogView } from "@/src/sync-log-view";
 
 export const metadata = { title: "XML senkron" };
 export const dynamic = "force-dynamic";
@@ -56,6 +58,13 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
   const server = readServerSync();
   const customFeeds = feeds.filter((f) => isCustomFeed(f.mapping));
   const status = server.status;
+  const plannedStages = [
+    ...(server.eryazReady ? ["Altay XML indir"] : []),
+    ...(server.basbugReady ? ["Başbuğ API çek"] : []),
+    "Altay import",
+    ...customFeeds.filter((f) => f.isActive).map((f) => `${f.name} (XML kaynağı)`),
+    "Başbuğ import",
+  ];
   const stateTone = server.running ? "info" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
   const stateLabel = server.running
     ? "Çalışıyor"
@@ -103,6 +112,14 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
           <code>{server.envFile.path}</code> dosyası yazılamadı; site yeniden başladığında tekrar denenecek.
         </Alert>
       ) : null}
+
+      {server.running ? <AutoRefresh everyMs={4000} /> : null}
+      <Panel
+        title={server.running ? "Senkron canlı takip" : "Son senkron"}
+        description={server.running ? "Sayfa kendiliğinden yenilenir; her adımın ilerlemesi burada görünür." : "Hangi adımın ne kadar sürdüğü ve ne yaptığı"}
+      >
+        <SyncLogView lines={server.logTail} planned={plannedStages} running={server.running} logFile={server.logFile} />
+      </Panel>
 
       <div className="grid-2">
         <div>
@@ -186,14 +203,6 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                 </tbody>
               </table>
             </div>
-          </Panel>
-
-          <Panel title="Senkron logu" description={`Son 120 satır · ${server.logFile}`}>
-            {server.logTail.length ? (
-              <pre className="log-view">{server.logTail.join("\n")}</pre>
-            ) : (
-              <EmptyState title="Log yok" description="Sunucuda ilk senkron çalıştığında adımlar burada görünür." />
-            )}
           </Panel>
 
           <Panel title="İçe aktarma geçmişi">

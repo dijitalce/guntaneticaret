@@ -316,7 +316,7 @@ async function main() {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Batch failed at", i, msg);
     }
-    if (i % 4000 === 0) console.log(`Imported ${Math.min(i + chunk, mapped.length)} / ${mapped.length}`);
+    if (i % 4000 === 0 || i + chunk >= mapped.length) console.log(`Imported ${Math.min(i + chunk, mapped.length)} / ${mapped.length}`);
   }
 
   const missing = failed ? 0 : await markMissingFromFeed(existing, new Set(unique.map((r) => r.externalId)));
