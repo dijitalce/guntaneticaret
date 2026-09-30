@@ -46,7 +46,7 @@ async function runAbandonedCart(): Promise<RunResult> {
     left join customers cu on cu.id = c.customer_id
     where c.updated_at > now() - interval 3 day
     group by c.id
-    having greatest(c.updated_at, max(ci.updated_at)) < now() - interval ${sql.raw(String(delay))} minute
+    having greatest(max(c.updated_at), max(ci.updated_at)) < now() - interval ${sql.raw(String(delay))} minute
       and email is not null
       and (reminder_count = 0 or (${s.secondEnabled ? 1 : 0} = 1 and reminder_count = 1
         and max(cc.last_reminded_at) < now() - interval ${sql.raw(String(secondDelay))} hour))

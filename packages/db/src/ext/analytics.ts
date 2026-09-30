@@ -103,15 +103,15 @@ function abandonedBase(tenantId?: string | null, search?: string | null, contact
     ${tenantId ? sql`and c.tenant_id = ${tenantId}` : sql``}
     ${q ? sql`and (cc.email like ${q} or cu.email like ${q} or cc.full_name like ${q} or concat(cu.first_name, ' ', cu.last_name) like ${q})` : sql``}
     group by c.id
-    having greatest(c.updated_at, max(ci.updated_at)) < now() - interval ${sql.raw(String(ABANDON_MINUTES))} minute
+    having greatest(max(c.updated_at), max(ci.updated_at)) < now() - interval ${sql.raw(String(ABANDON_MINUTES))} minute
     ${contactOnly ? sql`and coalesce(max(cc.email), max(cu.email)) is not null` : sql``}`;
 }
 
 export async function listAbandonedCarts(opts: { tenantId?: string | null; search?: string | null; limit: number; offset: number; withContactOnly?: boolean }) {
   await ensureExtTables();
   const list = await rows<Record<string, unknown>>(sql`select c.id, c.tenant_id, c.customer_id,
-      greatest(c.updated_at, max(ci.updated_at)) last_activity,
-      sum(ci.qty) qty, count(ci.id) lines, sum(ci.qty * p.price) total,
+      greatest(max(c.updated_at), max(ci.updated_at)) last_activity,
+      sum(ci.qty) qty, count(ci.id) line_count, sum(ci.qty * p.price) total,
       coalesce(max(cc.email), max(cu.email)) email,
       coalesce(max(cc.full_name), max(concat(cu.first_name, ' ', cu.last_name))) name,
       coalesce(max(cc.phone), max(cu.phone)) phone,
@@ -131,7 +131,7 @@ export async function listAbandonedCarts(opts: { tenantId?: string | null; searc
         customer_id: (r.customer_id as string) ?? null,
         last_activity: new Date(String(r.last_activity)),
         qty: num(r.qty),
-        lines: num(r.lines),
+        lines: num(r.line_count),
         total: num(r.total),
         email: (r.email as string) ?? null,
         name: ((r.name as string) ?? "").trim() || null,

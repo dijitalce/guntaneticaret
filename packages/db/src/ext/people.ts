@@ -103,10 +103,10 @@ export async function listCustomers(opts: {
 
 export async function customerKpis() {
   await ensureExtTables();
-  const [row] = await rows<{ total: number; new30: number; buyers: number; repeat: number }>(sql`select
+  const [row] = await rows<{ total: number; new30: number; buyers: number; repeat_buyers: number }>(sql`select
     (select count(*) from customers) total,
     (select count(*) from customers where created_at > now() - interval 30 day) new30,
     (select count(distinct customer_id) from orders where customer_id is not null and status not in ('cancelled','refunded')) buyers,
-    (select count(*) from (select customer_id from orders where customer_id is not null and status not in ('cancelled','refunded') group by customer_id having count(*) > 1) x) repeat`);
-  return { total: Number(row?.total ?? 0), new30: Number(row?.new30 ?? 0), buyers: Number(row?.buyers ?? 0), repeat: Number(row?.repeat ?? 0) };
+    (select count(*) from (select customer_id from orders where customer_id is not null and status not in ('cancelled','refunded') group by customer_id having count(*) > 1) x) repeat_buyers`);
+  return { total: Number(row?.total ?? 0), new30: Number(row?.new30 ?? 0), buyers: Number(row?.buyers ?? 0), repeat: Number(row?.repeat_buyers ?? 0) };
 }
