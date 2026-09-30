@@ -39,18 +39,32 @@ export type CheckoutDefaults = {
   shipPostalCode?: string;
 };
 
+export type CardInstallmentOption = { count: number; total: number; monthly: number; ratePct: number };
+
 export function CheckoutForm({
   items,
   subtotal,
+  shippingFee,
+  card,
   placeholder,
   defaults,
 }: {
   items: CheckoutLine[];
   subtotal: number;
+  shippingFee: number;
+  card: { testMode: boolean; options: CardInstallmentOption[] } | null;
   placeholder: string;
   defaults?: CheckoutDefaults;
 }) {
   const itemCount = items.reduce((sum, i) => sum + i.qty, 0);
+  const [paymentMethod, setPaymentMethod] = useState<"credit_card" | "bank_transfer">(
+    card ? "credit_card" : "bank_transfer",
+  );
+  const [installments, setInstallments] = useState(1);
+  const baseTotal = subtotal + shippingFee;
+  const selectedOption = card?.options.find((o) => o.count === installments);
+  const payTotal = paymentMethod === "credit_card" && selectedOption ? selectedOption.total : baseTotal;
+  const installmentFee = payTotal - baseTotal;
   const [invoiceType, setInvoiceType] = useState<"individual" | "corporate">(
     defaults?.invoiceType === "corporate" ? "corporate" : "individual",
   );
@@ -217,10 +231,64 @@ export function CheckoutForm({
 
           <section className="checkout-pay-card">
             <h2>Ödeme yöntemi</h2>
-            <div className="checkout-pay-method is-selected" aria-current="true">
-              <strong>Havale / EFT</strong>
-              <span>Sipariş sonrası IBAN gösterilir. Kart tahsilatı yoktur.</span>
-            </div>
+            {card ? (
+              <div className="checkout-pay-options" role="radiogroup" aria-label="Ödeme yöntemi">
+                <label className={`checkout-pay-method${paymentMethod === "credit_card" ? " is-selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="credit_card"
+                    checked={paymentMethod === "credit_card"}
+                    onChange={() => setPaymentMethod("credit_card")}
+                  />
+                  <strong>Kredi / banka kartı</strong>
+                  <span>
+                    Garanti BBVA güvenli ödeme sayfasında 3D Secure ile ödenir. Kart bilgileriniz bizde saklanmaz.
+                    {card.testMode ? " (Test modu: gerçek çekim yapılmaz.)" : ""}
+                  </span>
+                </label>
+                <label className={`checkout-pay-method${paymentMethod === "bank_transfer" ? " is-selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="bank_transfer"
+                    checked={paymentMethod === "bank_transfer"}
+                    onChange={() => setPaymentMethod("bank_transfer")}
+                  />
+                  <strong>Havale / EFT</strong>
+                  <span>Sipariş sonrası IBAN gösterilir.</span>
+                </label>
+              </div>
+            ) : (
+              <div className="checkout-pay-method is-selected" aria-current="true">
+                <input type="hidden" name="paymentMethod" value="bank_transfer" />
+                <strong>Havale / EFT</strong>
+                <span>Sipariş sonrası IBAN gösterilir.</span>
+              </div>
+            )}
+
+            {card && paymentMethod === "credit_card" && card.options.length > 1 && (
+              <fieldset className="checkout-installments">
+                <legend>Taksit seçenekleri</legend>
+                {card.options.map((o) => (
+                  <label key={o.count} className={installments === o.count ? "is-selected" : ""}>
+                    <input
+                      type="radio"
+                      name="installments"
+                      value={o.count}
+                      checked={installments === o.count}
+                      onChange={() => setInstallments(o.count)}
+                    />
+                    <span>{o.count === 1 ? "Tek çekim" : `${o.count} taksit`}</span>
+                    <span className="muted">{o.count === 1 ? "" : `${o.count} × ${money(o.monthly)}`}</span>
+                    <strong>{money(o.total)}</strong>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {card && paymentMethod === "credit_card" && card.options.length <= 1 && (
+              <input type="hidden" name="installments" value="1" />
+            )}
           </section>
 
           <section className="checkout-form-card">
@@ -250,7 +318,7 @@ export function CheckoutForm({
               </label>
             </div>
             <button className="btn btn-primary checkout-submit-inline" type="submit">
-              Siparişi oluştur · {money(subtotal)}
+              {paymentMethod === "credit_card" ? "Kartla öde" : "Siparişi oluştur"} · {money(payTotal)}
             </button>
           </section>
         </form>
@@ -281,22 +349,28 @@ export function CheckoutForm({
           </div>
           <div>
             <dt>Kargo</dt>
-            <dd>Sipariş sonrası</dd>
+            <dd>{money(shippingFee)}</dd>
           </div>
+          {installmentFee > 0 && (
+            <div>
+              <dt>Vade farkı ({installments} taksit)</dt>
+              <dd>{money(installmentFee)}</dd>
+            </div>
+          )}
           <div className="is-total">
             <dt>Ödenecek</dt>
-            <dd>{money(subtotal)}</dd>
+            <dd>{money(payTotal)}</dd>
           </div>
         </dl>
         <p className="cart-summary-note muted">KDV dahil fiyat. Stok siparişte rezerve edilir.</p>
         <button className="btn btn-primary" type="submit" form="checkout-form">
-          Siparişi oluştur
+          {paymentMethod === "credit_card" ? "Kartla öde" : "Siparişi oluştur"}
         </button>
         <Link className="cart-continue" href="/sepet">
           Sepete dön
         </Link>
         <ul className="cart-trust">
-          <li>Havale / EFT ile güvenli ödeme</li>
+          <li>{card ? "3D Secure kart veya havale / EFT" : "Havale / EFT ile güvenli ödeme"}</li>
           <li>KDV dahil fiyat</li>
           <li>Sipariş no ile takip</li>
         </ul>

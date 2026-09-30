@@ -117,6 +117,25 @@ Kurulum:
 Aynı anda iki senkron çalışmaz (kilit dosyası). Başbuğ tek oturuma izin verir; senkron bitince oturumu kapatır.
 Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
+### Garanti BBVA sanal POS
+
+- `GARANTI_*` değerleri hPanel → Node.js → Ortam değişkenleri'ne girilir (`.env.example`'a bak). Dördü (merchant, terminal, prov şifresi, 3D store key) dolmadan kart seçeneği görünmez.
+- Bankaya bildirilecek dönüş adresi (başarılı ve hatalı için aynı): `https://guntanotoyedekparca.com/api/payments/garanti/callback`
+- `GARANTI_MODE=TEST` banka test ortamını kullanır, ödeme sayfasında "Test modu" yazar. Canlı bilgiler gelince `PROD`.
+- Kart siparişi banka onayına kadar `Ödeme bekliyor` durumunda kalır, sepet silinmez. Onayda stok düşer, sepet boşalır. Hata/iptalde sipariş iptal edilir, sepet yerinde kalır. 30 dakikada tamamlanmayanlar otomatik iptal edilir.
+
+### Aras Kargo
+
+- `ARAS_*` değerleri hem hPanel ortam değişkenlerine (admin'deki "Aras Kargo'ya ver" için) hem `~/guntan-sync.env` dosyasına (takip cron'u için) eklenir.
+- "Aras Kargo'ya ver": Aras'ta gönderi kaydı açılır (entegrasyon kodu = sipariş no), sipariş `Kargoda` olur. Takip numarası paket şubeye teslim edilince oluşur.
+- Takip cron'u (saatte bir, `15 * * * *`):
+
+```bash
+/home/KULLANICI/.../hbuilds/current/nodejs/scripts/shipment-sync.sh
+```
+
+  Takip numarasını siparişe yazar, teslim edilenleri `Tamamlandı` yapar, yarım kalan kart siparişlerini temizler. Log: `logs/shipment-sync-YYYYMM.log`.
+
 ### Disk / prune
 
 ```bash

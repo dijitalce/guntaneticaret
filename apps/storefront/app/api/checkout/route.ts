@@ -5,6 +5,8 @@ import { checkout, getOrCreateCart } from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { getCustomerBySession } from "@guntan/auth";
 import { sendOrderReceivedEmail } from "@guntan/email";
+import { buildOosPayForm, garantiConfigFromEnv } from "@guntan/payments";
+import { autoPostHtml, clientIp } from "../../../src/garanti-redirect";
 
 function field(form: FormData, key: string) {
   return String(form.get(key) ?? "").trim();
@@ -50,6 +52,10 @@ export async function POST(request: Request) {
         postalCode: billing.postalCode,
       };
 
+  const garanti = garantiConfigFromEnv();
+  const payByCard = field(form, "paymentMethod") === "credit_card" && garanti !== null;
+  const installments = Math.max(1, Number.parseInt(field(form, "installments") || "1", 10) || 1);
+
   const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   let result;
   try {
@@ -70,17 +76,33 @@ export async function POST(request: Request) {
       shipDifferent,
       notes: field(form, "notes"),
       acceptMarketing: field(form, "acceptMarketing") === "1",
+      card: payByCard ? { installments } : undefined,
     });
   } catch {
     return NextResponse.redirect(publicRedirect("/odeme?hata=1", request), 303);
   }
+
+  if (payByCard && garanti) {
+    const callback = publicRedirect("/api/payments/garanti/callback", request).toString();
+    const { action, fields } = buildOosPayForm(garanti, {
+      orderId: result.order.orderNo,
+      amount: Number(result.order.grandTotal),
+      installment: installments,
+      email: result.order.email,
+      customerIp: clientIp(request.headers),
+      successUrl: callback,
+      errorUrl: callback,
+    });
+    return autoPostHtml(action, fields);
+  }
+
   try {
     await sendOrderReceivedEmail({
       to: result.order.email,
       siteName: tenant.siteName,
       orderNo: result.order.orderNo,
       amount: result.order.grandTotal,
-      ibanLines: result.intent.instructions.map((i) => `${i.bankName} ${i.iban}`),
+      ibanLines: (result.intent?.instructions ?? []).map((i) => `${i.bankName} ${i.iban}`),
     });
   } catch {
     /* sipariş oluştu; e-posta başarısız olsa da başarı sayfasına git */

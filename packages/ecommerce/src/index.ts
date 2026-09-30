@@ -14,8 +14,14 @@ import {
   tenantCatalogIndex,
   tenantSeesAllCatalog,
 } from "@guntan/db";
-import { getPaymentProvider } from "@guntan/payments";
-import { getShippingProvider, shippingAmountForSubtotal } from "@guntan/shipping";
+import { amountWithInstallment, garantiConfigFromEnv, getPaymentProvider } from "@guntan/payments";
+import {
+  arasConfigFromEnv,
+  createArasOrder,
+  getShippingProvider,
+  queryArasByIntegrationCode,
+  shippingAmountForSubtotal,
+} from "@guntan/shipping";
 import { ORDER_STATUS, PAYMENT_METHOD, PAYMENT_STATUS, type OrderStatus } from "@guntan/types";
 
 export function availableStock(stockQty: number, reservedQty: number): number {
@@ -293,7 +299,12 @@ export async function checkout(input: {
   shipDifferent: boolean;
   notes?: string;
   acceptMarketing?: boolean;
+  /** Verilirse kartla ödeme: sepet ödeme onayına kadar korunur. */
+  card?: { installments: number };
 }) {
+  const garanti = input.card ? garantiConfigFromEnv() : null;
+  if (input.card && !garanti) throw new Error("Kartla ödeme şu an kullanılamıyor.");
+  await expireStaleCardOrders().catch(() => undefined);
   const view = await getCartView(input.cartId);
   if (view.items.length === 0) throw new Error("Sepet boş.");
   if (!input.billing.city || !input.billing.district || !input.billing.line1) {
@@ -316,7 +327,14 @@ export async function checkout(input: {
 
   const quotes = await getShippingProvider().quote({ subtotal: view.subtotal, city: input.shipping.city });
   const shipping = Number(quotes[0]?.amount ?? 0);
-  const grand = view.subtotal + shipping;
+  const baseTotal = view.subtotal + shipping;
+  let installments = 1;
+  let grand = baseTotal;
+  if (input.card && garanti) {
+    installments = Math.max(1, Math.floor(input.card.installments || 1));
+    if (installments > 1 && baseTotal < garanti.installmentMinAmount) throw new Error("Bu tutarda taksit yok.");
+    grand = amountWithInstallment(baseTotal, installments, garanti);
+  }
   const orderNo = nextOrderNo();
 
   const order = {
@@ -346,6 +364,14 @@ export async function checkout(input: {
       billingLine1: input.billing.line1,
       billingPostalCode: input.billing.postalCode ?? "",
       acceptMarketing: input.acceptMarketing ? "1" : "0",
+      paymentMethod: input.card ? PAYMENT_METHOD.CREDIT_CARD : PAYMENT_METHOD.BANK_TRANSFER,
+      ...(input.card
+        ? {
+            installments: String(installments),
+            installmentFee: (grand - baseTotal).toFixed(2),
+            cartId: input.cartId,
+          }
+        : {}),
     },
     subtotal: view.subtotal.toFixed(2),
     shippingTotal: shipping.toFixed(2),
@@ -374,11 +400,16 @@ export async function checkout(input: {
   await db.insert(payments).values({
     orderId: order.id,
     tenantId: input.tenantId,
-    method: PAYMENT_METHOD.BANK_TRANSFER,
+    method: input.card ? PAYMENT_METHOD.CREDIT_CARD : PAYMENT_METHOD.BANK_TRANSFER,
     status: PAYMENT_STATUS.AWAITING,
     amount: grand.toFixed(2),
     providerRef: orderNo,
   });
+
+  if (input.card) {
+    const [savedOrder] = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);
+    return { order: savedOrder!, intent: null };
+  }
 
   const accounts = await db
     .select()
@@ -428,6 +459,90 @@ export async function cancelOrder(orderId: string) {
   await db.update(payments).set({ status: PAYMENT_STATUS.CANCELLED }).where(eq(payments.orderId, orderId));
 }
 
+const CARD_ORDER_TTL_MINUTES = 30;
+
+/** Banka sayfasında yarım bırakılan kart siparişlerinin stok rezervasyonunu bırakır. */
+export async function expireStaleCardOrders() {
+  const stale = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .innerJoin(payments, eq(payments.orderId, orders.id))
+    .where(
+      and(
+        eq(orders.status, ORDER_STATUS.PENDING_PAYMENT),
+        eq(payments.method, PAYMENT_METHOD.CREDIT_CARD),
+        sql`${orders.createdAt} < now() - interval ${sql.raw(String(CARD_ORDER_TTL_MINUTES))} minute`,
+      ),
+    )
+    .limit(50);
+  for (const row of stale) await cancelOrder(row.id).catch(() => undefined);
+  return stale.length;
+}
+
+async function getCardOrder(orderNo: string) {
+  const [order] = await db.select().from(orders).where(eq(orders.orderNo, orderNo)).limit(1);
+  if (!order) return null;
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.orderId, order.id), eq(payments.method, PAYMENT_METHOD.CREDIT_CARD)))
+    .limit(1);
+  return payment ? { order, payment } : null;
+}
+
+/**
+ * Banka onayını siparişe işler. Aynı cevap iki kez gelirse ikinci çağrı stok düşmez.
+ * Tutar kuruş cinsinden bankadan gelen değerdir; kayıttakiyle eşleşmezse reddedilir.
+ */
+export async function confirmCardPayment(
+  orderNo: string,
+  input: { amountKurus: string; authCode?: string; hostRef?: string },
+): Promise<{ order: typeof orders.$inferSelect; alreadyPaid: boolean }> {
+  const found = await getCardOrder(orderNo);
+  if (!found) throw new Error("Sipariş bulunamadı.");
+  const { order, payment } = found;
+  if (order.status !== ORDER_STATUS.PENDING_PAYMENT) {
+    if (payment.status === PAYMENT_STATUS.CONFIRMED) return { order, alreadyPaid: true };
+    throw new Error("Sipariş ödeme beklemiyor.");
+  }
+  if (String(Math.round(Number(payment.amount) * 100)) !== input.amountKurus) {
+    throw new Error("Ödenen tutar sipariş tutarıyla eşleşmiyor.");
+  }
+
+  const [res] = await db
+    .update(orders)
+    .set({ status: ORDER_STATUS.PAID, updatedAt: new Date() })
+    .where(and(eq(orders.id, order.id), eq(orders.status, ORDER_STATUS.PENDING_PAYMENT)));
+  if ((res as { affectedRows?: number }).affectedRows !== 1) return { order, alreadyPaid: true };
+
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+  for (const item of items) {
+    await db
+      .update(products)
+      .set({
+        stockQty: sql`greatest(${products.stockQty} - ${item.qty}, 0)`,
+        reservedQty: sql`greatest(${products.reservedQty} - ${item.qty}, 0)`,
+      })
+      .where(eq(products.id, item.productId));
+  }
+  const ref = [input.hostRef, input.authCode].filter(Boolean).join("/");
+  await db
+    .update(payments)
+    .set({ status: PAYMENT_STATUS.CONFIRMED, providerRef: ref ? `${orderNo}:${ref}`.slice(0, 255) : payment.providerRef })
+    .where(eq(payments.id, payment.id));
+
+  const cartId = order.shippingAddress?.cartId;
+  if (cartId) await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
+  return { order, alreadyPaid: false };
+}
+
+/** Başarısız/iptal edilen kart ödemesinde siparişi iptal edip rezervasyonu bırakır; sepet yerinde kalır. */
+export async function failCardPayment(orderNo: string) {
+  const found = await getCardOrder(orderNo);
+  if (!found || found.order.status !== ORDER_STATUS.PENDING_PAYMENT) return;
+  await cancelOrder(found.order.id);
+}
+
 export async function markOrderPreparing(orderId: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order || order.status !== ORDER_STATUS.PAID) throw new Error("Sipariş hazırlanamaz.");
@@ -464,6 +579,74 @@ export async function shipOrder(
   }
   await db.update(orders).set({ status: ORDER_STATUS.SHIPPED, updatedAt: new Date() }).where(eq(orders.id, orderId));
   return order;
+}
+
+export const ARAS_CARRIER = "Aras Kargo";
+
+/** Aras'ta gönderi kaydı açar (entegrasyon kodu = sipariş no) ve siparişi kargoya verildi yapar. */
+export async function shipOrderWithAras(orderId: string, input: { pieceCount?: number; weightKg?: number } = {}) {
+  const config = arasConfigFromEnv();
+  if (!config) throw new Error("Aras Kargo entegrasyonu ayarlı değil.");
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!order || (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.PREPARING)) {
+    throw new Error("Sipariş kargolanamaz.");
+  }
+  const a = order.shippingAddress ?? {};
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  const result = await createArasOrder(config, {
+    integrationCode: order.orderNo,
+    receiverName: a.shipFullName || order.fullName,
+    receiverAddress: [a.line1, a.line2, a.postalCode].filter(Boolean).join(" "),
+    receiverPhone: a.shipPhone || order.phone,
+    receiverCity: a.city ?? "",
+    receiverTown: a.district ?? "",
+    pieceCount: input.pieceCount,
+    weightKg: input.weightKg,
+    description: items.map((i) => `${i.qty}x ${i.sku}`).join(", ").slice(0, 200),
+  });
+  if (!result.ok) throw new Error(`Aras gönderi kaydı reddedildi: ${result.message || result.code}`);
+  await shipOrder(orderId, { carrier: ARAS_CARRIER });
+  return result;
+}
+
+/** Kargodaki Aras gönderilerinin takip no ve teslim durumunu günceller. */
+export async function syncArasShipments(log: (msg: string) => void = () => undefined) {
+  const config = arasConfigFromEnv();
+  if (!config) {
+    log("Aras ayarlı değil (ARAS_USERNAME/ARAS_PASSWORD); atlanıyor.");
+    return { checked: 0, tracked: 0, delivered: 0, errors: 0 };
+  }
+  const rows = await db
+    .select({ shipmentId: shipments.id, trackingNo: shipments.trackingNo, orderId: orders.id, orderNo: orders.orderNo })
+    .from(shipments)
+    .innerJoin(orders, eq(orders.id, shipments.orderId))
+    .where(and(eq(shipments.carrier, ARAS_CARRIER), eq(orders.status, ORDER_STATUS.SHIPPED)))
+    .limit(500);
+  const stats = { checked: 0, tracked: 0, delivered: 0, errors: 0 };
+  for (const row of rows) {
+    stats.checked++;
+    try {
+      const t = await queryArasByIntegrationCode(config, row.orderNo);
+      if (!t.found) continue;
+      if (t.trackingNo && t.trackingNo !== row.trackingNo) {
+        await db
+          .update(shipments)
+          .set({ trackingNo: t.trackingNo, updatedAt: new Date() })
+          .where(eq(shipments.id, row.shipmentId));
+        stats.tracked++;
+        log(`${row.orderNo}: takip no ${t.trackingNo}`);
+      }
+      if (t.delivered) {
+        await completeOrder(row.orderId);
+        stats.delivered++;
+        log(`${row.orderNo}: teslim edildi`);
+      }
+    } catch (err) {
+      stats.errors++;
+      log(`${row.orderNo}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return stats;
 }
 
 export async function completeOrder(orderId: string) {

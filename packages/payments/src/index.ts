@@ -42,3 +42,5 @@ export class BankTransferProvider implements PaymentProvider {
 export function getPaymentProvider(): PaymentProvider {
   return new BankTransferProvider();
 }
+
+export * from "./garanti";

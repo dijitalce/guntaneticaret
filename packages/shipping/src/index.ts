@@ -28,3 +28,5 @@ export class ManualShippingProvider implements ShippingProvider {
 export function getShippingProvider(): ShippingProvider {
   return new ManualShippingProvider();
 }
+
+export * from "./aras";

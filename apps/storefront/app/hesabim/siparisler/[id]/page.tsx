@@ -5,6 +5,9 @@ import { db, orderItems, orders, payments, shipments, tenantBankAccounts } from 
 import { getTenant } from "../../../../src/tenant";
 import { getCurrentCustomer } from "../../../../src/customer";
 import { formatDateTr, formatMoney, orderStatusLabel, orderStatusTone } from "../../../../src/order-labels";
+import { arasTrackingUrl } from "@guntan/shipping";
+
+const SHIPMENT_STATUS: Record<string, string> = { pending: "Hazırlanıyor", shipped: "Kargoda", delivered: "Teslim edildi" };
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +30,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   ]);
 
   const addr = order.shippingAddress ?? {};
-  const awaiting = pay.some((p) => p.status === "awaiting");
+  const awaiting = pay.some((p) => p.status === "awaiting" && p.method === "bank_transfer");
+  const installmentFee = Number(addr.installmentFee ?? "0");
   const ship = ships[0];
 
   return (
@@ -67,6 +71,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <div><dt>Kargo</dt><dd>{formatMoney(order.shippingTotal)}</dd></div>
             {Number(order.discountTotal) > 0 && (
               <div><dt>İndirim</dt><dd>-{formatMoney(order.discountTotal)}</dd></div>
+            )}
+            {installmentFee > 0 && (
+              <div><dt>Vade farkı ({addr.installments} taksit)</dt><dd>{formatMoney(installmentFee)}</dd></div>
             )}
             <div className="is-grand"><dt>Toplam</dt><dd>{formatMoney(order.grandTotal)}</dd></div>
           </dl>
@@ -120,8 +127,22 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <div className="account-panel">
               <h3>Kargo</h3>
               {ship.carrier && <p>Firma: {ship.carrier}</p>}
-              {ship.trackingNo && <p>Takip no: <strong>{ship.trackingNo}</strong></p>}
-              <p className="muted">Durum: {ship.status}</p>
+              {ship.trackingNo ? (
+                <p>
+                  Takip no: <strong>{ship.trackingNo}</strong>
+                  {ship.carrier === "Aras Kargo" && (
+                    <>
+                      {" · "}
+                      <a href={arasTrackingUrl(ship.trackingNo)} target="_blank" rel="noreferrer">
+                        Kargom nerede?
+                      </a>
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="muted">Takip numarası kargo şubeye teslim edilince burada görünür.</p>
+              )}
+              <p className="muted">Durum: {SHIPMENT_STATUS[ship.status] ?? ship.status}</p>
             </div>
           )}
 

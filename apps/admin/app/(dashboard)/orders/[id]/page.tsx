@@ -3,20 +3,32 @@ import { eq, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, productOems, tenants } from "@guntan/db";
 import { getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
+import { arasConfigFromEnv, arasTrackingUrl } from "@guntan/shipping";
 import { withBase } from "@/src/paths";
 import { PageHeader, Panel, StatusBadge, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Sipariş detayı" };
+
+const PAYMENT_LABELS: Record<string, string> = { bank_transfer: "Havale / EFT", credit_card: "Kredi kartı (Garanti)" };
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  awaiting: "bekliyor",
+  confirmed: "onaylandı",
+  expired: "süresi doldu",
+  cancelled: "iptal",
+};
 
 export default async function OrderDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; hata?: string }>;
+  searchParams: Promise<{ ok?: string; hata?: string; mesaj?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const aras = arasConfigFromEnv();
+  const arasReady = aras !== null;
+  const arasTest = aras?.mode === "TEST";
   const detail = await getAdminOrder(id);
   if (!detail) notFound();
   const { order, items, payments, shipments } = detail;
@@ -57,7 +69,7 @@ export default async function OrderDetailPage({
       )}
       {sp.hata === "1" && (
         <p className="login-alert" role="alert">
-          Bu işlem mevcut sipariş durumunda yapılamaz.
+          {sp.mesaj || "Bu işlem mevcut sipariş durumunda yapılamaz."}
         </p>
       )}
 
@@ -86,11 +98,17 @@ export default async function OrderDetailPage({
         <div className="panel-pad" style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "end" }}>
           {order.status === "pending_payment" && (
             <>
-              <form action={withBase(`/api/orders/${order.id}/confirm`)} method="post">
-                <button className="btn btn-primary" type="submit">
-                  Ödeme alındı
-                </button>
-              </form>
+              {address.paymentMethod === "credit_card" ? (
+                <p style={{ margin: 0, color: "#6b7280" }}>
+                  Kart ödemesi bankadan onay bekliyor. 30 dakika içinde tamamlanmazsa otomatik iptal edilir.
+                </p>
+              ) : (
+                <form action={withBase(`/api/orders/${order.id}/confirm`)} method="post">
+                  <button className="btn btn-primary" type="submit">
+                    Ödeme alındı
+                  </button>
+                </form>
+              )}
               <form action={withBase(`/api/orders/${order.id}/cancel`)} method="post">
                 <button className="btn btn-secondary" type="submit">
                   İptal et
@@ -103,6 +121,29 @@ export default async function OrderDetailPage({
               <button className="btn btn-primary" type="submit">
                 Hazırlığa al
               </button>
+            </form>
+          )}
+          {(order.status === "paid" || order.status === "preparing") && arasReady && (
+            <form
+              action={withBase(`/api/orders/${order.id}/ship`)}
+              method="post"
+              style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "end", width: "100%" }}
+            >
+              <input type="hidden" name="mode" value="aras" />
+              <div className="field">
+                <label htmlFor="pieceCount">Koli</label>
+                <input className="input" id="pieceCount" name="pieceCount" type="number" min={1} defaultValue={1} style={{ width: "5rem" }} />
+              </div>
+              <div className="field">
+                <label htmlFor="weightKg">Ağırlık (kg)</label>
+                <input className="input" id="weightKg" name="weightKg" inputMode="decimal" defaultValue="1" style={{ width: "6rem" }} />
+              </div>
+              <button className="btn btn-primary" type="submit">
+                Aras Kargo&apos;ya ver{arasTest ? " (test)" : ""}
+              </button>
+              <span style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                Aras&apos;ta gönderi kaydı açılır; takip no kargo şubeye teslim edilince otomatik gelir.
+              </span>
             </form>
           )}
           {(order.status === "paid" || order.status === "preparing") && (
@@ -119,8 +160,8 @@ export default async function OrderDetailPage({
                 <label htmlFor="trackingNo">Takip no</label>
                 <input className="input" id="trackingNo" name="trackingNo" placeholder="Takip numarası" defaultValue={shipments[0]?.trackingNo ?? ""} />
               </div>
-              <button className="btn btn-primary" type="submit">
-                Kargoya ver
+              <button className={arasReady ? "btn btn-secondary" : "btn btn-primary"} type="submit">
+                {arasReady ? "Elle kargoya ver" : "Kargoya ver"}
               </button>
             </form>
           )}
@@ -238,8 +279,20 @@ export default async function OrderDetailPage({
           <p style={{ margin: "0.4rem 0 0", color: "#6b7280", fontSize: "0.9rem" }}>
             {payments.length === 0
               ? "Kayıt yok"
-              : payments.map((p) => `${p.method} · ${p.status} · ${formatTry(p.amount)}`).join(" / ")}
+              : payments
+                  .map((p) => `${PAYMENT_LABELS[p.method] ?? p.method} · ${PAYMENT_STATUS_LABELS[p.status] ?? p.status} · ${formatTry(p.amount)}`)
+                  .join(" / ")}
           </p>
+          {Number(address.installments ?? "1") > 1 ? (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+              {address.installments} taksit · Vade farkı: {formatTry(address.installmentFee ?? "0")}
+            </p>
+          ) : null}
+          {payments.some((p) => p.method === "credit_card" && p.providerRef?.includes(":")) ? (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "#6b7280" }}>
+              Banka ref: {payments.find((p) => p.method === "credit_card")?.providerRef?.split(":")[1]}
+            </p>
+          ) : null}
           <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
             Ara: {formatTry(order.subtotal)} · Kargo: {formatTry(order.shippingTotal)} · İndirim:{" "}
             {formatTry(order.discountTotal)}
@@ -256,9 +309,20 @@ export default async function OrderDetailPage({
             {shipments.length === 0
               ? "Henüz kargo kaydı yok"
               : shipments
-                  .map((s) => `${s.carrier ?? "Firma yok"} · ${s.trackingNo ?? "Takip yok"} · ${s.status}`)
+                  .map((s) => `${s.carrier ?? "Firma yok"} · ${s.trackingNo ?? "Takip no bekleniyor"} · ${s.status}`)
                   .join(" / ")}
           </p>
+          {shipments.some((s) => s.carrier === "Aras Kargo" && s.trackingNo) ? (
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+              <a
+                href={arasTrackingUrl(shipments.find((s) => s.carrier === "Aras Kargo" && s.trackingNo)!.trackingNo!)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Aras takip sayfası
+              </a>
+            </p>
+          ) : null}
         </div>
       </div>
     </>

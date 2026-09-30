@@ -4,6 +4,8 @@ import { asc, eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
 import { getCartView, getOrCreateCart } from "@guntan/ecommerce";
 import { customerAddresses, db } from "@guntan/db";
+import { garantiConfigFromEnv, installmentOptions } from "@guntan/payments";
+import { shippingAmountForSubtotal } from "@guntan/shipping";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
 import { CheckoutForm } from "./form";
@@ -11,9 +13,10 @@ import { CheckoutForm } from "./form";
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hata?: string }>;
+  searchParams: Promise<{ hata?: string; mesaj?: string }>;
 }) {
   const sp = await searchParams;
+  const garanti = garantiConfigFromEnv();
   const tenant = await getTenant();
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
@@ -39,6 +42,7 @@ export default async function CheckoutPage({
 
   const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   const view = await getCartView(cart.id);
+  const shippingFee = shippingAmountForSubtotal(view.subtotal);
 
   if (view.items.length === 0) {
     return (
@@ -111,7 +115,7 @@ export default async function CheckoutPage({
         <div>
           <h1>Ödeme</h1>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-            Havale / EFT · KDV dahil · {view.items.reduce((s, i) => s + i.qty, 0)} ürün
+            {garanti ? "Kart veya havale / EFT" : "Havale / EFT"} · KDV dahil · {view.items.reduce((s, i) => s + i.qty, 0)} ürün
             {user ? " · Üye hesabı" : null}
           </p>
         </div>
@@ -130,6 +134,12 @@ export default async function CheckoutPage({
           Sipariş oluşturulamadı. Adres, fatura bilgileri, stok ve yasal onayları kontrol edip tekrar dene.
         </p>
       )}
+      {sp.hata === "kart" && (
+        <p className="account-alert is-bad" role="alert">
+          Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetin duruyor; tekrar deneyebilir veya
+          havale ile ödeyebilirsin.
+        </p>
+      )}
 
       <CheckoutForm
         items={view.items.map((i) => ({
@@ -141,6 +151,12 @@ export default async function CheckoutPage({
           imageUrl: i.imageUrl,
         }))}
         subtotal={view.subtotal}
+        shippingFee={shippingFee}
+        card={
+          garanti
+            ? { testMode: garanti.mode === "TEST", options: installmentOptions(view.subtotal + shippingFee, garanti) }
+            : null
+        }
         placeholder={placeholder}
         defaults={defaults}
       />

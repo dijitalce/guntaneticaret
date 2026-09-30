@@ -1537,6 +1537,44 @@ body {
   background: color-mix(in srgb, var(--primary) 7%, #fff);
 }
 .checkout-pay-method strong { font-size: 0.95rem; }
+.checkout-pay-options {
+  display: grid;
+  gap: 0.6rem;
+}
+label.checkout-pay-method {
+  cursor: pointer;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+}
+label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-top: 0.2rem; }
+.checkout-installments {
+  margin: 0.9rem 0 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.checkout-installments legend {
+  font-weight: 650;
+  font-size: 0.92rem;
+  margin-bottom: 0.4rem;
+}
+.checkout-installments label {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.checkout-installments label.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, #fff);
+}
+.checkout-installments .muted { font-size: 0.82rem; }
 .checkout-pay-method span {
   color: var(--muted-foreground);
   font-size: 0.84rem;

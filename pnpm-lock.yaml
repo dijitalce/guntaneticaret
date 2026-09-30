@@ -49,9 +49,15 @@ importers:
       '@guntan/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@guntan/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@guntan/search':
         specifier: workspace:*
         version: link:../../packages/search
+      '@guntan/shipping':
+        specifier: workspace:*
+        version: link:../../packages/shipping
       '@guntan/tenant':
         specifier: workspace:*
         version: link:../../packages/tenant
@@ -137,9 +143,15 @@ importers:
       '@guntan/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@guntan/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@guntan/search':
         specifier: workspace:*
         version: link:../../packages/search
+      '@guntan/shipping':
+        specifier: workspace:*
+        version: link:../../packages/shipping
       '@guntan/tenant':
         specifier: workspace:*
         version: link:../../packages/tenant
@@ -344,6 +356,9 @@ importers:
       '@guntan/db':
         specifier: workspace:*
         version: link:../db
+      '@guntan/ecommerce':
+        specifier: workspace:*
+        version: link:../ecommerce
       '@guntan/types':
         specifier: workspace:*
         version: link:../types

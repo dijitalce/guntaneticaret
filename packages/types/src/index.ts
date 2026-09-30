@@ -57,6 +57,7 @@ export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
 
 export const PAYMENT_METHOD = {
   BANK_TRANSFER: "bank_transfer",
+  CREDIT_CARD: "credit_card",
 } as const;
 export type PaymentMethod = (typeof PAYMENT_METHOD)[keyof typeof PAYMENT_METHOD];
 

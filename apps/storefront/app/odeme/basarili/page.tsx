@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db, orders, tenantBankAccounts } from "@guntan/db";
+import { ORDER_STATUS, PAYMENT_METHOD } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
 
 function money(value: string | number) {
@@ -12,10 +13,12 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
   const { order: orderNo } = await searchParams;
   const tenant = await getTenant();
   const [order] = orderNo ? await db.select().from(orders).where(eq(orders.orderNo, orderNo)).limit(1) : [];
-  const banks = await db
-    .select()
-    .from(tenantBankAccounts)
-    .where(eq(tenantBankAccounts.tenantId, tenant.tenant.id));
+  const paidByCard =
+    order?.shippingAddress?.paymentMethod === PAYMENT_METHOD.CREDIT_CARD && order.status !== ORDER_STATUS.PENDING_PAYMENT;
+  const banks = paidByCard
+    ? []
+    : await db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, tenant.tenant.id));
+  const installments = Number(order?.shippingAddress?.installments ?? "1");
 
   return (
     <div className="container page-surface">
@@ -30,41 +33,50 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
 
       <div className="checkout-layout">
         <section className="checkout-form-card">
-          <h1 style={{ margin: "0 0 0.5rem", fontSize: "1.45rem" }}>Siparişiniz alındı</h1>
+          <h1 style={{ margin: "0 0 0.5rem", fontSize: "1.45rem" }}>
+            {paidByCard ? "Ödemeniz alındı" : "Siparişiniz alındı"}
+          </h1>
           {order ? (
             <p className="muted" style={{ marginTop: 0 }}>
-              Sipariş no: <strong>{order.orderNo}</strong> · Ödenecek:{" "}
+              Sipariş no: <strong>{order.orderNo}</strong> · {paidByCard ? "Ödenen" : "Ödenecek"}:{" "}
               <strong>{money(order.grandTotal)}</strong>
+              {paidByCard && installments > 1 ? ` · ${installments} taksit` : null}
             </p>
           ) : (
             <p className="muted">Sipariş kaydı oluşturuldu. Havale açıklamasına sipariş numaranızı yazın.</p>
           )}
-          <p>
-            Ödemeyi tamamladıktan sonra siparişiniz hazırlanmaya başlar. Dekontu{" "}
-            {tenant.email ? <a href={`mailto:${tenant.email}`}>{tenant.email}</a> : "e-posta"} adresine
-            iletebilirsiniz.
-          </p>
+          {paidByCard ? (
+            <p>Kart ödemeniz onaylandı, siparişiniz hazırlanmaya alınacak. Kargoya verildiğinde takip numarası hesabınızda görünür.</p>
+          ) : (
+            <p>
+              Ödemeyi tamamladıktan sonra siparişiniz hazırlanmaya başlar. Dekontu{" "}
+              {tenant.email ? <a href={`mailto:${tenant.email}`}>{tenant.email}</a> : "e-posta"} adresine
+              iletebilirsiniz.
+            </p>
+          )}
           <Link className="btn btn-primary" href="/" style={{ marginTop: "0.5rem", display: "inline-flex" }}>
             Alışverişe dön
           </Link>
         </section>
 
-        <aside className="checkout-summary-card">
-          <h2>Havale / EFT</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Açıklama alanına sipariş numaranızı yazın.
-          </p>
-          <div className="checkout-mini-list">
-            {banks.length === 0 && <p className="muted">Banka hesabı henüz tanımlanmamış.</p>}
-            {banks.map((b) => (
-              <div key={b.id} style={{ display: "grid", gap: "0.2rem" }}>
-                <strong>{b.bankName}</strong>
-                <span className="muted">{b.accountHolder}</span>
-                <code style={{ fontSize: "0.92rem" }}>{b.iban}</code>
-              </div>
-            ))}
-          </div>
-        </aside>
+        {!paidByCard && (
+          <aside className="checkout-summary-card">
+            <h2>Havale / EFT</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Açıklama alanına sipariş numaranızı yazın.
+            </p>
+            <div className="checkout-mini-list">
+              {banks.length === 0 && <p className="muted">Banka hesabı henüz tanımlanmamış.</p>}
+              {banks.map((b) => (
+                <div key={b.id} style={{ display: "grid", gap: "0.2rem" }}>
+                  <strong>{b.bankName}</strong>
+                  <span className="muted">{b.accountHolder}</span>
+                  <code style={{ fontSize: "0.92rem" }}>{b.iban}</code>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );
