@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { createCustomer, loginCustomer } from "@guntan/auth";
 import { attachCartToCustomer, getCartSummary } from "@guntan/ecommerce";
-import { customerAddresses, db } from "@guntan/db";
+import { customerAddresses, db, sendTemplate } from "@guntan/db";
 import { resolveTenantByHost } from "@guntan/tenant";
 
 function field(form: FormData, key: string) {
@@ -60,6 +60,19 @@ export async function POST(request: Request) {
     });
   } catch {
     return NextResponse.redirect(publicRedirect("/hesabim?kayit=email", request), 303);
+  }
+
+  {
+    const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";
+    const welcomeTenant = await resolveTenantByHost(host).catch(() => null);
+    void sendTemplate({
+      key: "customer_welcome",
+      tenantId: welcomeTenant?.tenant.id ?? null,
+      email: user.email,
+      vars: { customer_name: firstName },
+      relatedType: "customer",
+      relatedId: user.id,
+    }).catch(() => undefined);
   }
 
   const fullName = `${firstName} ${lastName}`.trim();

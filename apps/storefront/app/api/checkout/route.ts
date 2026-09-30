@@ -4,8 +4,8 @@ import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/co
 import { buildOosPayForm, checkout, garantiConfigFromEnv, getOrCreateCart } from "@guntan/ecommerce";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { getCustomerBySession } from "@guntan/auth";
-import { sendOrderReceivedEmail } from "@guntan/email";
 import { autoPostHtml, clientIp } from "../../../src/garanti-redirect";
+import { COOKIE_VISITOR } from "../../../src/request-tenant";
 
 function field(form: FormData, key: string) {
   return String(form.get(key) ?? "").trim();
@@ -76,8 +76,18 @@ export async function POST(request: Request) {
       notes: field(form, "notes"),
       acceptMarketing: field(form, "acceptMarketing") === "1",
       card: payByCard ? { installments } : undefined,
+      couponCode: field(form, "couponCode") || undefined,
+      visitorSessionId: jar.get(COOKIE_VISITOR)?.value ?? null,
+      clientIp: clientIp(request.headers),
+      userAgent: request.headers.get("user-agent"),
     });
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (/kupon/i.test(message)) {
+      const url = publicRedirect("/odeme?hata=kupon", request);
+      url.searchParams.set("mesaj", message.slice(0, 160));
+      return NextResponse.redirect(url, 303);
+    }
     return NextResponse.redirect(publicRedirect("/odeme?hata=1", request), 303);
   }
 
@@ -95,17 +105,6 @@ export async function POST(request: Request) {
     return autoPostHtml(action, fields);
   }
 
-  try {
-    await sendOrderReceivedEmail({
-      to: result.order.email,
-      siteName: tenant.siteName,
-      orderNo: result.order.orderNo,
-      amount: result.order.grandTotal,
-      ibanLines: (result.intent?.instructions ?? []).map((i) => `${i.bankName} ${i.iban}`),
-    });
-  } catch {
-    /* sipariş oluştu; e-posta başarısız olsa da başarı sayfasına git */
-  }
   return NextResponse.redirect(
     publicRedirect(`/odeme/basarili?order=${result.order.orderNo}`, request),
     303,

@@ -25,6 +25,18 @@ import {
   IconShield,
   IconTag,
   IconUsers,
+  IconActivity,
+  IconBell,
+  IconCartOff,
+  IconPercent,
+  IconPuzzle,
+  IconSettings,
+  IconTarget,
+  IconTruck,
+  IconUser,
+  IconWindow,
+  IconZap,
+  IconSend,
 } from "./icons";
 
 type NavItem = {
@@ -37,11 +49,18 @@ type NavItem = {
 type NavGroup = { label: string; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
-  { label: "Genel", items: [{ href: "/", label: "Özet", icon: IconHome, exact: true }] },
+  {
+    label: "Genel",
+    items: [
+      { href: "/", label: "Özet", icon: IconHome, exact: true },
+      { href: "/live", label: "Canlı takip", icon: IconActivity },
+    ],
+  },
   {
     label: "Satış",
     items: [
       { href: "/orders", label: "Siparişler", icon: IconCart, countKey: "orders" },
+      { href: "/abandoned-carts", label: "Terk edilmiş sepetler", icon: IconCartOff },
       { href: "/customers", label: "Müşteriler", icon: IconUsers },
     ],
   },
@@ -56,26 +75,40 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Siteler",
+    label: "Pazarlama",
     items: [
-      { href: "/tenants", label: "Tüm siteler", icon: IconGlobe },
-      { href: "/tenants/new", label: "Yeni site", icon: IconPlus },
+      { href: "/marketing", label: "Pazarlama özeti", icon: IconMegaphone, exact: true },
+      { href: "/marketing/campaigns", label: "E-posta ve SMS", icon: IconSend },
+      { href: "/marketing/automations", label: "Otomasyonlar", icon: IconZap },
+      { href: "/marketing/segments", label: "Müşteri segmentleri", icon: IconTarget },
+      { href: "/marketing/popups", label: "Popup", icon: IconWindow },
+      { href: "/marketing/coupons", label: "İndirim kuponları", icon: IconPercent },
     ],
   },
   {
-    label: "İçerik ve büyüme",
+    label: "Siteler ve içerik",
     items: [
+      { href: "/tenants", label: "Tüm siteler", icon: IconGlobe },
+      { href: "/tenants/new", label: "Yeni site", icon: IconPlus },
       { href: "/content/pages", label: "Sayfalar", icon: IconFile },
       { href: "/content/banners", label: "Bannerlar", icon: IconImage },
-      { href: "/marketing", label: "Pazarlama", icon: IconMegaphone },
+    ],
+  },
+  {
+    label: "Ayarlar",
+    items: [
+      { href: "/settings/notifications", label: "Bildirimler", icon: IconBell },
+      { href: "/settings/shipping", label: "Kargo ve etiket", icon: IconTruck },
+      { href: "/integrations", label: "Eklentiler", icon: IconPuzzle, exact: true },
+      { href: "/integrations/xml", label: "XML senkron", icon: IconRefresh },
     ],
   },
   {
     label: "Sistem",
     items: [
-      { href: "/integrations/xml", label: "XML senkron", icon: IconRefresh },
       { href: "/system/users", label: "Kullanıcılar", icon: IconShield },
       { href: "/system/audit", label: "İşlem kayıtları", icon: IconList },
+      { href: "/profile", label: "Profilim", icon: IconUser },
     ],
   },
 ];
@@ -242,9 +275,17 @@ export function AdminShellClient({
                   <strong>{userName}</strong>
                   <span>{userEmail}</span>
                 </div>
+                <Link href="/profile">
+                  <IconUser />
+                  Profilim
+                </Link>
                 <Link href="/system/users">
                   <IconShield />
                   Kullanıcılar
+                </Link>
+                <Link href="/settings/notifications">
+                  <IconSettings />
+                  Ayarlar
                 </Link>
                 <form action={withBase("/api/logout")} method="post">
                   <button type="submit" className="is-danger">

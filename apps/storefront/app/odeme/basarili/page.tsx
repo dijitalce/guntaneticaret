@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { db, orders, tenantBankAccounts } from "@guntan/db";
+import { db, orderItems, orders, tenantBankAccounts } from "@guntan/db";
+import { CommerceEvent } from "../../../src/visitor-tracker";
 import { ORDER_STATUS, PAYMENT_METHOD } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
 
@@ -19,9 +20,20 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
     ? []
     : await db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, tenant.tenant.id));
   const installments = Number(order?.shippingAddress?.installments ?? "1");
+  const purchaseItems = order ? await db.select().from(orderItems).where(eq(orderItems.orderId, order.id)) : [];
+  const trackPurchase = Boolean(order) && (paidByCard || order?.shippingAddress?.paymentMethod !== PAYMENT_METHOD.CREDIT_CARD) && order?.status !== ORDER_STATUS.CANCELLED;
 
   return (
     <div className="container page-surface">
+      {trackPurchase && order ? (
+        <CommerceEvent
+          event="purchase"
+          orderNo={order.orderNo}
+          value={Number(order.grandTotal)}
+          shipping={Number(order.shippingTotal)}
+          items={purchaseItems.map((i) => ({ id: i.productId, name: i.name, price: Number(i.unitPrice), qty: i.qty }))}
+        />
+      ) : null}
       <nav className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › Sipariş onayı
       </nav>

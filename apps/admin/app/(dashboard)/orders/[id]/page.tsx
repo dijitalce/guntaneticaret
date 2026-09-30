@@ -1,13 +1,41 @@
 import Link from "next/link";
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { db, productOems, tenants } from "@guntan/db";
+import {
+  allOrderTags,
+  customerOrderStats,
+  customers,
+  db,
+  getOrderAttribution,
+  getOrderTags,
+  getShippingSettings,
+  listOrderEvents,
+  productOems,
+  returnRequests,
+  tenants,
+} from "@guntan/db";
 import { arasConfigFromEnv, arasTrackingUrl, getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
-import { IconArrowLeft, IconCheck, IconExternal, IconTruck } from "@/src/icons";
+import { IconArrowLeft, IconCheck, IconExternal, IconPrinter, IconTruck } from "@/src/icons";
+import { ConfirmButton } from "@/src/form-fields";
+import { OrderTimeline } from "@/src/order-timeline";
+import { durationText, relativeTime } from "@/src/ui-ext";
 import { withBase } from "@/src/paths";
 import { Alert, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Sipariş detayı" };
+export const dynamic = "force-dynamic";
+
+const RETURN_LABELS: Record<string, string> = { open: "Açık", approved: "Onaylandı", rejected: "Reddedildi" };
+const JOURNEY_LABEL: Record<string, string> = {
+  pv: "Sayfa",
+  product: "Ürün",
+  add_to_cart: "Sepete ekledi",
+  checkout: "Ödemeye geçti",
+  contact: "İletişim bıraktı",
+  purchase: "Satın aldı",
+  popup_view: "Popup gördü",
+  popup_click: "Popup tıkladı",
+};
 
 const PAYMENT_LABELS: Record<string, string> = { bank_transfer: "Havale / EFT", credit_card: "Kredi kartı (Garanti)" };
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -40,7 +68,7 @@ export default async function OrderDetailPage({
   if (!detail) notFound();
   const { order, items, payments, shipments } = detail;
   const productIds = [...new Set(items.map((item) => item.productId))];
-  const [tenant, oemRows] = await Promise.all([
+  const [tenant, oemRows, events, attribution, tags, knownTags, returns, stats, customer] = await Promise.all([
     db.select().from(tenants).where(eq(tenants.id, order.tenantId)).limit(1).then((rows) => rows[0]),
     productIds.length
       ? db
@@ -48,7 +76,23 @@ export default async function OrderDetailPage({
           .from(productOems)
           .where(inArray(productOems.productId, productIds))
       : Promise.resolve([] as { productId: string; raw: string }[]),
+    listOrderEvents(id).catch(() => []),
+    getOrderAttribution(id).catch(() => null),
+    getOrderTags(id).catch(() => [] as string[]),
+    allOrderTags().catch(() => [] as string[]),
+    db.select().from(returnRequests).where(eq(returnRequests.orderId, id)).orderBy(desc(returnRequests.createdAt)),
+    customerOrderStats(order.customerId, order.email).catch(() => ({ count: 0, total: 0, firstAt: null })),
+    order.customerId
+      ? db
+          .select({ id: customers.id, createdAt: customers.createdAt })
+          .from(customers)
+          .where(eq(customers.id, order.customerId))
+          .limit(1)
+          .then((r) => r[0] ?? null)
+      : Promise.resolve(null),
   ]);
+  const shipping = await getShippingSettings();
+  const openReturn = returns.find((r) => r.status === "open");
   const oemBy = new Map<string, string[]>();
   for (const oem of oemRows) {
     const list = oemBy.get(oem.productId) ?? [];
@@ -87,6 +131,10 @@ export default async function OrderDetailPage({
         actions={
           <>
             <StatusBadge tone={statusTone(order.status)}>{orderStatusLabel(order.status)}</StatusBadge>
+            <a className="btn btn-secondary" href={withBase(`/api/orders/labels?ids=${order.id}`)} target="_blank" rel="noreferrer">
+              <IconPrinter />
+              Kargo etiketi
+            </a>
             <Link className="btn btn-secondary" href="/orders">
               <IconArrowLeft />
               Listeye dön
@@ -141,13 +189,28 @@ export default async function OrderDetailPage({
                       </button>
                     </form>
                   )}
-                  <form action={withBase(`/api/orders/${order.id}/cancel`)} method="post">
-                    <button className="btn btn-danger" type="submit">
-                      Siparişi iptal et
-                    </button>
-                  </form>
                 </div>
               </div>
+            )}
+
+            {["pending_payment", "paid", "preparing"].includes(order.status) && (
+              <details className="op-block op-collapse">
+                <summary>Siparişi iptal et</summary>
+                <form action={withBase(`/api/orders/${order.id}/cancel`)} method="post" className="form-stack">
+                  <div className="field">
+                    <label htmlFor="cancel-reason">İptal sebebi</label>
+                    <input className="input" id="cancel-reason" name="reason" placeholder="Örn. Stokta kalmadı, müşteri vazgeçti" />
+                  </div>
+                  <label className="check">
+                    <input type="checkbox" name="notify" value="1" defaultChecked /> Müşteriye iptal bildirimi gönder
+                  </label>
+                  <div className="op-actions">
+                    <ConfirmButton className="btn btn-danger" message="Sipariş iptal edilsin mi? Stok rezervasyonu serbest bırakılır.">
+                      Siparişi iptal et
+                    </ConfirmButton>
+                  </div>
+                </form>
+              </details>
             )}
 
             {order.status === "paid" && (
@@ -170,11 +233,11 @@ export default async function OrderDetailPage({
                   <input type="hidden" name="mode" value="aras" />
                   <div className="field">
                     <label htmlFor="pieceCount">Koli</label>
-                    <input className="input" id="pieceCount" name="pieceCount" type="number" min={1} defaultValue={1} style={{ width: "5.5rem" }} />
+                    <input className="input" id="pieceCount" name="pieceCount" type="number" min={1} defaultValue={shipping.defaultPieces} style={{ width: "5.5rem" }} />
                   </div>
                   <div className="field">
                     <label htmlFor="weightKg">Ağırlık (kg)</label>
-                    <input className="input" id="weightKg" name="weightKg" inputMode="decimal" defaultValue="1" style={{ width: "6.5rem" }} />
+                    <input className="input" id="weightKg" name="weightKg" inputMode="decimal" defaultValue={String(shipping.defaultWeightKg).replace(".", ",")} style={{ width: "6.5rem" }} />
                   </div>
                   <button className="btn btn-primary" type="submit">
                     <IconTruck />
@@ -282,10 +345,104 @@ export default async function OrderDetailPage({
               </dl>
             </div>
           </Panel>
+
+          <Panel title="Zaman çizelgesi" description="Siparişteki tüm adımlar, bildirimler ve ekip notları">
+            <div className="panel-pad">
+              <OrderTimeline orderId={order.id} events={events} />
+            </div>
+          </Panel>
+
+          <Panel title="İadeler" description={returns.length ? `${returns.length} iade kaydı` : "Bu siparişte iade kaydı yok"}>
+            <div className="panel-pad form-stack">
+              {returns.map((r) => (
+                <div key={r.id} className="op-block">
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "center" }}>
+                    <strong>İade talebi · {formatDate(r.createdAt)}</strong>
+                    <StatusBadge tone={r.status === "approved" ? "ok" : r.status === "rejected" ? "bad" : "warn"}>
+                      {RETURN_LABELS[r.status] ?? r.status}
+                    </StatusBadge>
+                  </div>
+                  <p style={{ margin: "0.4rem 0 0" }}>{r.reason}</p>
+                  {r.status === "open" ? (
+                    <form action={withBase(`/api/orders/${order.id}/returns`)} method="post" className="form-stack" style={{ marginTop: "0.75rem" }}>
+                      <input type="hidden" name="returnId" value={r.id} />
+                      <div className="field">
+                        <label htmlFor={`ret-msg-${r.id}`}>Müşteriye mesaj (isteğe bağlı)</label>
+                        <input className="input" id={`ret-msg-${r.id}`} name="message" placeholder="Örn. Ücret iadeniz 3 iş günü içinde yapılacak" />
+                      </div>
+                      <label className="check text-sm">
+                        <input type="checkbox" name="notify" value="1" defaultChecked /> Müşteriye bildirim gönder
+                      </label>
+                      <label className="check text-sm">
+                        <input type="checkbox" name="refund" value="1" /> Onaylarsam siparişi “İade edildi” olarak işaretle
+                      </label>
+                      <div className="op-actions">
+                        <button className="btn btn-primary btn-sm" type="submit" name="_action" value="approve">
+                          İadeyi onayla
+                        </button>
+                        <button className="btn btn-secondary btn-sm" type="submit" name="_action" value="reject">
+                          Reddet
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
+                </div>
+              ))}
+              {!openReturn && ["paid", "preparing", "shipped", "completed"].includes(order.status) ? (
+                <details className="op-collapse">
+                  <summary>İade talebi oluştur</summary>
+                  <form action={withBase(`/api/orders/${order.id}/returns`)} method="post" className="form-stack" style={{ marginTop: "0.75rem" }}>
+                    <input type="hidden" name="_action" value="create" />
+                    <div className="field">
+                      <label htmlFor="ret-reason">İade sebebi</label>
+                      <textarea className="input" id="ret-reason" name="reason" rows={2} required placeholder="Örn. Yanlış parça, araca uymadı" />
+                    </div>
+                    <label className="check text-sm">
+                      <input type="checkbox" name="notify" value="1" defaultChecked /> Müşteriye “İade talebi alındı” bildirimi gönder
+                    </label>
+                    <div className="op-actions">
+                      <button className="btn btn-secondary btn-sm" type="submit">
+                        İade kaydı aç
+                      </button>
+                    </div>
+                  </form>
+                </details>
+              ) : null}
+            </div>
+          </Panel>
         </div>
 
         <div>
-          <Panel title="Müşteri" padded>
+          <Panel
+            title="Müşteri"
+            padded
+            action={
+              customer ? (
+                <Link className="btn btn-secondary btn-sm" href={`/customers/${customer.id}`}>
+                  Profil
+                </Link>
+              ) : (
+                <StatusBadge>Misafir</StatusBadge>
+              )
+            }
+          >
+            <div className="customer-box">
+              <span className="customer-avatar" aria-hidden>
+                {order.fullName
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p) => p[0]!.toLocaleUpperCase("tr-TR"))
+                  .join("")}
+              </span>
+              <div>
+                <strong>{order.fullName}</strong>
+                <span className="muted text-sm">
+                  {stats.count > 1 ? `${stats.count} sipariş · ${formatTry(stats.total)}` : "İlk siparişi"}
+                  {customer ? ` · Üye: ${formatDate(customer.createdAt, false)}` : ""}
+                </span>
+              </div>
+            </div>
             <dl className="dl">
               <div>
                 <dt>Ad soyad</dt>
@@ -307,8 +464,133 @@ export default async function OrderDetailPage({
                   <dd>{order.notes}</dd>
                 </div>
               ) : null}
+              {order.couponCode ? (
+                <div>
+                  <dt>Kupon</dt>
+                  <dd>
+                    <code>{order.couponCode}</code>
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           </Panel>
+
+          <Panel title="Etiketler" padded>
+            <form action={withBase(`/api/orders/${order.id}/tags`)} method="post" className="form-stack">
+              {tags.length ? (
+                <div className="tag-list">
+                  {tags.map((t) => (
+                    <span key={t} className="tag">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <input className="input" name="tags" defaultValue={tags.join(", ")} placeholder="Acil, toptan, servis…" list="order-tag-options" />
+              <datalist id="order-tag-options">
+                {knownTags.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+              <div className="op-actions">
+                <button className="btn btn-secondary btn-sm" type="submit">
+                  Etiketleri kaydet
+                </button>
+              </div>
+            </form>
+          </Panel>
+
+          <Panel title="Dönüşüm detayları" padded>
+            {attribution ? (
+              <dl className="dl">
+                <div>
+                  <dt>Kaynak</dt>
+                  <dd>
+                    <strong>{attribution.source ?? "Doğrudan"}</strong>
+                    {attribution.medium && attribution.medium !== "unknown" ? <span className="muted"> · {attribution.medium}</span> : null}
+                  </dd>
+                </div>
+                {attribution.campaign ? (
+                  <div>
+                    <dt>Kampanya</dt>
+                    <dd>{attribution.campaign}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Cihaz</dt>
+                  <dd>{[attribution.device, attribution.browser, attribution.os].filter(Boolean).join(" · ") || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Oturum süresi</dt>
+                  <dd>{durationText(Number(attribution.duration_sec ?? 0))}</dd>
+                </div>
+                <div>
+                  <dt>Görüntülenen sayfa</dt>
+                  <dd>{Number(attribution.pageviews ?? 0)}</dd>
+                </div>
+                {attribution.first_seen ? (
+                  <div>
+                    <dt>İlk ziyaret</dt>
+                    <dd>
+                      {formatDate(attribution.first_seen)} <span className="muted">({relativeTime(attribution.first_seen)})</span>
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Takip</dt>
+                  <dd className="tag-list">
+                    <span className={`tag${attribution.fbp || attribution.fbc ? " is-on" : ""}`}>Meta {attribution.fbc ? "(reklam tıklaması)" : attribution.fbp ? "" : "yok"}</span>
+                    <span className={`tag${attribution.ga_cid ? " is-on" : ""}`}>Google {attribution.ga_cid ? "" : "yok"}</span>
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="muted text-sm" style={{ margin: 0 }}>
+                Bu sipariş ziyaret takibi eklenmeden önce oluşturulmuş; kaynak bilgisi yok.
+              </p>
+            )}
+          </Panel>
+
+          {attribution ? (
+            <Panel title="Oturum detayları" padded>
+              <dl className="dl">
+                <div>
+                  <dt>Giriş sayfası</dt>
+                  <dd className="text-sm" style={{ wordBreak: "break-all" }}>
+                    {attribution.landing ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Yönlendiren</dt>
+                  <dd className="text-sm" style={{ wordBreak: "break-all" }}>
+                    {attribution.referrer ?? "Doğrudan giriş"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>IP adresi</dt>
+                  <dd className="mono text-sm">{attribution.ip ?? "—"}</dd>
+                </div>
+              </dl>
+              {attribution.journey.length ? (
+                <>
+                  <h3 className="subhead">Müşteri yolculuğu</h3>
+                  <ol className="journey">
+                    {attribution.journey.map((j, i) => (
+                      <li key={i}>
+                        <span className="journey-type">{JOURNEY_LABEL[j.type] ?? j.type}</span>
+                        <span className="journey-path" title={j.path ?? ""}>
+                          {j.title || j.path || "—"}
+                        </span>
+                        <span className="muted text-sm">
+                          {new Date(j.created_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" })}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : null}
+            </Panel>
+          ) : null}
 
           <Panel title="Teslimat" padded>
             <dl className="dl">

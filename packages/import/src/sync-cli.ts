@@ -9,7 +9,7 @@
  * Bayraklar: --skip-fetch (mevcut dosyalarla sadece import)
  */
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { mkdir, open, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -32,8 +32,28 @@ const STALE_LOCK_MS = 6 * 60 * 60 * 1000;
 const altayPath = process.env.ALTAY_XML_PATH || join(root, "products.xml");
 const basbugPath = process.env.BASBUG_JSON_PATH || join(root, "data/basbug/all_products.json");
 
+// Panel (XML senkron sayfası) bu dosyaları okur; deploy klasörü dışında tutulur.
+const LOG_FILE = process.env.SYNC_LOG_FILE || join(homedir(), "guntan-sync.log");
+const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(homedir(), "guntan-sync-status.json");
+const TRIGGER = process.env.SYNC_TRIGGER || "cron";
+
 function log(message: string) {
-  console.log(`[${new Date().toISOString()}] ${message}`);
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
+  try {
+    if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > 2_000_000) renameSync(LOG_FILE, `${LOG_FILE}.old`);
+    appendFileSync(LOG_FILE, `${line}\n`);
+  } catch {
+    /* log dosyası yazılamazsa senkron devam eder */
+  }
+}
+
+function writeStatus(status: Record<string, unknown>) {
+  try {
+    writeFileSync(STATUS_FILE, JSON.stringify({ trigger: TRIGGER, ...status }, null, 2));
+  } catch {
+    /* durum dosyası opsiyonel */
+  }
 }
 
 async function acquireLock(): Promise<boolean> {
@@ -68,6 +88,9 @@ async function main() {
     log("Başka bir senkron hâlâ çalışıyor, atlanıyor.");
     return 0;
   }
+  const startedAt = new Date().toISOString();
+  writeStatus({ state: "running", startedAt, pid: process.pid });
+  log(`Senkron başladı (${TRIGGER}).`);
   const errors: string[] = [];
   const step = async (name: string, fn: () => Promise<void>) => {
     log(`▶ ${name}`);
@@ -130,6 +153,7 @@ async function main() {
     await rm(LOCK_PATH, { force: true });
   }
 
+  writeStatus({ state: errors.length ? "warning" : "ok", startedAt, finishedAt: new Date().toISOString(), errors });
   if (errors.length) {
     log(`Senkron uyarılarla bitti:\n  - ${errors.join("\n  - ")}`);
     return 1;
@@ -142,6 +166,8 @@ main()
   .then((code) => process.exit(code))
   .catch(async (err) => {
     console.error(err);
+    log(`Senkron hata ile durdu: ${err instanceof Error ? err.message : String(err)}`);
+    writeStatus({ state: "failed", finishedAt: new Date().toISOString(), errors: [String(err)] });
     await rm(LOCK_PATH, { force: true });
     process.exit(1);
   });

@@ -6,11 +6,43 @@ import { useEffect } from "react";
 const GA_RE = /^(G|UA|AW)-[A-Z0-9-]{4,}$/i;
 const GTM_RE = /^GTM-[A-Z0-9]{4,}$/i;
 
-export function Analytics({ gaId, gtmId }: { gaId: string | null; gtmId: string | null }) {
+const META_RE = /^\d{6,20}$/;
+const TIKTOK_RE = /^[A-Z0-9]{8,30}$/i;
+const ADS_RE = /^AW-\d{6,15}$/i;
+
+export function Analytics({
+  gaId,
+  gtmId,
+  metaPixelId,
+  tiktokPixelId,
+  googleAdsId,
+  googleAdsLabel,
+}: {
+  gaId: string | null;
+  gtmId: string | null;
+  metaPixelId?: string | null;
+  tiktokPixelId?: string | null;
+  googleAdsId?: string | null;
+  googleAdsLabel?: string | null;
+}) {
   const ga = gaId && GA_RE.test(gaId) ? gaId : null;
   const gtm = gtmId && GTM_RE.test(gtmId) ? gtmId : null;
+  const meta = metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
+  const tiktok = tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
+  const ads = googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
+  const gtagId = ga ?? ads;
   return (
     <>
+      {meta ? (
+        <Script id="meta-pixel" strategy="afterInteractive">
+          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init',${JSON.stringify(meta)});fbq('track','PageView');`}
+        </Script>
+      ) : null}
+      {tiktok ? (
+        <Script id="tiktok-pixel" strategy="afterInteractive">
+          {`!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=r+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load(${JSON.stringify(tiktok)});ttq.page();}(window,document,'ttq');`}
+        </Script>
+      ) : null}
       {gtm ? (
         <>
           <Script id="gtm" strategy="afterInteractive">
@@ -27,11 +59,11 @@ export function Analytics({ gaId, gtmId }: { gaId: string | null; gtmId: string 
           </noscript>
         </>
       ) : null}
-      {ga ? (
+      {gtagId ? (
         <>
-          <Script src={`https://www.googletagmanager.com/gtag/js?id=${ga}`} strategy="afterInteractive" />
+          <Script src={`https://www.googletagmanager.com/gtag/js?id=${gtagId}`} strategy="afterInteractive" />
           <Script id="gtag-init" strategy="afterInteractive">
-            {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;gtag('js',new Date());gtag('config',${JSON.stringify(ga)});`}
+            {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=gtag;${ads && googleAdsLabel ? `window.__gtAdsSendTo=${JSON.stringify(`${ads}/${googleAdsLabel.replace(/[^A-Za-z0-9_-]/g, "")}`)};` : ""}gtag('js',new Date());${ga ? `gtag('config',${JSON.stringify(ga)});` : ""}${ads ? `gtag('config',${JSON.stringify(ads)});` : ""}`}
           </Script>
         </>
       ) : null}

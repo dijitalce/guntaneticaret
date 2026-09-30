@@ -73,7 +73,10 @@ export function ProductCard({
             {inStock ? "Stokta" : "Stokta yok"}
           </span>
           {inStock && product.slug && (
-            <AddToCartForm slug={product.slug}>
+            <AddToCartForm
+              slug={product.slug}
+              track={{ id: product.slug, name: product.name, price: Number(product.price ?? 0), qty: 1, brand: product.manufacturerName ?? null }}
+            >
               <button className="btn btn-primary" type="submit">
                 <span className="label-full">Sepete ekle</span>
                 <span className="label-short">Sepete</span>

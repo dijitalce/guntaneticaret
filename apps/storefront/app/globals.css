@@ -481,6 +481,26 @@ body {
 }
 .trust-item span { color: var(--primary); display: grid; }
 
+.home-banners {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0.4rem;
+}
+.home-banners.is-2 { grid-template-columns: repeat(2, 1fr); }
+.home-banners.is-3 { grid-template-columns: repeat(3, 1fr); }
+.home-banner {
+  display: block;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.home-banner img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 7; object-fit: cover; transition: transform 0.3s ease; }
+.home-banner:hover img { transform: scale(1.02); }
+@media (max-width: 760px) {
+  .home-banners.is-2, .home-banners.is-3 { grid-template-columns: 1fr; }
+}
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2623,3 +2643,32 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   font-weight: 700;
   color: var(--foreground) !important;
 }
+
+/* Kupon, stok bildirimi ve pazarlama popup'ı */
+.coupon-form { display: grid; gap: 0.35rem; margin: 0.9rem 0 0.4rem; }
+.coupon-form label { font-size: 0.85rem; font-weight: 600; }
+.coupon-row { display: flex; gap: 0.4rem; }
+.coupon-row .input { flex: 1; min-width: 0; text-transform: uppercase; }
+.coupon-remove { font-size: 0.8rem; color: var(--muted-foreground); }
+.cart-summary-rows .is-discount dd { color: #15803d; font-weight: 600; }
+.stock-alert { display: grid; gap: 0.4rem; margin-top: 0.8rem; }
+.stock-alert label { font-weight: 600; font-size: 0.92rem; }
+.stock-alert-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.stock-alert-row input { flex: 1; min-width: 200px; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; font: inherit; }
+.stock-alert-done { margin-top: 0.8rem; color: #15803d; font-weight: 600; }
+.stock-alert-err { color: var(--destructive); }
+.mk-popup-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.55); display: grid; place-items: center; padding: 1rem; animation: mk-fade 0.2s ease; }
+.mk-popup { position: relative; width: min(440px, 100%); background: var(--card, #fff); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3); }
+.mk-popup-close { position: absolute; top: 0.5rem; right: 0.6rem; width: 2rem; height: 2rem; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.9); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.mk-popup-img { display: block; width: 100%; max-height: 220px; object-fit: cover; }
+.mk-popup-body { padding: 1.4rem; display: grid; gap: 0.7rem; text-align: center; }
+.mk-popup-body h2 { margin: 0; font-size: 1.35rem; }
+.mk-popup-body p { margin: 0; color: var(--muted-foreground); }
+.mk-popup-form { display: grid; gap: 0.5rem; }
+.mk-popup-form input { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; font: inherit; }
+.mk-popup-form button, .mk-popup-cta { border: 0; border-radius: 10px; padding: 0.8rem; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; text-decoration: none; display: block; }
+.mk-popup-legal { color: var(--muted-foreground); font-size: 0.72rem; }
+.mk-popup-err { color: var(--destructive); }
+.mk-popup-code { display: block; border: 2px dashed var(--primary); border-radius: 10px; padding: 0.6rem; font-size: 1.2rem; font-weight: 800; letter-spacing: 0.08em; }
+.mk-popup-done { display: grid; gap: 0.4rem; }
+@keyframes mk-fade { from { opacity: 0; } to { opacity: 1; } }

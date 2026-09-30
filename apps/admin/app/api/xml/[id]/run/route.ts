@@ -1,24 +1,14 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_ADMIN_SESSION, QUEUE_NAMES } from "@guntan/config";
-import { getAdminBySession } from "@guntan/auth";
-import { runXmlImport } from "@guntan/import";
-import { Queue } from "bullmq";
-import IORedis from "ioredis";
-import { adminRedirect } from "../../../../../src/paths";
+import { writeAudit } from "@guntan/observability";
+import { apiAdminSession, redirectTo } from "../../../../../src/api-helpers";
+import { startServerSync } from "../../../../../src/server-sync";
 
+/** Eski "feed'i çalıştır" düğmesi: dosya yolu bilgisayara bağlı olabileceği için tam sunucu senkronunu başlatır. */
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const token = (await cookies()).get(COOKIE_ADMIN_SESSION)?.value;
-  const session = token ? await getAdminBySession(token) : null;
-  if (!session) return NextResponse.redirect(adminRedirect("/login", request), 303);
+  const session = await apiAdminSession();
+  if (!session) return redirectTo(request, "/login");
   const { id } = await ctx.params;
-  try {
-    const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
-    const queue = new Queue(QUEUE_NAMES.XML_IMPORT, { connection });
-    await queue.add("run", { feedId: id });
-    await connection.quit();
-  } catch {
-    await runXmlImport(id);
-  }
-  return NextResponse.redirect(adminRedirect("/integrations/xml", request), 303);
+  const result = startServerSync({ trigger: `panel:${session.user.email}` });
+  if (!result.ok) return redirectTo(request, "/integrations/xml", { hata: result.error });
+  await writeAudit({ actorId: session.user.id, actorEmail: session.user.email, entity: "supplier_sync", entityId: id, action: "run_full" });
+  return redirectTo(request, "/integrations/xml", { ok: "basladi" });
 }

@@ -18,6 +18,8 @@ import {
   type ListingQuery,
 } from "@guntan/catalog";
 import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
+import { banners, db } from "@guntan/db";
+import { and, asc, eq } from "drizzle-orm";
 
 const LISTING_CACHE_TTL_SECONDS = 90;
 const PRODUCT_CACHE_TTL_SECONDS = 300;
@@ -32,6 +34,25 @@ export const cachedVisibleBrands = cache(async (tenantId: string) => {
   if (rows.length === 0) return listVisibleBrands(tenantId);
   return rows;
 });
+
+export const cachedBanners = cache((tenantId: string) =>
+  unstable_cache(
+    async () => {
+      try {
+        return await db
+          .select({ id: banners.id, title: banners.title, imageUrl: banners.imageUrl, href: banners.href, placement: banners.placement })
+          .from(banners)
+          .where(and(eq(banners.tenantId, tenantId), eq(banners.isActive, 1)))
+          .orderBy(asc(banners.sortOrder), asc(banners.createdAt))
+          .limit(24);
+      } catch {
+        return [];
+      }
+    },
+    ["banners", tenantId],
+    { revalidate: 60 },
+  )(),
+);
 
 export const cachedPopularCategories = cache((limit = 8) => {
   return unstable_cache(

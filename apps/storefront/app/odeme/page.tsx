@@ -7,9 +7,10 @@ import {
   getCartView,
   getOrCreateCart,
   installmentOptions,
-  shippingAmountForSubtotal,
+  shippingFeeFor,
 } from "@guntan/ecommerce";
-import { customerAddresses, db } from "@guntan/db";
+import { customerAddresses, db, evaluateCoupon } from "@guntan/db";
+import { CommerceEvent } from "../../src/visitor-tracker";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
 import { CheckoutForm } from "./form";
@@ -17,7 +18,7 @@ import { CheckoutForm } from "./form";
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hata?: string; mesaj?: string }>;
+  searchParams: Promise<{ hata?: string; mesaj?: string; kupon?: string }>;
 }) {
   const sp = await searchParams;
   const garanti = garantiConfigFromEnv();
@@ -46,7 +47,10 @@ export default async function CheckoutPage({
 
   const cart = await getOrCreateCart(tenant.tenant.id, user?.id, sessionId);
   const view = await getCartView(cart.id);
-  const shippingFee = shippingAmountForSubtotal(view.subtotal);
+  const couponInput = (sp.kupon ?? "").trim().slice(0, 64);
+  const coupon = couponInput ? await evaluateCoupon(tenant.tenant.id, couponInput, view.subtotal) : null;
+  const discount = coupon?.ok ? coupon.discount : 0;
+  const shippingFee = await shippingFeeFor(view.subtotal - discount, { freeShipping: coupon?.ok ? coupon.freeShipping : false });
 
   if (view.items.length === 0) {
     return (
@@ -139,6 +143,16 @@ export default async function CheckoutPage({
           tekrar dene.
         </p>
       )}
+      {sp.hata === "kupon" && (
+        <p className="account-alert is-bad" role="alert">
+          {sp.mesaj || "Kupon kodu uygulanamadı."}
+        </p>
+      )}
+      {coupon && !coupon.ok && (
+        <p className="account-alert is-bad" role="alert">
+          {coupon.error}
+        </p>
+      )}
       {sp.hata === "kart" && (
         <p className="account-alert is-bad" role="alert">
           Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetin duruyor; tekrar deneyebilir veya
@@ -156,14 +170,22 @@ export default async function CheckoutPage({
           imageUrl: i.imageUrl,
         }))}
         subtotal={view.subtotal}
+        discount={discount}
+        couponCode={coupon?.ok ? coupon.code : ""}
+        couponInput={couponInput}
         shippingFee={shippingFee}
         card={
           garanti
-            ? { testMode: garanti.mode === "TEST", options: installmentOptions(view.subtotal + shippingFee, garanti) }
+            ? { testMode: garanti.mode === "TEST", options: installmentOptions(Math.max(0, view.subtotal - discount) + shippingFee, garanti) }
             : null
         }
         placeholder={placeholder}
         defaults={defaults}
+      />
+      <CommerceEvent
+        event="begin_checkout"
+        items={view.items.map((i) => ({ id: i.productId, name: i.name, price: Number(i.price), qty: i.qty }))}
+        value={Math.max(0, view.subtotal - discount)}
       />
     </div>
   );

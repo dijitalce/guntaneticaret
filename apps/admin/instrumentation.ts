@@ -9,4 +9,8 @@ export async function register() {
   process.on("unhandledRejection", (reason) => {
     console.error("[unhandledRejection] keeping process alive:", reason);
   });
+
+  // Otomasyonlar (terk edilmiş sepet, havale hatırlatma/iptal, stok bildirimleri, kampanya kuyruğu).
+  const { startAutomationScheduler } = await import("@guntan/db");
+  startAutomationScheduler();
 }

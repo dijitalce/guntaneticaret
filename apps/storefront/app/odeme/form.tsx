@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { beacon } from "../../src/track";
 import { VAT_RATE, vatBreakdown } from "../../src/vat";
 
 function money(n: number) {
@@ -105,6 +106,9 @@ export type CardInstallmentOption = { count: number; total: number; monthly: num
 export function CheckoutForm({
   items,
   subtotal,
+  discount = 0,
+  couponCode = "",
+  couponInput = "",
   shippingFee,
   card,
   placeholder,
@@ -112,6 +116,9 @@ export function CheckoutForm({
 }: {
   items: CheckoutLine[];
   subtotal: number;
+  discount?: number;
+  couponCode?: string;
+  couponInput?: string;
   shippingFee: number;
   card: { testMode: boolean; options: CardInstallmentOption[] } | null;
   placeholder: string;
@@ -122,7 +129,7 @@ export function CheckoutForm({
     card ? "credit_card" : "bank_transfer",
   );
   const [installments, setInstallments] = useState(1);
-  const baseTotal = subtotal + shippingFee;
+  const baseTotal = Math.max(0, subtotal - discount) + shippingFee;
   const selectedOption = card?.options.find((o) => o.count === installments);
   const payTotal = paymentMethod === "credit_card" && selectedOption ? selectedOption.total : baseTotal;
   const installmentFee = Math.round((payTotal - baseTotal) * 100) / 100;
@@ -134,7 +141,22 @@ export function CheckoutForm({
   return (
     <div className="checkout-layout">
       <div className="checkout-main">
-        <form className="checkout-form-stack" action="/api/checkout" method="post" id="checkout-form">
+        <form
+          className="checkout-form-stack"
+          action="/api/checkout"
+          method="post"
+          id="checkout-form"
+          onBlur={(e) => {
+            const target = e.target as unknown as HTMLInputElement;
+            if (!["email", "phone", "fullName"].includes(target.name)) return;
+            const data = new FormData(e.currentTarget);
+            const email = String(data.get("email") ?? "");
+            const phone = String(data.get("phone") ?? "");
+            if (!email.includes("@") && phone.replace(/\D/g, "").length < 10) return;
+            beacon({ t: "contact", p: "/odeme", email, phone, name: String(data.get("fullName") ?? "") });
+          }}
+        >
+          <input type="hidden" name="couponCode" value={couponCode} />
           <section className="checkout-form-card">
             <h2>İletişim</h2>
             <p className="checkout-lead muted">Sipariş bilgilendirmesi ve kargo için kullanılır.</p>
@@ -408,9 +430,15 @@ export function CheckoutForm({
             <dt>Ürün ({itemCount})</dt>
             <dd>{money(subtotal)}</dd>
           </div>
+          {discount > 0 ? (
+            <div className="is-discount">
+              <dt>İndirim ({couponCode})</dt>
+              <dd>-{money(discount)}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>Kargo</dt>
-            <dd>{money(shippingFee)}</dd>
+            <dd>{shippingFee === 0 ? "Ücretsiz" : money(shippingFee)}</dd>
           </div>
           {installmentFee > 0 && (
             <div>
@@ -431,6 +459,16 @@ export function CheckoutForm({
             <dd>{money(payTotal)}</dd>
           </div>
         </dl>
+        <form className="coupon-form" action="/odeme" method="get">
+          <label htmlFor="kupon">İndirim kodu</label>
+          <div className="coupon-row">
+            <input className="input" id="kupon" name="kupon" defaultValue={couponCode || couponInput} placeholder="Kupon kodu" autoComplete="off" />
+            <button className="btn btn-secondary" type="submit">
+              {couponCode ? "Değiştir" : "Uygula"}
+            </button>
+          </div>
+          {couponCode ? <a className="coupon-remove" href="/odeme">Kuponu kaldır</a> : null}
+        </form>
         <p className="cart-summary-note muted">KDV dahil fiyat. Stok siparişte rezerve edilir.</p>
         <button className="btn btn-primary" type="submit" form="checkout-form">
           {paymentMethod === "credit_card" ? "Kartla öde" : "Siparişi oluştur"}

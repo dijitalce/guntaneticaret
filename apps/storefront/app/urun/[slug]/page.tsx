@@ -9,6 +9,8 @@ import { pageTitle } from "../../../src/seo";
 import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
+import { CommerceEvent } from "../../../src/visitor-tracker";
+import { StockAlertForm } from "../../../src/stock-alert-form";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
 
 export const revalidate = 300;
@@ -72,6 +74,10 @@ export default async function ProductPage({
   return (
     <div className="container page-surface">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <CommerceEvent
+        event="view_item"
+        items={[{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }]}
+      />
       <nav className="breadcrumb">
         <Link href="/">Ana Sayfa</Link>
         {fit && (
@@ -124,7 +130,11 @@ export default async function ProductPage({
             </p>
           )}
           {inStock ? (
-            <AddToCartForm className="pdp-cart" slug={product.slug}>
+            <AddToCartForm
+              className="pdp-cart"
+              slug={product.slug}
+              track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
+            >
               <label>
                 Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} />
               </label>
@@ -145,6 +155,7 @@ export default async function ProductPage({
           ) : (
             <div className="pdp-cart">
               <p className="muted">Bu ürün şu an stokta yok. Tedarik durumu için bize ulaşın.</p>
+              <StockAlertForm productId={product.id} />
               {whatsappHref && (
                 <div className="pdp-actions">
                   <a className="btn btn-primary" href={whatsappHref}>

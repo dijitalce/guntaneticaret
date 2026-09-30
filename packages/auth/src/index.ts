@@ -7,6 +7,7 @@ import {
   customerSessions,
   customers,
   db,
+  getCustomerMeta,
   newId,
   rolePermissions,
   roles,
@@ -84,6 +85,7 @@ export async function createCustomer({
 export async function loginCustomer(email: string, password: string) {
   const [user] = await db.select().from(customers).where(eq(customers.email, email.toLowerCase().trim())).limit(1);
   if (!user || !verifyPassword(password, user.passwordHash)) return null;
+  if ((await getCustomerMeta(user.id).catch(() => null))?.is_blocked) return null;
   const token = randomBytes(32).toString("hex");
   await db.insert(customerSessions).values({
     customerId: user.id,
@@ -181,7 +183,7 @@ export async function getAdminBySession(token: string) {
     .limit(1);
   if (!session || new Date(session.expiresAt) < new Date()) return null;
   const [user] = await db.select().from(adminUsers).where(eq(adminUsers.id, session.adminUserId)).limit(1);
-  if (!user) return null;
+  if (!user || user.isActive !== "true") return null;
   const perms = await db
     .select({ key: permissionTable.key })
     .from(adminUserRoles)

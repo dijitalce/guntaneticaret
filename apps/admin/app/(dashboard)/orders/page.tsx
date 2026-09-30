@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { and, count, desc, eq, like, or, type SQL } from "drizzle-orm";
-import { db, orders, tenants } from "@guntan/db";
+import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
-import { IconBank, IconCard, IconCart, IconSearch } from "@/src/icons";
+import { IconBank, IconCard, IconCart, IconPrinter, IconSearch } from "@/src/icons";
 import { withBase } from "@/src/paths";
 import { EmptyState, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
@@ -53,6 +53,7 @@ export default async function OrdersPage({
       .offset((page - 1) * PAGE_SIZE),
   ]);
   const total = totalRows[0]?.total ?? 0;
+  const tagMap = await tagsForOrders(rows.map((o) => o.id)).catch(() => new Map<string, string[]>());
 
   const nameBy = Object.fromEntries(tenantRows.map((t) => [t.id, t.name]));
   const countBy = Object.fromEntries(statusCounts.map((r) => [r.status, r.n]));
@@ -69,7 +70,18 @@ export default async function OrdersPage({
 
   return (
     <>
-      <PageHeader title="Siparişler" description="Ödeme, hazırlık, kargo ve teslim adımlarını sipariş detayından yönetin." />
+      <PageHeader
+        title="Siparişler"
+        description="Ödeme, hazırlık, kargo ve teslim adımlarını sipariş detayından yönetin."
+        actions={
+          <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank">
+            <button className="btn btn-secondary" type="submit">
+              <IconPrinter />
+              Seçilenlerin etiketini yazdır
+            </button>
+          </form>
+        }
+      />
 
       <Panel>
         <nav className="tabs" aria-label="Sipariş durumu">
@@ -122,6 +134,7 @@ export default async function OrdersPage({
             <table className="table">
               <thead>
                 <tr>
+                  <th style={{ width: 28 }} aria-label="Seç" />
                   <th>Sipariş</th>
                   <th>Müşteri</th>
                   {tenantRows.length > 1 ? <th>Site</th> : null}
@@ -138,8 +151,20 @@ export default async function OrdersPage({
                   return (
                     <tr key={o.id}>
                       <td>
+                        <input type="checkbox" name="ids" value={o.id} form="bulk-labels" aria-label={`${o.orderNo} seç`} />
+                      </td>
+                      <td>
                         <Link href={`/orders/${o.id}`}>{o.orderNo}</Link>
                         <span className="sub">{formatDate(o.createdAt)}</span>
+                        {tagMap.get(o.id)?.length ? (
+                          <span className="tag-list">
+                            {tagMap.get(o.id)!.map((t) => (
+                              <span key={t} className="tag">
+                                {t}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         {o.fullName}

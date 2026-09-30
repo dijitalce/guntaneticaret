@@ -8,6 +8,9 @@ import "./globals.css";
 import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { metadataBaseForHost, pageTitle, tenantNoIndex, tenantVerification } from "../src/seo";
 import { Analytics, CustomScripts } from "../src/analytics";
+import { VisitorTracker } from "../src/visitor-tracker";
+import { MarketingPopup } from "../src/marketing-popup";
+import { getActivePopup } from "@guntan/db";
 import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { BrandMark } from "../src/brand-mark";
 import { SearchBox } from "../src/search-box";
@@ -82,10 +85,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
   }
-  const [brands, categories] = await Promise.all([
+  const [brands, categories, popup] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedPopularCategories(8),
+    getActivePopup(tenant.tenant.id),
   ]);
+  const social = (tenant.social ?? {}) as Record<string, string>;
   const navCats = categories.filter((c) => !c.parentId);
   const allParts = allCatalogHref(tenant);
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
@@ -206,7 +211,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </footer>
         {tenant.footerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.footerHtml }} /> : null}
-        <Analytics gaId={tenant.gaId} gtmId={tenant.gtmId} />
+        <Analytics
+          gaId={tenant.gaId}
+          gtmId={tenant.gtmId}
+          metaPixelId={social.metaPixelId}
+          tiktokPixelId={social.tiktokPixelId}
+          googleAdsId={social.googleAdsId}
+          googleAdsLabel={social.googleAdsLabel}
+        />
+        <VisitorTracker />
+        {popup ? <MarketingPopup popup={popup} /> : null}
         {tenant.customScripts ? <CustomScripts html={tenant.customScripts} /> : null}
       </body>
     </html>

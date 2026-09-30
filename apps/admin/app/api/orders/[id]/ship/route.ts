@@ -18,13 +18,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (viaAras) {
       const pieceCount = Number(form.get("pieceCount") ?? "1") || 1;
       const weightKg = Number(String(form.get("weightKg") ?? "1").replace(",", ".")) || 1;
-      const result = await shipOrderWithAras(id, { pieceCount, weightKg });
+      const result = await shipOrderWithAras(id, { pieceCount, weightKg }, session.user.name || session.user.email);
       after = { carrier: "Aras Kargo", integration: true, pieceCount, weightKg, arasMessage: result.message };
     } else {
       await shipOrder(id, {
         carrier: String(form.get("carrier") ?? ""),
         trackingNo: String(form.get("trackingNo") ?? ""),
-      });
+      }, session.user.name || session.user.email);
       after = { carrier: form.get("carrier"), trackingNo: form.get("trackingNo") };
     }
     await writeAudit({

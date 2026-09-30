@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { cachedFeaturedProducts, cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
+import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { getTenant } from "../src/tenant";
 import { ProductCard } from "../src/product-card";
 import { VehicleFinder } from "../src/vehicle-finder";
@@ -42,11 +42,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function HomePage() {
   const tenant = await getTenant();
-  const [brands, featured, cats] = await Promise.all([
+  const [brands, featured, cats, bannerRows] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedFeaturedProducts(tenant.tenant.id, 8),
     cachedPopularCategories(8),
+    cachedBanners(tenant.tenant.id),
   ]);
+  const sliderBanners = bannerRows.filter((b) => b.placement === "home_slider");
+  const middleBanners = bannerRows.filter((b) => b.placement === "home_middle").slice(0, 3);
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const seoBody =
@@ -100,7 +103,7 @@ export default async function HomePage() {
         />
         <div className="home-ia-main">
           <HomeSlider
-            slides={[
+            slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
               {
                 alt: "Aracınıza uygun parçalar — motor, fren, süspansiyon. Hemen incele.",
                 href: "#finder",
@@ -125,6 +128,16 @@ export default async function HomePage() {
         <div className="trust-item"><span><IconBox /></span>Stokta ürün</div>
         <div className="trust-item"><span><IconShield /></span>Havale ile güvenli ödeme</div>
       </div>
+
+      {middleBanners.length > 0 && (
+        <section className={`home-banners is-${middleBanners.length}`} aria-label="Kampanyalar">
+          {middleBanners.map((b) => (
+            <Link key={b.id} href={b.href || "/arama"} className="home-banner">
+              <img src={b.imageUrl} alt={b.title} loading="lazy" />
+            </Link>
+          ))}
+        </section>
+      )}
 
       {rootCats.length > 0 && (
         <section className="home-categories" aria-labelledby="home-cats-title">

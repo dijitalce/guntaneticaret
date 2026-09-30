@@ -11,3 +11,4 @@ export {
 } from "./visibility";
 export { pruneUnusedCatalog, type PruneStats } from "./prune-catalog";
 export { ensureAppSettingsTable, getAppSetting, setAppSetting } from "./app-settings";
+export * from "./ext";

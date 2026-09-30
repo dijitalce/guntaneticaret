@@ -13,7 +13,7 @@ async function loadPage(slug: string) {
   const [page] = await db
     .select()
     .from(pages)
-    .where(and(eq(pages.tenantId, tenant.tenant.id), eq(pages.slug, slug)))
+    .where(and(eq(pages.tenantId, tenant.tenant.id), eq(pages.slug, slug), eq(pages.isPublished, 1)))
     .limit(1);
   return page ?? null;
 }

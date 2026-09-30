@@ -13,6 +13,15 @@ import {
   tenantBankAccounts,
   tenantCatalogIndex,
   tenantSeesAllCatalog,
+  addOrderEventSafe,
+  attachOrderAttribution,
+  evaluateCoupon,
+  getCustomerMeta,
+  getShippingSettings,
+  markCouponUsed,
+  notifyOrder,
+  notifyOrderInBackground,
+  sendServerPurchaseInBackground,
 } from "@guntan/db";
 import { amountWithInstallment, garantiConfigFromEnv, getPaymentProvider } from "@guntan/payments";
 import {
@@ -201,11 +210,20 @@ export async function cartQty(tenantId: string, sessionId?: string | null, custo
   return Number(row?.n ?? 0);
 }
 
+/** Kargo ayarlarındaki sabit ücret ve ücretsiz kargo eşiğine göre tutar. */
+export async function shippingFeeFor(subtotal: number, opts: { freeShipping?: boolean } = {}): Promise<number> {
+  if (opts.freeShipping) return 0;
+  const s = await getShippingSettings().catch(() => null);
+  if (!s) return shippingAmountForSubtotal(subtotal);
+  if (s.freeShippingThreshold > 0 && subtotal >= s.freeShippingThreshold) return 0;
+  return Math.max(0, Number(s.flatFee) || 0);
+}
+
 export async function getCartSummary(tenantId: string, sessionId?: string | null, customerId?: string | null) {
   const empty = {
     qty: 0,
     subtotal: 0,
-    shippingAmount: shippingAmountForSubtotal(0),
+    shippingAmount: await shippingFeeFor(0),
     items: [] as Array<{
       id: string;
       name: string;
@@ -222,7 +240,7 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
 
   const view = await getCartView(cartId);
   const qty = view.items.reduce((sum, i) => sum + i.qty, 0);
-  const shippingAmount = shippingAmountForSubtotal(view.subtotal);
+  const shippingAmount = await shippingFeeFor(view.subtotal);
   return {
     qty,
     subtotal: view.subtotal,
@@ -309,12 +327,20 @@ export async function checkout(input: {
   acceptMarketing?: boolean;
   /** Verilirse kartla ödeme: sepet ödeme onayına kadar korunur. */
   card?: { installments: number };
+  couponCode?: string;
+  /** Ziyaret oturumu (kaynak/cihaz bilgisi siparişe kopyalanır). */
+  visitorSessionId?: string | null;
+  clientIp?: string | null;
+  userAgent?: string | null;
 }) {
   const garanti = input.card ? garantiConfigFromEnv() : null;
   if (input.card && !garanti) throw new Error("Kartla ödeme şu an kullanılamıyor.");
   await expireStaleCardOrders().catch(() => undefined);
   const view = await getCartView(input.cartId);
   if (view.items.length === 0) throw new Error("Sepet boş.");
+  if (input.customerId && (await getCustomerMeta(input.customerId).catch(() => null))?.is_blocked) {
+    throw new Error("Hesabınız sipariş vermeye kapalı. Lütfen bizimle iletişime geçin.");
+  }
   if (!input.billing.city || !input.billing.district || !input.billing.line1) {
     throw new Error("Fatura adresi eksik.");
   }
@@ -337,9 +363,20 @@ export async function checkout(input: {
     }
   }
 
-  const quotes = await getShippingProvider().quote({ subtotal: view.subtotal, city: input.shipping.city });
-  const shipping = Number(quotes[0]?.amount ?? 0);
-  const baseTotal = view.subtotal + shipping;
+  let discount = 0;
+  let couponId: string | null = null;
+  let couponCode: string | null = null;
+  let freeShipping = false;
+  if (input.couponCode?.trim()) {
+    const coupon = await evaluateCoupon(input.tenantId, input.couponCode, view.subtotal);
+    if (!coupon.ok) throw new Error(coupon.error);
+    discount = coupon.discount;
+    couponId = coupon.couponId;
+    couponCode = coupon.code;
+    freeShipping = coupon.freeShipping;
+  }
+  const shipping = await shippingFeeFor(view.subtotal - discount, { freeShipping });
+  const baseTotal = Math.max(0, view.subtotal - discount) + shipping;
   let installments = 1;
   let grand = baseTotal;
   if (input.card && garanti) {
@@ -387,8 +424,9 @@ export async function checkout(input: {
     },
     subtotal: view.subtotal.toFixed(2),
     shippingTotal: shipping.toFixed(2),
-    discountTotal: "0.00",
+    discountTotal: discount.toFixed(2),
     grandTotal: grand.toFixed(2),
+    couponCode,
     notes: input.notes?.trim() || null,
   };
   await db.insert(orders).values(order);
@@ -418,6 +456,22 @@ export async function checkout(input: {
     providerRef: orderNo,
   });
 
+  if (couponId) await markCouponUsed(couponId).catch(() => undefined);
+  await addOrderEventSafe({
+    orderId: order.id,
+    kind: "created",
+    title: input.card ? "Sipariş oluşturuldu, kart ödemesi bekleniyor" : "Sipariş oluşturuldu (Havale / EFT)",
+    body: couponCode ? `Kupon: ${couponCode} (-${discount.toFixed(2)} TL)` : null,
+    actor: "Müşteri",
+  });
+  await attachOrderAttribution({
+    orderId: order.id,
+    sid: input.visitorSessionId,
+    cartId: input.cartId,
+    ip: input.clientIp,
+    ua: input.userAgent,
+  }).catch(() => undefined);
+
   if (input.card) {
     const [savedOrder] = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);
     return { order: savedOrder!, intent: null };
@@ -436,10 +490,12 @@ export async function checkout(input: {
 
   await db.delete(cartItems).where(eq(cartItems.cartId, input.cartId));
   const [savedOrder] = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);
+  notifyOrderInBackground(order.id, "order_created_bank");
+  sendServerPurchaseInBackground(order.id);
   return { order: savedOrder!, intent };
 }
 
-export async function confirmBankTransfer(orderId: string) {
+export async function confirmBankTransfer(orderId: string, actor?: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order || order.status !== ORDER_STATUS.PENDING_PAYMENT) throw new Error("Sipariş onaylanamaz.");
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
@@ -454,21 +510,33 @@ export async function confirmBankTransfer(orderId: string) {
   }
   await db.update(orders).set({ status: ORDER_STATUS.PAID }).where(eq(orders.id, orderId));
   await db.update(payments).set({ status: PAYMENT_STATUS.CONFIRMED }).where(eq(payments.orderId, orderId));
+  await addOrderEventSafe({ orderId, kind: "payment", title: "Havale ödemesi onaylandı", body: `Tutar: ${order.grandTotal} TL`, actor });
+  notifyOrderInBackground(orderId, "payment_confirmed");
   return order;
 }
 
-export async function cancelOrder(orderId: string) {
+export async function cancelOrder(orderId: string, opts: { actor?: string; reason?: string; notify?: boolean } = {}) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order || order.status !== ORDER_STATUS.PENDING_PAYMENT) throw new Error("Sipariş iptal edilemez.");
+  const wasPaid = order?.status === ORDER_STATUS.PAID || order?.status === ORDER_STATUS.PREPARING;
+  if (!order || (order.status !== ORDER_STATUS.PENDING_PAYMENT && !wasPaid)) throw new Error("Sipariş iptal edilemez.");
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
   for (const item of items) {
     await db
       .update(products)
-      .set({ reservedQty: sql`greatest(${products.reservedQty} - ${item.qty}, 0)` })
+      .set(
+        wasPaid
+          ? { stockQty: sql`${products.stockQty} + ${item.qty}` }
+          : { reservedQty: sql`greatest(${products.reservedQty} - ${item.qty}, 0)` },
+      )
       .where(eq(products.id, item.productId));
   }
   await db.update(orders).set({ status: ORDER_STATUS.CANCELLED }).where(eq(orders.id, orderId));
-  await db.update(payments).set({ status: PAYMENT_STATUS.CANCELLED }).where(eq(payments.orderId, orderId));
+  if (!wasPaid) await db.update(payments).set({ status: PAYMENT_STATUS.CANCELLED }).where(eq(payments.orderId, orderId));
+  const body = [opts.reason, wasPaid ? "Ödeme alınmıştı: tutarın müşteriye iadesini banka üzerinden yapmayı unutmayın. Stok geri eklendi." : null]
+    .filter(Boolean)
+    .join(" · ");
+  await addOrderEventSafe({ orderId, kind: "status", title: "Sipariş iptal edildi", body: body || null, actor: opts.actor });
+  if (opts.notify) notifyOrderInBackground(orderId, "order_cancelled");
 }
 
 const CARD_ORDER_TTL_MINUTES = 30;
@@ -487,7 +555,7 @@ export async function expireStaleCardOrders() {
       ),
     )
     .limit(50);
-  for (const row of stale) await cancelOrder(row.id).catch(() => undefined);
+  for (const row of stale) await cancelOrder(row.id, { reason: `Kart ödemesi ${CARD_ORDER_TTL_MINUTES} dakika içinde tamamlanmadı; stok rezervasyonu bırakıldı.` }).catch(() => undefined);
   return stale.length;
 }
 
@@ -545,6 +613,9 @@ export async function confirmCardPayment(
 
   const cartId = order.shippingAddress?.cartId;
   if (cartId) await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
+  await addOrderEventSafe({ orderId: order.id, kind: "payment", title: "Kart ödemesi onaylandı", body: ref ? `Banka referansı: ${ref}` : null, actor: "Garanti BBVA" });
+  notifyOrderInBackground(order.id, "order_created");
+  sendServerPurchaseInBackground(order.id);
   return { order, alreadyPaid: false };
 }
 
@@ -552,19 +623,22 @@ export async function confirmCardPayment(
 export async function failCardPayment(orderNo: string) {
   const found = await getCardOrder(orderNo);
   if (!found || found.order.status !== ORDER_STATUS.PENDING_PAYMENT) return;
-  await cancelOrder(found.order.id);
+  await cancelOrder(found.order.id, { reason: "Kart ödemesi banka tarafından onaylanmadı." });
 }
 
-export async function markOrderPreparing(orderId: string) {
+export async function markOrderPreparing(orderId: string, actor?: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order || order.status !== ORDER_STATUS.PAID) throw new Error("Sipariş hazırlanamaz.");
   await db.update(orders).set({ status: ORDER_STATUS.PREPARING, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  await addOrderEventSafe({ orderId, kind: "status", title: "Sipariş hazırlanıyor", actor });
+  notifyOrderInBackground(orderId, "order_preparing");
   return order;
 }
 
 export async function shipOrder(
   orderId: string,
   input: { carrier?: string; trackingNo?: string } = {},
+  actor?: string,
 ) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order || (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.PREPARING)) {
@@ -590,13 +664,16 @@ export async function shipOrder(
     });
   }
   await db.update(orders).set({ status: ORDER_STATUS.SHIPPED, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  const carrierText = [input.carrier?.trim(), input.trackingNo?.trim() ? `takip no ${input.trackingNo.trim()}` : ""].filter(Boolean).join(" · ");
+  await addOrderEventSafe({ orderId, kind: "shipment", title: "Kargoya verildi", body: carrierText || null, actor });
+  if (input.trackingNo?.trim() || input.carrier !== ARAS_CARRIER) notifyOrderInBackground(orderId, "order_shipped");
   return order;
 }
 
 export const ARAS_CARRIER = "Aras Kargo";
 
 /** Aras'ta gönderi kaydı açar (entegrasyon kodu = sipariş no) ve siparişi kargoya verildi yapar. */
-export async function shipOrderWithAras(orderId: string, input: { pieceCount?: number; weightKg?: number } = {}) {
+export async function shipOrderWithAras(orderId: string, input: { pieceCount?: number; weightKg?: number } = {}, actor?: string) {
   const config = arasConfigFromEnv();
   if (!config) throw new Error("Aras Kargo entegrasyonu ayarlı değil.");
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
@@ -617,7 +694,7 @@ export async function shipOrderWithAras(orderId: string, input: { pieceCount?: n
     description: items.map((i) => `${i.qty}x ${i.sku}`).join(", ").slice(0, 200),
   });
   if (!result.ok) throw new Error(`Aras gönderi kaydı reddedildi: ${result.message || result.code}`);
-  await shipOrder(orderId, { carrier: ARAS_CARRIER });
+  await shipOrder(orderId, { carrier: ARAS_CARRIER }, actor);
   return result;
 }
 
@@ -646,10 +723,12 @@ export async function syncArasShipments(log: (msg: string) => void = () => undef
           .set({ trackingNo: t.trackingNo, updatedAt: new Date() })
           .where(eq(shipments.id, row.shipmentId));
         stats.tracked++;
+        await addOrderEventSafe({ orderId: row.orderId, kind: "shipment", title: "Aras takip numarası alındı", body: t.trackingNo, actor: "Aras Kargo" });
+        if (!row.trackingNo) await notifyOrder(row.orderId, "order_shipped");
         log(`${row.orderNo}: takip no ${t.trackingNo}`);
       }
       if (t.delivered) {
-        await completeOrder(row.orderId);
+        await completeOrder(row.orderId, "Aras Kargo");
         stats.delivered++;
         log(`${row.orderNo}: teslim edildi`);
       }
@@ -661,7 +740,7 @@ export async function syncArasShipments(log: (msg: string) => void = () => undef
   return stats;
 }
 
-export async function completeOrder(orderId: string) {
+export async function completeOrder(orderId: string, actor?: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (!order || order.status !== ORDER_STATUS.SHIPPED) throw new Error("Sipariş tamamlanamaz.");
   await db.update(orders).set({ status: ORDER_STATUS.COMPLETED, updatedAt: new Date() }).where(eq(orders.id, orderId));
@@ -669,6 +748,8 @@ export async function completeOrder(orderId: string) {
     .update(shipments)
     .set({ status: "delivered", updatedAt: new Date() })
     .where(eq(shipments.orderId, orderId));
+  await addOrderEventSafe({ orderId, kind: "shipment", title: "Teslim edildi", actor });
+  await notifyOrder(orderId, "order_delivered");
   return order;
 }
 
