@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 export function resolveAssetUrl(src: string, storefrontUrl: string) {
   if (!src) return "";
   if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src;
-  return `${storefrontUrl.replace(/\/$/, "")}${src.startsWith("/") ? "" : "/"}${src}`;
+  return `${storefrontUrl}${src.startsWith("/") ? "" : "/"}${src}`;
 }
 
 function toSlug(value: string) {

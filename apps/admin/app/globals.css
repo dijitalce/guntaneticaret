@@ -872,6 +872,149 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
 .todo-dot.is-ok { background: #12b76a; }
 
 .form-page { max-width: 760px; }
+.form-page.is-wide { max-width: 1040px; }
+
+/* ——— Marka logoları ——— */
+.brand-logo {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--a-border), 0 1px 2px rgba(16, 24, 40, 0.04);
+  overflow: hidden;
+}
+.brand-logo img { width: 100%; height: 100%; object-fit: contain; padding: 8%; }
+.brand-logo > span { font-weight: 700; letter-spacing: 0.02em; color: var(--a-brand-600); background: var(--a-brand-50); width: 100%; height: 100%; display: grid; place-items: center; }
+
+.brand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem 1.2rem 1.2rem;
+}
+.brand-card {
+  display: grid;
+  border: 1px solid var(--a-border);
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.brand-card:hover { border-color: #d0d5dd; box-shadow: 0 6px 16px -8px rgba(16, 24, 40, 0.18); transform: translateY(-1px); }
+.brand-card.is-off .brand-logo { filter: grayscale(1); opacity: 0.55; }
+.brand-card.is-off .brand-card-main strong { color: var(--a-muted); }
+.brand-card-main { display: flex; align-items: center; gap: 0.8rem; padding: 0.9rem; color: inherit; text-decoration: none; min-width: 0; }
+.brand-card-main > div { display: grid; gap: 0.15rem; min-width: 0; }
+.brand-card-main strong { font-size: 0.95rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-card-main span { font-size: 0.76rem; color: var(--a-muted); }
+.brand-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem 0.55rem 0.9rem;
+  border-top: 1px solid var(--a-border);
+  background: var(--a-surface-2);
+  border-radius: 0 0 12px 12px;
+}
+.brand-card-foot .icon-btn { width: 30px; height: 30px; }
+
+/* ——— Marka grupları ——— */
+.group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.9rem; }
+.group-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--a-border);
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.group-card:hover { border-color: var(--a-brand); box-shadow: 0 8px 20px -12px rgba(216, 50, 42, 0.35); }
+.group-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+.group-card-head strong { display: block; font-size: 1rem; font-weight: 650; }
+.group-card-head span:not(.icon-btn) { font-size: 0.78rem; color: var(--a-muted); }
+.logo-stack { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.logo-more {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 0.4rem;
+  border-radius: 12px;
+  background: var(--a-surface-2);
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--a-muted);
+}
+.group-card-foot { display: flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; color: var(--a-muted); border-top: 1px dashed var(--a-border); padding-top: 0.7rem; }
+
+.brand-picker { border: 1px solid var(--a-border); border-radius: 12px; overflow: hidden; }
+.brand-picker-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  background: var(--a-surface-2);
+  border-bottom: 1px solid var(--a-border);
+}
+.brand-picker-bar .input { flex: 1; min-width: 180px; }
+.seg { display: inline-flex; padding: 2px; border-radius: 9px; background: #fff; box-shadow: inset 0 0 0 1px var(--a-border); }
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.7rem;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 550;
+  color: var(--a-muted);
+  cursor: pointer;
+}
+.seg button.is-on { background: var(--a-brand-50); color: var(--a-brand-600); }
+.brand-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+  max-height: 460px;
+  overflow-y: auto;
+}
+.pick-tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 0.8rem 0.5rem 0.65rem;
+  border: 1px solid var(--a-border);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  color: var(--a-text);
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.pick-tile:hover { border-color: #d0d5dd; background: var(--a-surface-2); }
+.pick-tile.is-on { border-color: var(--a-brand); background: var(--a-brand-50); box-shadow: 0 0 0 1px var(--a-brand) inset; }
+.pick-tile.is-off .brand-logo { filter: grayscale(1); opacity: 0.6; }
+.pick-name { font-size: 0.78rem; font-weight: 550; text-align: center; line-height: 1.2; }
+.pick-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid #d0d5dd;
+  background: #fff;
+  color: transparent;
+}
+.pick-check svg { width: 11px; height: 11px; }
+.pick-tile.is-on .pick-check { background: var(--a-brand); border-color: var(--a-brand); color: #fff; }
 .form-stack { display: grid; gap: 1.1rem; }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
 .field-hint { font-size: 0.75rem; color: var(--a-muted); word-break: break-all; }

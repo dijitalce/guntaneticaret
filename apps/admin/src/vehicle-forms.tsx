@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ConfirmButton, ImageUrlField, NameSlugFields } from "./form-fields";
 import { IconTrash } from "./icons";
 import { withBase } from "./paths";
-import { storefrontUrl } from "./storefront";
+import { assetBase, storefrontUrl } from "./storefront";
 
 type Common = {
   name: string;
@@ -56,7 +56,7 @@ export function BrandForm({ brand }: { brand?: Common & { id: string; logoUrl: s
           name="logoUrl"
           label="Logo"
           defaultValue={brand?.logoUrl ?? ""}
-          storefrontUrl={site}
+          storefrontUrl={assetBase()}
           fallback={(brand?.name ?? "?").slice(0, 2).toUpperCase()}
           hint={
             <>
@@ -138,7 +138,7 @@ export function ModelForm({
           name="imageUrl"
           label="Görsel"
           defaultValue={model?.imageUrl ?? ""}
-          storefrontUrl={site}
+          storefrontUrl={assetBase()}
           fallback={(model?.name ?? "?").slice(0, 2).toUpperCase()}
           hint="Model kartında gösterilir. Boş bırakılabilir."
         />

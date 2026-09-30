@@ -2,6 +2,7 @@ import Link from "next/link";
 import { and, asc, count, eq, like, type SQL } from "drizzle-orm";
 import { db, vehicleBrands, vehicleModels } from "@guntan/db";
 import { IconEdit, IconExternal, IconEye, IconEyeOff, IconLayers, IconPlus, IconSearch } from "@/src/icons";
+import { BrandLogo } from "@/src/brand-logo";
 import { withBase } from "@/src/paths";
 import { assetUrl, storefrontUrl } from "@/src/storefront";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge } from "@/src/ui";
@@ -34,7 +35,7 @@ export default async function ModelsPage({
   if (durum === "pasif") where.push(eq(vehicleModels.isActive, false));
 
   const [brands, rows, totalRows, statusRows] = await Promise.all([
-    db.select({ id: vehicleBrands.id, name: vehicleBrands.name, slug: vehicleBrands.slug }).from(vehicleBrands).orderBy(asc(vehicleBrands.name)),
+    db.select({ id: vehicleBrands.id, name: vehicleBrands.name, slug: vehicleBrands.slug, logoUrl: vehicleBrands.logoUrl }).from(vehicleBrands).orderBy(asc(vehicleBrands.name)),
     db
       .select({
         id: vehicleModels.id,
@@ -145,17 +146,12 @@ export default async function ModelsPage({
               <tbody>
                 {rows.map((m) => {
                   const brand = brandBy.get(m.brandId);
-                  const img = assetUrl(m.imageUrl);
+                  const img = assetUrl(m.imageUrl) ?? assetUrl(brand?.logoUrl);
                   return (
                     <tr key={m.id}>
                       <td>
                         <div className="item-row">
-                          {img ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img className="item-thumb" src={img} alt="" loading="lazy" />
-                          ) : (
-                            <span className="item-thumb item-thumb-text">{m.name.slice(0, 2).toUpperCase()}</span>
-                          )}
+                          <BrandLogo src={img} name={m.name} size={40} />
                           <div>
                             <Link href={`/catalog/models/${m.id}`}>{m.name}</Link>
                             <span className="sub">

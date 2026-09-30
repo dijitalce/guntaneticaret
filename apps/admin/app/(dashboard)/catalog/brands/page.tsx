@@ -2,6 +2,7 @@ import Link from "next/link";
 import { and, asc, count, eq, like, type SQL } from "drizzle-orm";
 import { db, vehicleBrands, vehicleModels } from "@guntan/db";
 import { IconCar, IconEdit, IconExternal, IconEye, IconEyeOff, IconLayers, IconPlus, IconSearch } from "@/src/icons";
+import { BrandLogo } from "@/src/brand-logo";
 import { withBase } from "@/src/paths";
 import { assetUrl, storefrontUrl } from "@/src/storefront";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge } from "@/src/ui";
@@ -97,73 +98,46 @@ export default async function BrandsPage({
             icon={IconCar}
           />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Marka</th>
-                  <th className="num">Model</th>
-                  <th className="num">Sıra</th>
-                  <th>Durum</th>
-                  <th className="num">İşlemler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((b) => {
-                  const logo = assetUrl(b.logoUrl);
-                  return (
-                    <tr key={b.id}>
-                      <td>
-                        <div className="item-row">
-                          {logo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img className="item-thumb" src={logo} alt="" loading="lazy" />
-                          ) : (
-                            <span className="item-thumb item-thumb-text">{b.name.slice(0, 2).toUpperCase()}</span>
-                          )}
-                          <div>
-                            <Link href={`/catalog/brands/${b.id}`}>{b.name}</Link>
-                            <span className="sub">/{b.slug}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="num">
-                        <Link href={`/catalog/models?marka=${b.id}`}>{(modelsBy.get(b.id) ?? 0).toLocaleString("tr-TR")}</Link>
-                      </td>
-                      <td className="num">{b.sortOrder}</td>
-                      <td>
-                        <StatusBadge tone={b.isActive ? "ok" : "neutral"}>{b.isActive ? "Aktif" : "Pasif"}</StatusBadge>
-                      </td>
-                      <td>
-                        <div className="icon-actions">
-                          <Link className="icon-btn" href={`/catalog/brands/${b.id}`} title="Düzenle" aria-label={`${b.name} düzenle`}>
-                            <IconEdit />
-                          </Link>
-                          <Link className="icon-btn" href={`/catalog/models?marka=${b.id}`} title="Modeller" aria-label={`${b.name} modelleri`}>
-                            <IconLayers />
-                          </Link>
-                          <form action={withBase(`/api/vehicle-brands/${b.id}`)} method="post">
-                            <input type="hidden" name="_action" value="toggle" />
-                            <input type="hidden" name="next" value={listPath} />
-                            <button
-                              className="icon-btn"
-                              type="submit"
-                              title={b.isActive ? "Pasif yap (vitrinde gizle)" : "Aktif yap (vitrinde göster)"}
-                              aria-label={b.isActive ? "Pasif yap" : "Aktif yap"}
-                            >
-                              {b.isActive ? <IconEyeOff /> : <IconEye />}
-                            </button>
-                          </form>
-                          <a className="icon-btn" href={`${site}/${b.slug}`} target="_blank" rel="noreferrer" title="Vitrinde gör" aria-label="Vitrinde gör">
-                            <IconExternal />
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="brand-grid">
+            {rows.map((b) => (
+              <article key={b.id} className={`brand-card${b.isActive ? "" : " is-off"}`}>
+                <Link className="brand-card-main" href={`/catalog/brands/${b.id}`}>
+                  <BrandLogo src={assetUrl(b.logoUrl)} name={b.name} size={52} />
+                  <div>
+                    <strong>{b.name}</strong>
+                    <span>
+                      {(modelsBy.get(b.id) ?? 0).toLocaleString("tr-TR")} model · sıra {b.sortOrder}
+                    </span>
+                  </div>
+                </Link>
+                <div className="brand-card-foot">
+                  <StatusBadge tone={b.isActive ? "ok" : "neutral"}>{b.isActive ? "Aktif" : "Pasif"}</StatusBadge>
+                  <div className="icon-actions">
+                    <Link className="icon-btn" href={`/catalog/brands/${b.id}`} title="Düzenle" aria-label={`${b.name} düzenle`}>
+                      <IconEdit />
+                    </Link>
+                    <Link className="icon-btn" href={`/catalog/models?marka=${b.id}`} title="Modeller" aria-label={`${b.name} modelleri`}>
+                      <IconLayers />
+                    </Link>
+                    <form action={withBase(`/api/vehicle-brands/${b.id}`)} method="post">
+                      <input type="hidden" name="_action" value="toggle" />
+                      <input type="hidden" name="next" value={listPath} />
+                      <button
+                        className="icon-btn"
+                        type="submit"
+                        title={b.isActive ? "Pasif yap (vitrinde gizle)" : "Aktif yap (vitrinde göster)"}
+                        aria-label={b.isActive ? "Pasif yap" : "Aktif yap"}
+                      >
+                        {b.isActive ? <IconEyeOff /> : <IconEye />}
+                      </button>
+                    </form>
+                    <a className="icon-btn" href={`${site}/${b.slug}`} target="_blank" rel="noreferrer" title="Vitrinde gör" aria-label="Vitrinde gör">
+                      <IconExternal />
+                    </a>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </Panel>
