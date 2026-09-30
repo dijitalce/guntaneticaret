@@ -125,7 +125,7 @@ export function CheckoutForm({
   const baseTotal = subtotal + shippingFee;
   const selectedOption = card?.options.find((o) => o.count === installments);
   const payTotal = paymentMethod === "credit_card" && selectedOption ? selectedOption.total : baseTotal;
-  const installmentFee = payTotal - baseTotal;
+  const installmentFee = Math.round((payTotal - baseTotal) * 100) / 100;
   const [invoiceType, setInvoiceType] = useState<"individual" | "corporate">(
     defaults?.invoiceType === "corporate" ? "corporate" : "individual",
   );
