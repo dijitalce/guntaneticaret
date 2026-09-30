@@ -196,7 +196,13 @@ export async function resolveTenantByHost(rawHost: string): Promise<TenantPublic
     return config;
   } catch (err) {
     // Empty MySQL / wrong DATABASE_URL / connection errors must not take down every tenant domain.
-    console.error("[tenant] resolveTenantByHost failed:", hostname, err instanceof Error ? err.message : err);
+    const cause = err instanceof Error ? (err.cause as { code?: string; message?: string } | undefined) : undefined;
+    console.error(
+      "[tenant] resolveTenantByHost failed:",
+      hostname,
+      err instanceof Error ? err.message : err,
+      cause ? `| cause: ${cause.code ?? ""} ${cause.message ?? ""}` : "",
+    );
     return null;
   }
 }
