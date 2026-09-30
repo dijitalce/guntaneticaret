@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconCart, IconClose } from "./icons";
+import { VAT_RATE, vatBreakdown } from "./vat";
 
 export type CartSummaryPayload = {
   qty: number;
@@ -221,6 +222,10 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                     <div>
                       <dt>Kargo</dt>
                       <dd>{money(cart.shippingAmount)}</dd>
+                    </div>
+                    <div className="is-vat">
+                      <dt>KDV (%{VAT_RATE})</dt>
+                      <dd>{money(vatBreakdown(cart.subtotal + cart.shippingAmount).vat)}</dd>
                     </div>
                     <div className="is-total">
                       <dt>Toplam</dt>

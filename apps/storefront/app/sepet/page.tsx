@@ -5,6 +5,7 @@ import { COOKIE_CART } from "@guntan/config";
 import { getCartSummary, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
+import { VAT_RATE, vatBreakdown } from "../../src/vat";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -139,6 +140,14 @@ export default async function CartPage({
             <div>
               <dt>Kargo</dt>
               <dd>{money(view.shippingAmount)}</dd>
+            </div>
+            <div className="is-vat">
+              <dt>KDV hariç tutar</dt>
+              <dd>{money(vatBreakdown(grand).net)}</dd>
+            </div>
+            <div className="is-vat">
+              <dt>KDV (%{VAT_RATE})</dt>
+              <dd>{money(vatBreakdown(grand).vat)}</dd>
             </div>
             <div className="is-total">
               <dt>Ödenecek</dt>

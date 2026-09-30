@@ -1121,6 +1121,10 @@ body {
   border-top: 1px solid var(--border);
   font-size: 1.05rem;
 }
+.cart-summary-rows .is-vat dt,
+.cart-summary-rows .is-vat dd,
+.cart-drawer-foot .is-vat dt,
+.cart-drawer-foot .is-vat dd { font-size: 0.85rem; font-weight: 500; color: var(--muted-foreground); }
 .cart-summary-rows .is-total dt { color: var(--foreground); font-weight: 700; }
 .cart-summary-rows .is-total dd { color: var(--primary); font-size: 1.15rem; }
 .cart-summary-note { margin: 0.7rem 0 0; font-size: 0.82rem; }

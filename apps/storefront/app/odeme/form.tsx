@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { VAT_RATE, vatBreakdown } from "../../src/vat";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -417,6 +418,14 @@ export function CheckoutForm({
               <dd>{money(installmentFee)}</dd>
             </div>
           )}
+          <div className="is-vat">
+            <dt>KDV hariç tutar</dt>
+            <dd>{money(vatBreakdown(payTotal).net)}</dd>
+          </div>
+          <div className="is-vat">
+            <dt>KDV (%{VAT_RATE})</dt>
+            <dd>{money(vatBreakdown(payTotal).vat)}</dd>
+          </div>
           <div className="is-total">
             <dt>Ödenecek</dt>
             <dd>{money(payTotal)}</dd>

@@ -6,6 +6,7 @@ import { getTenant } from "../../../../src/tenant";
 import { getCurrentCustomer } from "../../../../src/customer";
 import { formatDateTr, formatMoney, orderStatusLabel, orderStatusTone } from "../../../../src/order-labels";
 import { arasTrackingUrl } from "@guntan/ecommerce";
+import { VAT_RATE, vatBreakdown } from "../../../../src/vat";
 
 const SHIPMENT_STATUS: Record<string, string> = { pending: "Hazırlanıyor", shipped: "Kargoda", delivered: "Teslim edildi" };
 
@@ -75,6 +76,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             {installmentFee > 0 && (
               <div><dt>Vade farkı ({addr.installments} taksit)</dt><dd>{formatMoney(installmentFee)}</dd></div>
             )}
+            <div><dt>KDV (%{VAT_RATE}) dahil</dt><dd>{formatMoney(vatBreakdown(Number(order.grandTotal)).vat)}</dd></div>
             <div className="is-grand"><dt>Toplam</dt><dd>{formatMoney(order.grandTotal)}</dd></div>
           </dl>
         </div>
