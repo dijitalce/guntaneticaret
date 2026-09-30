@@ -118,7 +118,7 @@ body {
   cursor: pointer;
 }
 .search-suggest a:hover, .search-suggest-all button:hover { background: var(--muted); }
-.search-suggest small { color: var(--muted-foreground); }
+.search-suggest small, .search-suggest-mfr { color: var(--muted-foreground); font-size: 0.8rem; }
 .search-suggest-empty { padding: 0.7rem 0.75rem; color: var(--muted-foreground); font-size: 0.85rem; }
 .search-suggest-all button { color: var(--primary); font-weight: 700; }
 
@@ -558,6 +558,12 @@ body {
   min-height: 2.4em;
 }
 .product-card-mfr { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; color: var(--muted-foreground); text-transform: uppercase; }
+.mfr-logo { display: inline-flex; align-items: center; align-self: flex-start; }
+.mfr-logo img { display: block; max-width: 110px; object-fit: contain; }
+.pdp-mfr { margin-bottom: 0.4rem; }
+.pdp-mfr img { max-width: 160px; }
+.filter-mfr { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.filter-mfr img { height: 16px; width: 34px; object-fit: contain; flex: none; }
 .product-card-fit {
   margin: 0;
   font-size: 0.72rem;

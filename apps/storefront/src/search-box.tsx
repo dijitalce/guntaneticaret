@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconSearch } from "./icons";
+import { ManufacturerLogo } from "./manufacturer-logo";
 
 type Hit = { id: string; title: string; slug: string; sku?: string; manufacturer?: string | null; price?: string };
 
@@ -62,7 +63,7 @@ export function SearchBox({ brands }: { brands: { slug: string; name: string }[]
             <li key={h.id}>
               <Link href={`/urun/${h.slug}`} onClick={() => setOpen(false)}>
                 <span>{h.title}</span>
-                {h.manufacturer ? <small>{h.manufacturer}</small> : null}
+                {h.manufacturer ? <ManufacturerLogo name={h.manufacturer} className="search-suggest-mfr" height={16} /> : null}
               </Link>
             </li>
           ))}

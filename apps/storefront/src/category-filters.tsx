@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { manufacturerLogoUrl } from "./manufacturer-logo";
 
 type FacetItem = { id: string; name: string; slug: string; count: number };
 
@@ -61,7 +62,13 @@ export function CategoryFilters({
               className={`filter-link${manufacturerSlug === m.slug ? " is-active" : ""}`}
               href={href({ mfr: m.slug, page: undefined })}
             >
-              <span>{m.name}</span>
+              <span className="filter-mfr">
+                {manufacturerLogoUrl(m.name) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={manufacturerLogoUrl(m.name)!} alt="" height={16} loading="lazy" />
+                )}
+                {m.name}
+              </span>
               <em>{m.count}</em>
             </Link>
           ))}

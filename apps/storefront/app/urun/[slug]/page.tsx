@@ -8,6 +8,7 @@ import { getTenant } from "../../../src/tenant";
 import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
+import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
 
 export const revalidate = 300;
 
@@ -88,7 +89,12 @@ export default async function ProductPage({
           />
         </div>
         <div className="pdp-info">
-          {data.manufacturerName && <div className="badge">{data.manufacturerName}</div>}
+          {data.manufacturerName &&
+            (manufacturerLogoUrl(data.manufacturerName) ? (
+              <ManufacturerLogo name={data.manufacturerName} className="pdp-mfr" height={36} />
+            ) : (
+              <div className="badge">{data.manufacturerName}</div>
+            ))}
           <h1>{product.name}</h1>
           <p className="price">
             {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}

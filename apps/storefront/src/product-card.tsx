@@ -3,6 +3,7 @@ import Image from "next/image";
 import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
 import { AddToCartForm } from "./add-to-cart-form";
+import { ManufacturerLogo } from "./manufacturer-logo";
 
 function formatPrice(value: string) {
   return `${Number(value).toLocaleString("tr-TR")} TL`;
@@ -47,7 +48,7 @@ export function ProductCard({
         />
       </Link>
       <div className="product-card-body">
-        {product.manufacturerName && <span className="product-card-mfr">{product.manufacturerName}</span>}
+        <ManufacturerLogo name={product.manufacturerName} className="product-card-mfr" height={20} />
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
         {fitments.length > 0 && (
           <p className="product-card-fit">
