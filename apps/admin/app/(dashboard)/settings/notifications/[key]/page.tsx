@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { TEMPLATES, TEMPLATE_GROUPS, TEMPLATE_VARIABLES, getTemplateOverrides, resolveTemplate } from "@guntan/db";
 import { ConfirmButton } from "@/src/form-fields";
 import { withBase } from "@/src/paths";
-import { renderPreview } from "@/src/template-samples";
+import { loadPreviewVars, renderPreview } from "@/src/template-samples";
 import { Alert, PageHeader, Panel, StatusBadge } from "@/src/ui";
 import { Toggle } from "@/src/ui-ext";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const OK: Record<string, string> = {
   kaydedildi: "Şablon kaydedildi. Bundan sonraki gönderimlerde bu içerik kullanılır.",
   sifirlandi: "Şablon varsayılan içeriğe döndürüldü.",
-  test: "Test mesajı gönderildi (örnek verilerle).",
+  test: "Test mesajı son siparişin bilgileriyle gönderildi.",
 };
 
 export default async function TemplatePage({
@@ -26,11 +26,14 @@ export default async function TemplatePage({
   const sp = await searchParams;
   const def = TEMPLATES.find((t) => t.key === key);
   if (!def) notFound();
-  const [tpl, overrides] = await Promise.all([resolveTemplate(key), getTemplateOverrides()]);
+  const [tpl, overrides, previewData] = await Promise.all([resolveTemplate(key), getTemplateOverrides(), loadPreviewVars()]);
   if (!tpl) notFound();
   const o = overrides[key] ?? {};
   const customized = Boolean(o.subject || o.body || o.smsBody);
-  const preview = renderPreview(tpl);
+  const preview = renderPreview(tpl, previewData);
+  const previewSource = previewData.orderNo
+    ? `Son sipariş (${previewData.orderNo}) bilgileriyle; kaydettikten sonra güncellenir`
+    : "Henüz sipariş yok; sipariş alanları boş görünür";
   const group = TEMPLATE_GROUPS.find((g) => g.key === def.group);
   const action = withBase(`/api/settings/notifications/${key}`);
 
@@ -105,7 +108,7 @@ export default async function TemplatePage({
         </div>
 
         <div>
-          <Panel title="Önizleme" description="Örnek verilerle; kaydettikten sonra güncellenir">
+          <Panel title="Önizleme" description={previewSource}>
             <div className="panel-pad">
               <div className="mail-subject">
                 <span className="muted text-sm">Konu:</span> <strong>{preview.subject}</strong>

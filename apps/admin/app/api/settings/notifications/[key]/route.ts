@@ -1,7 +1,7 @@
 import { TEMPLATES, getNotifySettings, getTemplateOverrides, resolveTemplate, saveTemplateOverrides, sendEmailRaw, sendSmsRaw } from "@guntan/db";
 import { writeAudit } from "@guntan/observability";
 import { apiAdminSession, redirectTo, text } from "../../../../../src/api-helpers";
-import { renderPreview } from "../../../../../src/template-samples";
+import { loadPreviewVars, renderPreview } from "../../../../../src/template-samples";
 
 export async function POST(request: Request, ctx: { params: Promise<{ key: string }> }) {
   const session = await apiAdminSession();
@@ -29,7 +29,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ key: strin
     const tpl = await resolveTemplate(key);
     if (!tpl) return redirectTo(request, back);
     const settings = await getNotifySettings();
-    const preview = renderPreview(tpl);
+    const preview = renderPreview(tpl, await loadPreviewVars());
     const to = text(form, "to");
     const channel = text(form, "channel");
     const result =

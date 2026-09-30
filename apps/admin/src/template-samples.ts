@@ -1,44 +1,73 @@
-import { emailLayout, itemsTableHtml, renderText, type ResolvedTemplate } from "@guntan/db";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
+import {
+  buildOrderVars,
+  coupons,
+  db,
+  emailLayout,
+  escapeHtml,
+  getTenantContext,
+  orders,
+  products,
+  renderText,
+  tenants,
+  type ResolvedTemplate,
+} from "@guntan/db";
 
-export const SAMPLE_VARS: Record<string, string> = {
-  site_name: "Örnek Mağaza",
-  site_url: "https://ornek.com",
-  customer_name: "Ayşe Yılmaz",
-  customer_email: "ayse@ornek.com",
-  order_no: "GT-240930-1042",
-  order_total: "2.349,90 ₺",
-  order_date: "30 Eylül 2026 14:05",
-  order_url: "https://ornek.com/hesabim/siparisler",
-  payment_method: "Havale / EFT",
-  bank_accounts:
-    "<p><strong>Garanti BBVA</strong><br>Örnek Otomotiv Ltd. Şti.<br>TR00 0006 2000 0000 0000 0000 00</p>",
-  carrier: "Aras Kargo",
-  tracking_no: "1234567890",
-  tracking_url: "https://kargotakip.araskargo.com.tr",
-  cart_url: "https://ornek.com/sepet",
-  coupon_code: "SEPET10",
-  coupon_block: '<div class="coupon">SEPET10</div>',
-  product_name: "Ön fren balatası (Bosch)",
-  product_url: "https://ornek.com/urun/on-fren-balatasi",
-  message: "Siparişinizdeki bir ürün tedarikçiden yarın depomuza ulaşacak, ardından hemen kargoya vereceğiz.",
-  threshold: "2",
-  count: "3",
-  items_table: itemsTableHtml([
-    { name: "Ön fren balatası (Bosch)", qty: 1, price: "1.249,90 ₺" },
-    { name: "Yağ filtresi (Mann)", qty: 2, price: "1.100,00 ₺" },
-  ]),
-};
+export type PreviewVars = { vars: Record<string, string>; orderNo: string | null; siteName: string; siteUrl: string };
 
-export function renderPreview(tpl: Pick<ResolvedTemplate, "subject" | "body" | "smsBody" | "marketing">, siteName = SAMPLE_VARS.site_name!) {
-  const vars: Record<string, string> = { ...SAMPLE_VARS, site_name: siteName };
+/** Önizleme ve test gönderimi için sitedeki son siparişin, gerçek bir ürünün ve aktif kuponun bilgileri. */
+export async function loadPreviewVars(): Promise<PreviewVars> {
+  const [lastOrder] = await db.select({ id: orders.id, tenantId: orders.tenantId }).from(orders).orderBy(desc(orders.createdAt)).limit(1);
+  const [firstTenant] = lastOrder ? [] : await db.select({ id: tenants.id }).from(tenants).orderBy(tenants.createdAt).limit(1);
+  const tenantId = lastOrder?.tenantId ?? firstTenant?.id ?? null;
+  const [tenant, orderData, product, coupon] = await Promise.all([
+    getTenantContext(tenantId),
+    lastOrder ? buildOrderVars(lastOrder.id).catch(() => null) : Promise.resolve(null),
+    db
+      .select({ name: products.name, slug: products.slug })
+      .from(products)
+      .where(and(eq(products.status, "active"), gt(products.stockQty, 0)))
+      .orderBy(desc(products.updatedAt))
+      .limit(1)
+      .then((r) => r[0] ?? null),
+    db
+      .select({ code: coupons.code })
+      .from(coupons)
+      .where(tenantId ? and(eq(coupons.isActive, 1), sql`(${coupons.tenantId} = ${tenantId} or ${coupons.tenantId} is null)`) : eq(coupons.isActive, 1))
+      .limit(1)
+      .then((r) => r[0] ?? null),
+  ]);
+  const vars: Record<string, string> = {
+    site_name: tenant.name,
+    site_url: tenant.url,
+    cart_url: `${tenant.url}/sepet`,
+    order_url: `${tenant.url}/hesabim/siparisler`,
+    ...(orderData?.vars ?? {}),
+  };
+  vars.customer_name ||= "Müşteri";
+  if (product) {
+    vars.product_name = product.name;
+    vars.product_url = `${tenant.url}/urun/${product.slug}`;
+  }
+  if (coupon) {
+    vars.coupon_code = coupon.code;
+    vars.coupon_block = `<p>Size özel indirim kodu:</p><div class="coupon">${escapeHtml(coupon.code)}</div>`;
+  } else {
+    vars.coupon_code = "";
+    vars.coupon_block = "";
+  }
+  return { vars, orderNo: orderData?.order.orderNo ?? null, siteName: tenant.name, siteUrl: tenant.url };
+}
+
+export function renderPreview(tpl: Pick<ResolvedTemplate, "subject" | "body" | "smsBody" | "marketing">, data: PreviewVars) {
   return {
-    subject: renderText(tpl.subject, vars, false),
+    subject: renderText(tpl.subject, data.vars, false),
     html: emailLayout({
-      siteName,
-      siteUrl: vars.site_url!,
-      body: renderText(tpl.body, vars, true),
+      siteName: data.siteName,
+      siteUrl: data.siteUrl,
+      body: renderText(tpl.body, data.vars, true),
       footer: tpl.marketing ? ' · <a class="muted" href="#">Abonelikten çık</a>' : "",
     }),
-    sms: renderText(tpl.smsBody, vars, false),
+    sms: renderText(tpl.smsBody, data.vars, false),
   };
 }
