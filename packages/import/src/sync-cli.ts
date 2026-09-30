@@ -11,19 +11,16 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { mkdir, open, rm, stat } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchEryazXml, eryazConfigFromEnv } from "./eryaz-fetch";
 import { basbugConfigFromEnv, fetchBasbugCatalog } from "./basbug-fetch";
+import { loadSyncEnv, syncHomeDir } from "./sync-env";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../../..");
-// Hostinger panel ortam değişkenleri cron'a geçmez; ayarlar deploy klasörü
-// dışındaki bir dosyadan okunur (deploy'da silinmez).
-for (const envFile of [process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync.env"), join(root, ".env")]) {
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
-}
+const loadedEnvFiles = loadSyncEnv(root);
 
 const SKIP_FETCH = process.argv.includes("--skip-fetch");
 const ONLY_FEED = process.argv.find((a) => a.startsWith("--feed="))?.slice("--feed=".length) || null;
@@ -34,8 +31,10 @@ const altayPath = process.env.ALTAY_XML_PATH || join(root, "products.xml");
 const basbugPath = process.env.BASBUG_JSON_PATH || join(root, "data/basbug/all_products.json");
 
 // Panel (XML senkron sayfası) bu dosyaları okur; deploy klasörü dışında tutulur.
-const LOG_FILE = process.env.SYNC_LOG_FILE || join(homedir(), "guntan-sync.log");
-const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(homedir(), "guntan-sync-status.json");
+const SYNC_HOME = syncHomeDir(loadedEnvFiles);
+process.env.FEEDS_DIR ||= join(SYNC_HOME, "guntan-feeds");
+const LOG_FILE = process.env.SYNC_LOG_FILE || join(SYNC_HOME, "guntan-sync.log");
+const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(SYNC_HOME, "guntan-sync-status.json");
 const TRIGGER = process.env.SYNC_TRIGGER || "cron";
 
 function log(message: string) {
@@ -91,7 +90,7 @@ async function main() {
   }
   const startedAt = new Date().toISOString();
   writeStatus({ state: "running", startedAt, pid: process.pid });
-  log(`Senkron başladı (${TRIGGER}).`);
+  log(`Senkron başladı (${TRIGGER}). Ayar dosyası: ${loadedEnvFiles.join(", ") || "yok (yalnızca ortam değişkenleri)"}`);
   const errors: string[] = [];
   const step = async (name: string, fn: () => Promise<void>) => {
     log(`▶ ${name}`);

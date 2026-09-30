@@ -10,6 +10,13 @@ export async function register() {
     console.error("[unhandledRejection] keeping process alive:", reason);
   });
 
+  try {
+    const { persistSyncEnv } = await import("./src/server-sync");
+    persistSyncEnv();
+  } catch (err) {
+    console.error("[sync-env] guntan-sync.env yazılamadı:", err);
+  }
+
   // Otomasyonlar (terk edilmiş sepet, havale hatırlatma/iptal, stok bildirimleri, kampanya kuyruğu).
   const { startAutomationScheduler } = await import("@guntan/db");
   startAutomationScheduler();

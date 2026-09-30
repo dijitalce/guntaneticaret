@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, openSync, readFileSync, statSync } from "node:fs";
+import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -54,6 +54,11 @@ export type SyncStatus = {
 };
 
 export function readServerSync() {
+  try {
+    persistSyncEnv();
+  } catch {
+    /* dosya yazılamazsa panel uyarı gösterir */
+  }
   const root = findRepoRoot();
   let status: SyncStatus | null = null;
   try {
@@ -80,6 +85,7 @@ export function readServerSync() {
     running: lock.exists && Boolean(lock.mtime && Date.now() - lock.mtime.getTime() < 6 * 3600_000),
     lockSince: lock.mtime,
     envFile: { path: ENV_FILE, exists: existsSync(ENV_FILE) },
+    processEnvReady: Object.keys(process.env).some((k) => (k.startsWith("ERYAZ_") || k.startsWith("BASBUG_")) && Boolean(process.env[k])),
     eryazReady: ["ERYAZ_USERNAME", "ERYAZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])) || keys.some((k) => k.startsWith("ERYAZ_")),
     basbugReady: keys.some((k) => k.startsWith("BASBUG_")) || Object.keys(process.env).some((k) => k.startsWith("BASBUG_")),
     altay: altayPath ? fileInfo(altayPath) : null,
@@ -114,3 +120,54 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean; fe
 export function feedFileInfo(path: string) {
   return fileInfo(path);
 }
+
+const SYNC_ENV_PREFIXES = ["DATABASE_", "ERYAZ_", "BASBUG_", "ARAS_", "ALTAY_", "MEILI_"];
+const SYNC_ENV_KEYS = ["REDIS_URL", "STOREFRONT_URL", "APP_SECRET", "AUTH_SECRET", "SESSION_SECRET"];
+
+function isSyncEnvKey(key: string) {
+  return SYNC_ENV_KEYS.includes(key) || SYNC_ENV_PREFIXES.some((p) => key.startsWith(p));
+}
+
+function envLine(key: string, value: string): string | null {
+  if (/[\r\n]/.test(value)) return null;
+  if (!value.includes("'")) return `${key}='${value}'`;
+  if (!value.includes('"')) return `${key}="${value}"`;
+  if (!value.includes("`")) return `${key}=\`${value}\``;
+  return null;
+}
+
+/**
+ * hPanel ortam değişkenleri cron'a geçmez. Admin süreci tedarikçi/veritabanı
+ * değişkenlerini sunucudaki guntan-sync.env dosyasına yazar; cron betikleri
+ * bu dosyayı okur. Dosyadaki diğer satırlar korunur.
+ */
+export function persistSyncEnv(): { written: boolean; path: string } {
+  if (process.env.NODE_ENV !== "production" || process.platform !== "linux") return { written: false, path: ENV_FILE };
+  const keys = Object.keys(process.env).filter((k) => isSyncEnvKey(k) && process.env[k]);
+  if (!keys.some((k) => k.startsWith("ERYAZ_") || k.startsWith("BASBUG_"))) return { written: false, path: ENV_FILE };
+  let existing = "";
+  try {
+    existing = readFileSync(ENV_FILE, "utf8");
+  } catch {
+    existing = "";
+  }
+  const kept = existing
+    .split(/\r?\n/)
+    .filter((line) => {
+      const t = line.trim();
+      if (!t || t.startsWith("#") || !t.includes("=")) return Boolean(t) && t !== AUTO_HEADER;
+      return !keys.includes(t.split("=")[0]!.replace(/^export\s+/, "").trim());
+    });
+  const managed = keys.sort().map((k) => envLine(k, process.env[k]!)).filter((l): l is string => Boolean(l));
+  const next = `${[...kept, AUTO_HEADER, ...managed].join("\n")}\n`;
+  if (next === existing) return { written: false, path: ENV_FILE };
+  writeFileSync(ENV_FILE, next, { mode: 0o600 });
+  try {
+    chmodSync(ENV_FILE, 0o600);
+  } catch {
+    /* izin değiştirilemezse dosya yine kullanılabilir */
+  }
+  return { written: true, path: ENV_FILE };
+}
+
+const AUTO_HEADER = "# hPanel ortam değişkenlerinden otomatik (admin açılışında güncellenir)";

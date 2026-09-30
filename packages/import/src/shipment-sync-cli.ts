@@ -5,16 +5,13 @@
  *
  * Kullanım: pnpm --filter @guntan/import shipment-sync
  */
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadSyncEnv } from "./sync-env";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../../..");
-for (const envFile of [process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync.env"), join(root, ".env")]) {
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
-}
+loadSyncEnv(root);
 
 function log(message: string) {
   console.log(`[${new Date().toISOString()}] ${message}`);

@@ -92,10 +92,15 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
       ) : null}
       {sp.ok === "kaynak-silindi" ? <Alert tone="ok">XML kaynağı silindi; ürünleri satıştan kaldırıldı.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
-      {!server.envFile.exists ? (
+      {!server.envFile.exists && !server.processEnvReady ? (
         <Alert tone="warn">
-          Sunucuda tedarikçi bilgileri dosyası bulunamadı (<code>{server.envFile.path}</code>). Eryaz ve Başbuğ kullanıcı bilgileri bu dosyada
-          olmalı; yoksa senkron indirme adımını atlar ve yalnızca mevcut dosyaları içe aktarır.
+          Eryaz ve Başbuğ kullanıcı bilgileri bulunamadı. Bunları hPanel ortam değişkenlerine (ERYAZ_*, BASBUG_*) ekleyin; yoksa senkron indirme
+          adımını atlar ve yalnızca mevcut dosyaları içe aktarır.
+        </Alert>
+      ) : !server.envFile.exists ? (
+        <Alert tone="warn">
+          Tedarikçi bilgileri ortam değişkenlerinde var; panelden başlatılan senkron çalışır. Zamanlanmış görev için{" "}
+          <code>{server.envFile.path}</code> dosyası yazılamadı; site yeniden başladığında tekrar denenecek.
         </Alert>
       ) : null}
 
