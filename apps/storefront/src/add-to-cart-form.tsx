@@ -4,11 +4,13 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { trackCommerce, type TrackItem } from "./track";
 
 export function AddToCartForm({
+  id,
   slug,
   className,
   children,
   track,
 }: {
+  id?: string;
   slug: string;
   className?: string;
   children: ReactNode;
@@ -20,6 +22,8 @@ export function AddToCartForm({
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (pending) return;
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const buyNow = submitter?.name === "intent" && submitter.value === "buy";
     setPending(true);
     setDone(false);
     const form = e.currentTarget;
@@ -37,11 +41,15 @@ export function AddToCartForm({
         | ({ ok?: boolean; error?: string } & Record<string, unknown>)
         | null;
       if (!res.ok || !json || json.ok === false) throw new Error(String(json?.error ?? "sepet"));
-      window.dispatchEvent(new CustomEvent("cart:updated", { detail: { ...json, openDrawer: true } }));
       if (track) {
         const qty = Math.max(1, Number(data.get("qty") ?? 1) || 1);
         trackCommerce("add_to_cart", { items: [{ ...track, qty }] });
       }
+      if (buyNow) {
+        window.location.assign("/odeme");
+        return;
+      }
+      window.dispatchEvent(new CustomEvent("cart:updated", { detail: { ...json, openDrawer: true } }));
       setDone(true);
       window.setTimeout(() => setDone(false), 1800);
     } catch {
@@ -53,7 +61,7 @@ export function AddToCartForm({
   }
 
   return (
-    <form className={className} action="/api/cart" method="post" onSubmit={onSubmit} data-pending={pending || undefined}>
+    <form id={id} className={className} action="/api/cart" method="post" onSubmit={onSubmit} data-pending={pending || undefined}>
       <input type="hidden" name="slug" value={slug} />
       <fieldset className="add-to-cart-fields" disabled={pending}>
         {children}

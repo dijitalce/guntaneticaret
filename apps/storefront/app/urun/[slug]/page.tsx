@@ -12,6 +12,9 @@ import { AddToCartForm } from "../../../src/add-to-cart-form";
 import { CommerceEvent } from "../../../src/visitor-tracker";
 import { StockAlertForm } from "../../../src/stock-alert-form";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
+import { QtyStepper } from "../../../src/qty-stepper";
+import { StickyAtc } from "../../../src/sticky-atc";
+import { IconBox, IconShield, IconTag, IconTruck } from "../../../src/icons";
 
 export const revalidate = 300;
 
@@ -53,6 +56,10 @@ export default async function ProductPage({
   const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
   const fit = data.fitments[0];
   const inStock = product.stockStatus === "in_stock";
+  const available = Math.max(0, (product.stockQty ?? 0) - (product.reservedQty ?? 0));
+  const lowStock = inStock && available > 0 && available <= 5;
+  const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
+  const oemCodes = [...new Set(data.oems.map((o) => o.raw))].slice(0, 4);
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
@@ -110,15 +117,43 @@ export default async function ProductPage({
               <div className="badge">{data.manufacturerName}</div>
             ))}
           <h1>{product.name}</h1>
-          <p className="price">
-            {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}
-            {Number(product.price).toLocaleString("tr-TR")} TL
-            <small>KDV dahil</small>
-            {disc != null && <span className="badge">%{disc}</span>}
-          </p>
-          <p className={inStock ? "badge badge-stock" : "badge badge-out"}>
-            {inStock ? "Stokta" : "Stokta yok"}
-          </p>
+          <dl className="pdp-codes">
+            <div>
+              <dt>Ürün kodu</dt>
+              <dd>{product.sku}</dd>
+            </div>
+            {oemCodes.length > 0 && (
+              <div>
+                <dt>OEM</dt>
+                <dd>{oemCodes.join(", ")}</dd>
+              </div>
+            )}
+            {product.barcode && (
+              <div>
+                <dt>Barkod</dt>
+                <dd>{product.barcode}</dd>
+              </div>
+            )}
+          </dl>
+          {fit && (
+            <a className="pdp-fit" href="#uyumluluk">
+              <span className="pdp-fit-dot" aria-hidden />
+              Uyumlu: {fit.brandName} {fit.modelName}
+              {fit.yearFrom && fit.yearTo ? ` (${fit.yearFrom}-${fit.yearTo})` : ""}
+              {data.fitments.length > 1 ? ` ve ${data.fitments.length - 1} araç daha` : ""}
+            </a>
+          )}
+          <div className="pdp-price-row">
+            <p className="price">
+              {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}
+              {priceLabel}
+              <small>KDV dahil</small>
+              {disc != null && <span className="badge">%{disc}</span>}
+            </p>
+            <p className={inStock ? "badge badge-stock" : "badge badge-out"}>
+              {!inStock ? "Stokta yok" : lowStock ? `Son ${available} adet` : "Stokta"}
+            </p>
+          </div>
           {sp.sepet === "ok" && (
             <p className="account-alert" role="status">
               Ürün sepete eklendi. <Link href="/sepet">Sepete git</Link>
@@ -131,22 +166,23 @@ export default async function ProductPage({
           )}
           {inStock ? (
             <AddToCartForm
+              id="pdp-cart-form"
               className="pdp-cart"
               slug={product.slug}
               track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
             >
-              <label>
-                Adet <input className="input" type="number" name="qty" defaultValue={1} min={1} />
-              </label>
-              <div className="pdp-actions">
+              <div className="pdp-buy" id="pdp-buy">
+                <QtyStepper max={available || undefined} />
                 <button className="btn btn-primary" type="submit">
                   Sepete ekle
                 </button>
-                <Link className="btn btn-secondary" href="/odeme">
+              </div>
+              <div className="pdp-actions">
+                <button className="btn btn-secondary" type="submit" name="intent" value="buy">
                   Hemen al
-                </Link>
+                </button>
                 {whatsappHref && (
-                  <a className="btn btn-ghost" href={whatsappHref}>
+                  <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
                     WhatsApp ile sor
                   </a>
                 )}
@@ -165,28 +201,44 @@ export default async function ProductPage({
               )}
             </div>
           )}
-          <p className="pdp-ship">Teslimat bilgisi sipariş sonrası SMS veya e-posta ile iletilir.</p>
+          <ul className="pdp-trust">
+            <li><IconTag /> KDV dahil fiyat, ek ücret yok</li>
+            <li><IconTruck /> Kargo takip bilgisi SMS ve e-posta ile</li>
+            <li><IconBox /> Teslimattan itibaren 14 gün iade hakkı</li>
+            <li><IconShield /> Güvenli ödeme</li>
+          </ul>
         </div>
       </div>
-      <h2 className="pdp-section">Bu ürün hangi araçlarla uyumlu?</h2>
-      <div className="table-scroll">
-      <table className="fitment-table">
-        <thead><tr><th>Marka</th><th>Model</th><th>Kasa</th><th>Yıl</th><th>Motor</th></tr></thead>
-        <tbody>
-          {data.fitments.map((f, i) => (
-            <tr key={i}>
-              <td>{f.brandName}</td>
-              <td>{f.modelName}</td>
-              <td>{f.generationName ?? "—"}</td>
-              <td>{f.yearFrom && f.yearTo ? `${f.yearFrom}-${f.yearTo}` : "—"}</td>
-              <td>{f.engineName ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
-      <h2 className="pdp-section">Açıklama</h2>
-      <p className="pdp-desc">{product.description}</p>
+      <h2 className="pdp-section" id="uyumluluk">Bu ürün hangi araçlarla uyumlu?</h2>
+      {data.fitments.length > 0 ? (
+        <div className="table-scroll">
+          <table className="fitment-table">
+            <thead><tr><th>Marka</th><th>Model</th><th>Kasa</th><th>Yıl</th><th>Motor</th></tr></thead>
+            <tbody>
+              {data.fitments.map((f, i) => (
+                <tr key={i}>
+                  <td>{f.brandName}</td>
+                  <td>{f.modelName}</td>
+                  <td>{f.generationName ?? "—"}</td>
+                  <td>{f.yearFrom && f.yearTo ? `${f.yearFrom}-${f.yearTo}` : "—"}</td>
+                  <td>{f.engineName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="pdp-desc">
+          Uyumluluk bilgisi henüz girilmedi. Aracınıza uyup uymadığını OEM numarasıyla kontrol edebilir
+          {whatsappHref ? <> veya <a href={whatsappHref} target="_blank" rel="noreferrer">WhatsApp üzerinden sorabilirsiniz</a></> : null}.
+        </p>
+      )}
+      {product.description && (
+        <>
+          <h2 className="pdp-section">Açıklama</h2>
+          <p className="pdp-desc">{product.description}</p>
+        </>
+      )}
       {related.length > 0 && (
         <>
           <h2 className="pdp-section">Aynı araca uygun diğer parçalar</h2>
@@ -201,6 +253,7 @@ export default async function ProductPage({
           </div>
         </>
       )}
+      {inStock && <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} />}
     </div>
   );
 }

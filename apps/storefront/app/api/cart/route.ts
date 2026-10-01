@@ -164,6 +164,9 @@ export async function POST(request: Request) {
   }
 
   if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
+  if (String(form.get("intent") ?? "") === "buy") {
+    return withCartCookie(NextResponse.redirect(publicRedirect("/odeme", request), 303), sessionId);
+  }
   return withCartCookie(
     NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "ok"), request), 303),
     sessionId,
