@@ -5,7 +5,16 @@ import type { Metadata } from "next";
 import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
-import { pageTitle } from "../../../src/seo";
+import { JsonLd, breadcrumbJsonLd, pageTitle } from "../../../src/seo";
+import {
+  fitmentSummary,
+  oemList,
+  productDisplayTitle,
+  productFactsSummary,
+  productJsonLd,
+  productMetaDescription,
+  type ProductSeoInput,
+} from "../../../src/product-seo";
 import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
@@ -15,18 +24,32 @@ import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer
 import { QtyStepper } from "../../../src/qty-stepper";
 import { StickyAtc } from "../../../src/sticky-atc";
 import { IconBox, IconShield, IconTag, IconTruck } from "../../../src/icons";
+import { sentenceCaseTr } from "../../../src/format";
 
 export const revalidate = 300;
+
+type ProductData = NonNullable<Awaited<ReturnType<typeof cachedProductBySlug>>>;
+
+function seoInput(tenant: Awaited<ReturnType<typeof getTenant>>, data: ProductData): ProductSeoInput {
+  return {
+    host: tenant.tenant.canonicalHost,
+    siteName: tenant.siteName,
+    product: data.product,
+    manufacturerName: data.manufacturerName,
+    images: data.images,
+    oems: data.oems,
+    categories: data.categories,
+    fitments: data.fitments,
+  };
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const tenant = await getTenant();
   const product = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!product) return {};
-  const title = pageTitle(tenant, product.product.name);
-  const description =
-    product.product.description?.slice(0, 160) ??
-    `${product.product.name} — KDV dahil fiyat, stok durumu ve araç uyumluluğu. ${tenant.siteName}.`;
+  const title = pageTitle(tenant, productDisplayTitle(product.product.name, product.manufacturerName));
+  const description = productMetaDescription(seoInput(tenant, product));
   const url = `https://${tenant.tenant.canonicalHost}/urun/${product.product.slug}`;
   const image = product.images[0]?.url;
   return {
@@ -59,28 +82,33 @@ export default async function ProductPage({
   const available = Math.max(0, (product.stockQty ?? 0) - (product.reservedQty ?? 0));
   const lowStock = inStock && available > 0 && available <= 5;
   const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
-  const oemCodes = [...new Set(data.oems.map((o) => o.raw))].slice(0, 4);
+  const allOems = oemList(data.oems);
+  const oemCodes = allOems.slice(0, 4);
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    sku: product.sku,
-    brand: data.manufacturerName,
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "TRY",
-      price: product.price,
-      availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-    },
-  };
+  const seo = seoInput(tenant, data);
+  const factsSummary = productFactsSummary(seo);
+  const host = tenant.tenant.canonicalHost;
+  const vehicleCount = fitmentSummary(data.fitments).count;
 
   return (
     <div className="container page-surface">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <JsonLd
+        data={[
+          productJsonLd(seo),
+          breadcrumbJsonLd(host, [
+            { name: "Ana Sayfa", path: "/" },
+            ...(fit
+              ? [
+                  { name: fit.brandName, path: `/${fit.brandSlug}` },
+                  { name: fit.modelName, path: `/${fit.brandSlug}/${fit.modelSlug}` },
+                ]
+              : []),
+            { name: product.name, path: `/urun/${product.slug}` },
+          ]),
+        ]}
+      />
       <CommerceEvent
         event="view_item"
         items={[{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }]}
@@ -233,10 +261,43 @@ export default async function ProductPage({
           {whatsappHref ? <> veya <a href={whatsappHref} target="_blank" rel="noreferrer">WhatsApp üzerinden sorabilirsiniz</a></> : null}.
         </p>
       )}
-      {product.description && (
+      <h2 className="pdp-section">Ürün bilgileri</h2>
+      <div className="table-scroll">
+        <table className="fitment-table pdp-specs">
+          <tbody>
+            {data.manufacturerName && (
+              <tr><th scope="row">Marka</th><td>{data.manufacturerName}</td></tr>
+            )}
+            <tr><th scope="row">Ürün kodu</th><td>{product.sku}</td></tr>
+            {allOems.length > 0 && (
+              <tr><th scope="row">OEM numarası</th><td>{allOems.join(", ")}</td></tr>
+            )}
+            {product.barcode && <tr><th scope="row">Barkod</th><td>{product.barcode}</td></tr>}
+            {data.categories.length > 0 && (
+              <tr>
+                <th scope="row">Kategori</th>
+                <td>
+                  {data.categories.map((c, i) => (
+                    <span key={c.id}>
+                      {i > 0 && ", "}
+                      <Link href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
+                    </span>
+                  ))}
+                </td>
+              </tr>
+            )}
+            {vehicleCount > 0 && (
+              <tr><th scope="row">Uyumlu araç</th><td>{vehicleCount} model</td></tr>
+            )}
+            <tr><th scope="row">Durum</th><td>Sıfır</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {(product.description || factsSummary) && (
         <>
           <h2 className="pdp-section">Açıklama</h2>
-          <p className="pdp-desc">{product.description}</p>
+          {product.description && <p className="pdp-desc">{product.description}</p>}
+          {factsSummary && <p className="pdp-desc">{factsSummary}</p>}
         </>
       )}
       {related.length > 0 && (

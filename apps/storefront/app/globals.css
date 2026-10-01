@@ -2920,3 +2920,7 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .trust-item span { display: grid; flex: none; }
   .trust-item svg { width: 18px; height: 18px; }
 }
+
+.pdp-specs th { width: 34%; color: var(--muted-foreground); font-weight: 600; background: color-mix(in srgb, var(--muted) 60%, #fff); }
+.pdp-specs td { overflow-wrap: anywhere; }
+.pdp-specs a { color: var(--primary); font-weight: 600; }

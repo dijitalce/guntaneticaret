@@ -3,6 +3,23 @@ import { headers } from "next/headers";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { tenantNoIndex } from "../src/seo";
 
+const PRIVATE_PATHS = ["/sepet", "/odeme", "/hesabim", "/favoriler", "/api/"];
+
+/** Yapay zekâ arama/asistan tarayıcıları: ürünlerin ChatGPT, Perplexity, Claude, Gemini, Copilot yanıtlarında yer alması için açık. */
+const AI_CRAWLERS = [
+  "OAI-SearchBot",
+  "ChatGPT-User",
+  "GPTBot",
+  "PerplexityBot",
+  "Perplexity-User",
+  "ClaudeBot",
+  "Claude-SearchBot",
+  "Claude-User",
+  "Google-Extended",
+  "Applebot-Extended",
+  "Bingbot",
+];
+
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "localhost";
   const tenant = await resolveTenantByHost(host);
@@ -11,7 +28,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     return { rules: { userAgent: "*", disallow: "/" } };
   }
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/sepet", "/odeme", "/hesabim"] },
+    rules: [
+      { userAgent: "*", allow: "/", disallow: PRIVATE_PATHS },
+      { userAgent: AI_CRAWLERS, allow: "/", disallow: PRIVATE_PATHS },
+    ],
     sitemap: `${base}/sitemap.xml`,
   };
 }

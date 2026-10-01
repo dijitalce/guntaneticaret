@@ -267,7 +267,6 @@ export type XmlFieldMapping = Partial<Record<XmlFieldKey, string>>;
 
 export const LISTING_PAGE_SIZE = 24;
 export const XML_BATCH_SIZE = 500;
-export const SITEMAP_URL_LIMIT = 10_000;
 export const TENANT_HOST_CACHE_TTL_SECONDS = 300;
 export const TENANT_CONFIG_CACHE_TTL_SECONDS = 300;
 export const NAV_CACHE_TTL_SECONDS = 600;

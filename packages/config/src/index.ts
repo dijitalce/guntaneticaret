@@ -16,6 +16,8 @@ export const RESERVED_PATH_SLUGS = [
   "cikis",
   "robots.txt",
   "sitemap.xml",
+  "sitemaps",
+  "llms.txt",
   "api",
   "admin",
   "yonetim",

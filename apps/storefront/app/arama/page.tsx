@@ -5,6 +5,12 @@ import { getTenant } from "../../src/tenant";
 import { ProductCard } from "../../src/product-card";
 import { cachedFeaturedProducts } from "../../src/cached-catalog";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Arama",
+  robots: { index: false, follow: true },
+};
 
 export default async function SearchPage({
   searchParams,
