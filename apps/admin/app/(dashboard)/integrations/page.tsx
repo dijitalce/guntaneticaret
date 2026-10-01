@@ -1,31 +1,71 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { asc, eq } from "drizzle-orm";
-import { db, getIntegrationSecrets, getTenantContext, tenantSettings, tenants } from "@guntan/db";
+import { eq } from "drizzle-orm";
+import { db, getIntegrationSecrets, getTenantContext, tenantDomains, tenantSettings, tenants } from "@guntan/db";
+import { BrandLogo } from "@/src/brand-logo";
 import { IconExternal } from "@/src/icons";
 import { withBase } from "@/src/paths";
+import { assetUrl } from "@/src/storefront";
 import { Alert, EmptyState, PageHeader, StatusBadge } from "@/src/ui";
-import { TabNav, Toggle } from "@/src/ui-ext";
+import { Toggle } from "@/src/ui-ext";
 
 export const metadata = { title: "Eklentiler" };
 export const dynamic = "force-dynamic";
 
 const MASK = "••••••••";
+const MAIN_SLUG = "guntan";
 
-function Card({ title, subtitle, logo, connected, children }: { title: string; subtitle: string; logo: string; connected: boolean; children: ReactNode }) {
+function Item({
+  title,
+  subtitle,
+  logo,
+  connected,
+  onLabel = "Bağlı",
+  offLabel = "Bağlı değil",
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  logo: string;
+  connected: boolean;
+  onLabel?: string;
+  offLabel?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="panel integration-card">
-      <div className="integration-head">
+    <details className="int-item">
+      <summary>
         <span className="integration-logo" aria-hidden>
           {logo}
         </span>
+        <span className="int-item-text">
+          <strong>{title}</strong>
+          <small>{subtitle}</small>
+        </span>
+        <StatusBadge tone={connected ? "ok" : "neutral"}>{connected ? onLabel : offLabel}</StatusBadge>
+        <svg className="int-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <div className="int-item-body form-stack">{children}</div>
+    </details>
+  );
+}
+
+function Group({ title, description, active, total, extra, children }: { title: string; description: string; active: number; total: number; extra?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="panel int-group">
+      <header className="int-group-head">
         <div>
           <h2>{title}</h2>
-          <p>{subtitle}</p>
+          <p>{description}</p>
         </div>
-        <StatusBadge tone={connected ? "ok" : "neutral"}>{connected ? "Bağlı" : "Bağlı değil"}</StatusBadge>
-      </div>
-      <div className="panel-pad form-stack">{children}</div>
+        <span className={`int-count${active ? " is-on" : ""}`}>
+          {active}/{total} etkin
+        </span>
+      </header>
+      {extra ? <div className="int-group-extra">{extra}</div> : null}
+      <div className="int-list">{children}</div>
     </section>
   );
 }
@@ -44,7 +84,11 @@ function CopyUrl({ url }: { url: string }) {
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ site?: string; ok?: string; hata?: string }> }) {
   const sp = await searchParams;
-  const tenantRows = await db.select({ id: tenants.id, name: tenants.name }).from(tenants).orderBy(asc(tenants.name));
+  const [tenantRows, domainRows, settingRows] = await Promise.all([
+    db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, createdAt: tenants.createdAt }).from(tenants),
+    db.select({ tenantId: tenantDomains.tenantId, hostname: tenantDomains.hostname, isPrimary: tenantDomains.isPrimary }).from(tenantDomains),
+    db.select({ tenantId: tenantSettings.tenantId, siteName: tenantSettings.siteName, logoUrl: tenantSettings.logoUrl, faviconUrl: tenantSettings.faviconUrl }).from(tenantSettings),
+  ]);
   if (!tenantRows.length) {
     return (
       <>
@@ -53,7 +97,23 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       </>
     );
   }
-  const tenantId = tenantRows.find((t) => t.id === sp.site)?.id ?? tenantRows[0]!.id;
+  const sites = tenantRows
+    .map((t) => {
+      const s = settingRows.find((r) => r.tenantId === t.id);
+      const ds = domainRows.filter((d) => d.tenantId === t.id);
+      const primary = ds.find((d) => d.isPrimary) ?? ds[0];
+      return {
+        id: t.id,
+        main: t.slug === MAIN_SLUG,
+        name: s?.siteName?.trim() || t.name,
+        host: primary?.hostname ?? "Alan adı yok",
+        logo: assetUrl(s?.faviconUrl ?? s?.logoUrl),
+        createdAt: t.createdAt,
+      };
+    })
+    .sort((a, b) => Number(b.main) - Number(a.main) || a.createdAt.getTime() - b.createdAt.getTime() || a.name.localeCompare(b.name, "tr"));
+  const current = sites.find((t) => t.id === sp.site) ?? sites[0]!;
+  const tenantId = current.id;
   const [[settings], secrets, ctx] = await Promise.all([
     db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1),
     getIntegrationSecrets(tenantId),
@@ -62,11 +122,30 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const social = (settings?.socialJson ?? {}) as Record<string, string>;
   const site = ctx.url.replace(/\/$/, "");
 
+  const tracking = {
+    ga: Boolean(settings?.gaId),
+    gtm: Boolean(settings?.gtmId),
+    ads: Boolean(social.googleAdsId && social.googleAdsLabel),
+    meta: Boolean(social.metaPixelId),
+    tiktok: Boolean(social.tiktokPixelId),
+  };
+  const feeds = {
+    merchant: social.merchantFeed === "1",
+    chatgpt: social.chatgptFeed === "1",
+    bing: social.bingFeed === "1",
+    meta: social.metaFeed === "1",
+    tiktok: social.tiktokFeed === "1",
+    pinterest: social.pinterestFeed === "1",
+  };
+  const search = { google: Boolean(social.googleVerification), bing: Boolean(social.bingVerification) };
+  const custom = Boolean(settings?.customScripts || settings?.headerHtml);
+  const on = (o: Record<string, boolean>) => Object.values(o).filter(Boolean).length;
+
   return (
     <>
       <PageHeader
         title="Eklentiler"
-        description="Reklam, analiz ve ürün kataloğu entegrasyonları. Ayarlar seçili siteye uygulanır."
+        description="Reklam, analiz, ürün beslemeleri ve arama motoru bağlantıları. Ayarlar seçili siteye uygulanır."
         actions={
           <Link className="btn btn-secondary" href="/integrations/xml">
             Tedarikçi XML senkronu
@@ -75,14 +154,56 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       />
       {sp.ok ? <Alert tone="ok">Eklenti ayarları kaydedildi. Sitede birkaç saniye içinde etkin olur.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
-      {tenantRows.length > 1 ? (
-        <TabNav label="Site" active={tenantId} items={tenantRows.map((t) => ({ key: t.id, label: t.name, href: `/integrations?site=${t.id}` }))} />
-      ) : null}
 
-      <form action={withBase("/api/integrations")} method="post">
+      <nav className="int-sites" aria-label="Site seçimi">
+        {sites.map((t) => (
+          <Link key={t.id} href={`/integrations?site=${t.id}`} className={t.id === tenantId ? "is-active" : undefined} aria-current={t.id === tenantId ? "page" : undefined}>
+            <BrandLogo src={t.logo} name={t.name} size={32} />
+            <span>
+              <strong>{t.name}</strong>
+              <small>{t.host}</small>
+            </span>
+          </Link>
+        ))}
+      </nav>
+
+      <form action={withBase("/api/integrations")} method="post" className="int-form">
         <input type="hidden" name="tenantId" value={tenantId} />
-        <div className="integration-grid">
-          <Card title="Meta Pixel ve Dönüşüm API'si" subtitle="Facebook ve Instagram reklamları için gelişmiş dönüşüm izleme" logo="f" connected={Boolean(social.metaPixelId)}>
+
+        <Group title="Analiz ve reklam" description="Ziyaretçi ve satış ölçümü, reklam dönüşüm izleme" active={on(tracking)} total={5}>
+          <Item title="Google Analytics 4" subtitle="Ziyaret ve e-ticaret analizi" logo="GA" connected={tracking.ga}>
+            <div className="field">
+              <label htmlFor="gaId">Ölçüm kimliği</label>
+              <input className="input mono" id="gaId" name="gaId" defaultValue={settings?.gaId ?? ""} placeholder="G-XXXXXXXXXX" />
+            </div>
+            <div className="field">
+              <label htmlFor="ga4ApiSecret">Measurement Protocol API anahtarı</label>
+              <input className="input" id="ga4ApiSecret" name="ga4ApiSecret" type="password" defaultValue={secrets.ga4ApiSecret ? MASK : ""} autoComplete="off" />
+              <small className="field-hint">GA4 → Yönetici → Veri akışları → Measurement Protocol API anahtarları. Satın almalar sunucudan da iletilir.</small>
+            </div>
+          </Item>
+
+          <Item title="Google Tag Manager" subtitle="Etiketleri tek yerden yönetin; dataLayer e-ticaret olayları gönderilir" logo="GTM" connected={tracking.gtm}>
+            <div className="field">
+              <label htmlFor="gtmId">Kapsayıcı kimliği</label>
+              <input className="input mono" id="gtmId" name="gtmId" defaultValue={settings?.gtmId ?? ""} placeholder="GTM-XXXXXXX" />
+            </div>
+          </Item>
+
+          <Item title="Google Ads dönüşüm izleme" subtitle="Satın alma dönüşümlerini Google Ads’e bildirir" logo="Ads" connected={tracking.ads}>
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="googleAdsId">Dönüşüm kimliği</label>
+                <input className="input mono" id="googleAdsId" name="googleAdsId" defaultValue={social.googleAdsId ?? ""} placeholder="AW-123456789" />
+              </div>
+              <div className="field">
+                <label htmlFor="googleAdsLabel">Dönüşüm etiketi</label>
+                <input className="input mono" id="googleAdsLabel" name="googleAdsLabel" defaultValue={social.googleAdsLabel ?? ""} placeholder="AbC-D_efG-h12_34" />
+              </div>
+            </div>
+          </Item>
+
+          <Item title="Meta Pixel ve Dönüşüm API'si" subtitle="Facebook ve Instagram reklamları için dönüşüm izleme" logo="f" connected={tracking.meta}>
             <div className="field">
               <label htmlFor="metaPixelId">Pixel ID</label>
               <input className="input mono" id="metaPixelId" name="metaPixelId" defaultValue={social.metaPixelId ?? ""} placeholder="123456789012345" />
@@ -100,120 +221,116 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             <p className="muted text-sm" style={{ margin: 0 }}>
               Gönderilen olaylar: PageView, ViewContent, AddToCart, InitiateCheckout, Purchase (tarayıcı + sunucu, event_id ile tekilleştirilir; e-posta/telefon SHA-256 ile şifrelenir).
             </p>
-          </Card>
+          </Item>
 
-          <Card title="Meta ürün kataloğu" subtitle="Facebook/Instagram mağaza ve dinamik reklamlar için ürün feed’i" logo="∞" connected={social.metaFeed === "1"}>
-            <Toggle name="metaFeed" defaultChecked={social.metaFeed === "1"} label="Katalog feed’ini yayınla" />
-            <CopyUrl url={`${site}/feeds/meta.xml`} />
-            <small className="field-hint">Commerce Manager → Katalog → Veri kaynakları → Veri akışı → Zamanlanmış akış olarak bu adresi ekleyin (günlük).</small>
-          </Card>
-
-          <Card title="Google Analytics 4" subtitle="Ziyaret ve e-ticaret analizi" logo="GA" connected={Boolean(settings?.gaId)}>
+          <Item title="TikTok Pixel" subtitle="TikTok reklamları için dönüşüm izleme" logo="♪" connected={tracking.tiktok}>
             <div className="field">
-              <label htmlFor="gaId">Ölçüm kimliği</label>
-              <input className="input mono" id="gaId" name="gaId" defaultValue={settings?.gaId ?? ""} placeholder="G-XXXXXXXXXX" />
+              <label htmlFor="tiktokPixelId">Pixel ID</label>
+              <input className="input mono" id="tiktokPixelId" name="tiktokPixelId" defaultValue={social.tiktokPixelId ?? ""} placeholder="C1A2B3C4D5E6F7G8H9" />
             </div>
-            <div className="field">
-              <label htmlFor="ga4ApiSecret">Measurement Protocol API anahtarı</label>
-              <input className="input" id="ga4ApiSecret" name="ga4ApiSecret" type="password" defaultValue={secrets.ga4ApiSecret ? MASK : ""} autoComplete="off" />
-              <small className="field-hint">GA4 → Yönetici → Veri akışları → Measurement Protocol API anahtarları. Satın almalar sunucudan da iletilir.</small>
-            </div>
-          </Card>
+          </Item>
+        </Group>
 
-          <Card title="Google Ads dönüşüm izleme" subtitle="Satın alma dönüşümlerini Google Ads’e bildirir (gelişmiş dönüşümler dahil)" logo="Ads" connected={Boolean(social.googleAdsId && social.googleAdsLabel)}>
-            <div className="form-row">
-              <div className="field">
-                <label htmlFor="googleAdsId">Dönüşüm kimliği</label>
-                <input className="input mono" id="googleAdsId" name="googleAdsId" defaultValue={social.googleAdsId ?? ""} placeholder="AW-123456789" />
-              </div>
-              <div className="field">
-                <label htmlFor="googleAdsLabel">Dönüşüm etiketi</label>
-                <input className="input mono" id="googleAdsLabel" name="googleAdsLabel" defaultValue={social.googleAdsLabel ?? ""} placeholder="AbC-D_efG-h12_34" />
-              </div>
-            </div>
-          </Card>
-
-          <Card title="Google Merchant Center" subtitle="Google Alışveriş ve Performance Max için ürün feed’i" logo="M" connected={social.merchantFeed === "1"}>
-            <Toggle name="merchantFeed" defaultChecked={social.merchantFeed === "1"} label="Merchant feed’ini yayınla" />
+        <Group
+          title="Ürün beslemeleri"
+          description="Ürünlerinizi alışveriş platformlarına ve yapay zekâ asistanlarına otomatik gönderin"
+          active={on(feeds)}
+          total={6}
+          extra={<Toggle name="feedAllProducts" defaultChecked={social.feedAllProducts === "1"} label="Stokta olmayanları da ekle" hint="Tüm ürün beslemelerine uygulanır. Kapalıyken yalnızca stoktaki ürünler gönderilir." />}
+        >
+          <Item title="Google Merchant Center" subtitle="Google Alışveriş ve Performance Max" logo="M" connected={feeds.merchant} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="merchantFeed" defaultChecked={feeds.merchant} label="Merchant beslemesini yayınla" />
             <CopyUrl url={`${site}/feeds/google.xml`} />
-            <Toggle name="feedAllProducts" defaultChecked={social.feedAllProducts === "1"} label="Stokta olmayanları da ekle" hint="Tüm ürün feed’lerine uygulanır. Kapalıyken yalnızca stoktaki ürünler feed’e girer." />
             <small className="field-hint">Merchant Center → Ürünler → Feed’ler → Planlanmış getirme ile bu adresi ekleyin.</small>
-          </Card>
+          </Item>
 
-          <Card title="ChatGPT ürün kataloğu" subtitle="ChatGPT alışveriş sonuçlarında ürünlerinizin görünmesi için OpenAI biçiminde (JSONL) feed" logo="AI" connected={social.chatgptFeed === "1"}>
-            <Toggle name="chatgptFeed" defaultChecked={social.chatgptFeed === "1"} label="ChatGPT feed’ini yayınla" />
+          <Item title="ChatGPT ürün kataloğu" subtitle="ChatGPT alışveriş sonuçları için OpenAI biçiminde (JSONL) besleme" logo="AI" connected={feeds.chatgpt} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="chatgptFeed" defaultChecked={feeds.chatgpt} label="ChatGPT beslemesini yayınla" />
             <CopyUrl url={`${site}/feeds/chatgpt.jsonl`} />
             <small className="field-hint">
-              chatgpt.com/merchants üzerinden satıcı başvurusu yapıp bu adresi (veya indirilen dosyayı) ürün kaynağı olarak verin. Görseli ve fiyatı olmayan ürünler feed’e alınmaz. ChatGPT sitenizi ayrıca OAI-SearchBot ile tarar; robots.txt buna izin veriyor.
+              chatgpt.com/merchants üzerinden satıcı başvurusu yapıp bu adresi ürün kaynağı olarak verin. Görseli ve fiyatı olmayan ürünler beslemeye alınmaz.
             </small>
             <a className="btn btn-secondary btn-sm" href="https://chatgpt.com/merchants" target="_blank" rel="noreferrer">
               <IconExternal width={14} height={14} />
               ChatGPT satıcı başvurusu
             </a>
-          </Card>
+          </Item>
 
-          <Card title="TikTok ürün kataloğu" subtitle="TikTok Shop ve katalog reklamları için ürün feed’i" logo="♪" connected={social.tiktokFeed === "1"}>
-            <Toggle name="tiktokFeed" defaultChecked={social.tiktokFeed === "1"} label="TikTok feed’ini yayınla" />
-            <CopyUrl url={`${site}/feeds/tiktok.xml`} />
-            <small className="field-hint">TikTok Ads Manager → Varlıklar → Kataloglar → Ürün ekle → Veri akışı (zamanlanmış) ile bu adresi ekleyin.</small>
-          </Card>
-
-          <Card title="Pinterest ürün kataloğu" subtitle="Pinterest alışveriş pinleri ve reklamları için ürün feed’i" logo="P" connected={social.pinterestFeed === "1"}>
-            <Toggle name="pinterestFeed" defaultChecked={social.pinterestFeed === "1"} label="Pinterest feed’ini yayınla" />
-            <CopyUrl url={`${site}/feeds/pinterest.xml`} />
-            <small className="field-hint">Pinterest Business → Kataloglar → Veri kaynağı oluştur → bu adresi girin (para birimi TRY).</small>
-          </Card>
-
-          <Card title="Microsoft Merchant Center (Bing)" subtitle="Bing Alışveriş ve Microsoft reklamları için ürün feed’i" logo="B" connected={social.bingFeed === "1"}>
-            <Toggle name="bingFeed" defaultChecked={social.bingFeed === "1"} label="Microsoft feed’ini yayınla" />
+          <Item title="Microsoft Merchant Center (Bing)" subtitle="Bing Alışveriş, Microsoft reklamları ve Copilot" logo="B" connected={feeds.bing} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="bingFeed" defaultChecked={feeds.bing} label="Microsoft beslemesini yayınla" />
             <CopyUrl url={`${site}/feeds/bing.xml`} />
             <small className="field-hint">Microsoft Merchant Center → Mağaza → Feed’ler → Zamanlanmış indirme ile bu adresi ekleyin.</small>
-          </Card>
+          </Item>
 
-          <Card title="Google Tag Manager" subtitle="Etiketleri tek yerden yönetin; dataLayer e-ticaret olayları gönderilir" logo="GTM" connected={Boolean(settings?.gtmId)}>
-            <div className="field">
-              <label htmlFor="gtmId">Kapsayıcı kimliği</label>
-              <input className="input mono" id="gtmId" name="gtmId" defaultValue={settings?.gtmId ?? ""} placeholder="GTM-XXXXXXX" />
-            </div>
-          </Card>
+          <Item title="Meta ürün kataloğu" subtitle="Facebook/Instagram mağaza ve dinamik reklamlar" logo="∞" connected={feeds.meta} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="metaFeed" defaultChecked={feeds.meta} label="Meta beslemesini yayınla" />
+            <CopyUrl url={`${site}/feeds/meta.xml`} />
+            <small className="field-hint">Commerce Manager → Katalog → Veri kaynakları → Veri akışı → Zamanlanmış akış olarak bu adresi ekleyin (günlük).</small>
+          </Item>
 
-          <Card title="TikTok Pixel" subtitle="TikTok reklamları için dönüşüm izleme" logo="♪" connected={Boolean(social.tiktokPixelId)}>
-            <div className="field">
-              <label htmlFor="tiktokPixelId">Pixel ID</label>
-              <input className="input mono" id="tiktokPixelId" name="tiktokPixelId" defaultValue={social.tiktokPixelId ?? ""} placeholder="C1A2B3C4D5E6F7G8H9" />
-            </div>
-          </Card>
+          <Item title="TikTok ürün kataloğu" subtitle="TikTok Shop ve katalog reklamları" logo="♪" connected={feeds.tiktok} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="tiktokFeed" defaultChecked={feeds.tiktok} label="TikTok beslemesini yayınla" />
+            <CopyUrl url={`${site}/feeds/tiktok.xml`} />
+            <small className="field-hint">TikTok Ads Manager → Varlıklar → Kataloglar → Ürün ekle → Veri akışı (zamanlanmış) ile bu adresi ekleyin.</small>
+          </Item>
 
-          <Card title="Google Search Console" subtitle="Site sahipliği doğrulama, site haritası ve arama performansı" logo="SC" connected={Boolean(social.googleVerification)}>
+          <Item title="Pinterest ürün kataloğu" subtitle="Pinterest alışveriş pinleri ve reklamları" logo="P" connected={feeds.pinterest} onLabel="Yayında" offLabel="Kapalı">
+            <Toggle name="pinterestFeed" defaultChecked={feeds.pinterest} label="Pinterest beslemesini yayınla" />
+            <CopyUrl url={`${site}/feeds/pinterest.xml`} />
+            <small className="field-hint">Pinterest Business → Kataloglar → Veri kaynağı oluştur → bu adresi girin (para birimi TRY).</small>
+          </Item>
+        </Group>
+
+        <Group title="Arama motorları" description="Site sahipliği doğrulama, site haritası ve yapay zekâ tarayıcıları" active={on(search)} total={2}>
+          <Item title="Google Search Console" subtitle="Sahiplik doğrulama ve arama performansı" logo="G" connected={search.google} onLabel="Doğrulandı" offLabel="Doğrulanmadı">
             <div className="field">
               <label htmlFor="googleVerification">Google doğrulama kodu</label>
               <input className="input mono" id="googleVerification" name="googleVerification" defaultValue={social.googleVerification ?? ""} placeholder='<meta name="google-site-verification" content="..."> veya yalnızca kod' />
               <small className="field-hint">Search Console → Mülk ekle → URL ön eki → HTML etiketi yöntemi. Etiketin tamamını yapıştırabilirsiniz.</small>
             </div>
-            <div className="field">
-              <label htmlFor="bingVerification">Bing doğrulama kodu (isteğe bağlı)</label>
-              <input className="input mono" id="bingVerification" name="bingVerification" defaultValue={social.bingVerification ?? ""} />
-            </div>
-            <div className="field">
-              <label>Site haritası (Search Console’a gönderin)</label>
-              <CopyUrl url={`${site}/sitemap.xml`} />
-            </div>
             <a className="btn btn-secondary btn-sm" href="https://search.google.com/search-console" target="_blank" rel="noreferrer">
               <IconExternal width={14} height={14} />
               Search Console’u aç
             </a>
-          </Card>
+          </Item>
 
-          <Card title="Özel kodlar" subtitle="Canlı destek, ısı haritası vb. üçüncü parti scriptler" logo="</>" connected={Boolean(settings?.customScripts || settings?.headerHtml)}>
+          <Item title="Bing Webmaster Tools" subtitle="Bing, Copilot ve ChatGPT aramasında görünürlük" logo="B" connected={search.bing} onLabel="Doğrulandı" offLabel="Doğrulanmadı">
+            <div className="field">
+              <label htmlFor="bingVerification">Bing doğrulama kodu</label>
+              <input className="input mono" id="bingVerification" name="bingVerification" defaultValue={social.bingVerification ?? ""} placeholder='<meta name="msvalidate.01" content="..."> veya yalnızca kod' />
+              <small className="field-hint">Bing Webmaster → Site ekle → HTML Meta etiketi. Search Console’dan içe aktarma da kullanılabilir.</small>
+            </div>
+            <a className="btn btn-secondary btn-sm" href="https://www.bing.com/webmasters" target="_blank" rel="noreferrer">
+              <IconExternal width={14} height={14} />
+              Bing Webmaster’ı aç
+            </a>
+          </Item>
+
+          <div className="int-links">
+            <div className="field">
+              <label>Site haritası (Search Console ve Bing’e gönderin)</label>
+              <CopyUrl url={`${site}/sitemap.xml`} />
+            </div>
+            <div className="field">
+              <label>Yapay zekâ özeti (llms.txt)</label>
+              <CopyUrl url={`${site}/llms.txt`} />
+            </div>
+          </div>
+        </Group>
+
+        <Group title="Özel kodlar" description="Canlı destek, ısı haritası gibi üçüncü parti scriptler" active={custom ? 1 : 0} total={1}>
+          <Item title="Özel kodlar" subtitle="Hotjar, Clarity, canlı destek vb." logo="</>" connected={custom} onLabel="Ekli" offLabel="Yok">
             <p className="text-sm" style={{ margin: 0 }}>
-              Hotjar, Clarity, canlı destek gibi kodları site ayarlarındaki <strong>Gelişmiş</strong> bölümünden ekleyebilirsiniz.
+              Bu kodlar site ayarlarındaki <strong>Gelişmiş</strong> bölümünden yönetilir.
             </p>
             <Link className="btn btn-secondary btn-sm" href={`/tenants/${tenantId}?sekme=gelismis`}>
               Site ayarlarına git
             </Link>
-          </Card>
-        </div>
+          </Item>
+        </Group>
+
         <div className="form-actions sticky-actions">
+          <span className="muted text-sm int-save-note">{current.name} için kaydedilir</span>
           <button className="btn btn-primary" type="submit">
             Eklenti ayarlarını kaydet
           </button>
