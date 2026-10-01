@@ -2675,6 +2675,7 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 
 /* —— Ürün sayfası satın alma alanı —— */
 .pdp { align-items: start; }
+.pdp-media img { height: auto; }
 .pdp-info { display: flex; flex-direction: column; }
 .pdp-info h1 { font-size: clamp(1.25rem, 2.2vw, 1.75rem); margin-bottom: 0.55rem; }
 .pdp-codes { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; margin: 0 0 0.85rem; font-size: 0.85rem; }
@@ -2773,4 +2774,66 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 }
 @media (max-width: 420px) {
   .pdp-trust { grid-template-columns: 1fr; }
+}
+
+/* —— Ürün kartı ve listeler —— */
+.product-card-media { background: #fff; }
+.product-card-media img { object-fit: contain; height: auto; }
+.product-card-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.35em * 2);
+}
+.product-card-name:hover { color: var(--primary); }
+.product-card-oem { margin: 0; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-card-price { justify-content: space-between; align-items: center; gap: 0.35rem; padding-top: 0.35rem; }
+.product-card-price > span:first-child { display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; }
+.product-card-price .badge { font-size: 0.7rem; padding: 0.15rem 0.5rem; }
+.product-card-foot { margin-top: 0.45rem; }
+
+.mobile-filters { display: none; }
+@media (max-width: 900px) {
+  .catalog-aside.has-mobile-filters { display: none; }
+  .mobile-filters {
+    display: block;
+    margin-bottom: 0.75rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .mobile-filters > summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1rem;
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .mobile-filters > summary::-webkit-details-marker { display: none; }
+  .mobile-filters > summary::after { content: "▾"; margin-left: auto; color: var(--muted-foreground); }
+  .mobile-filters[open] > summary::after { content: "▴"; }
+  .mobile-filters > summary em {
+    font-style: normal;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.72rem;
+    display: grid;
+    place-items: center;
+  }
+  .mobile-filters .filter-panel { border: 0; padding-top: 0; border-radius: 0 0 14px 14px; box-shadow: none; }
+}
+@media (max-width: 640px) {
+  .product-card-price { flex-direction: column; align-items: flex-start; }
+  .product-card-price strong { font-size: 1rem; }
+}
+@media (max-width: 900px) {
+  .mobile-filters .filter-panel-head { font-size: 0; justify-content: flex-end; }
+  .mobile-filters .filter-panel-head:not(:has(a)) { display: none; }
+  .mobile-filters .filter-clear { font-size: 0.8rem; }
 }

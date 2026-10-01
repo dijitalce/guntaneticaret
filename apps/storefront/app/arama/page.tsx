@@ -34,7 +34,18 @@ export default async function SearchPage({
   return (
     <div className="container page-surface">
       <nav className="breadcrumb"><Link href="/">Ana Sayfa</Link> › Arama</nav>
-      <h1>{sp.q ? `“${sp.q}” araması` : "Arama"}</h1>
+      <div className="catalog-toolbar">
+        <div>
+          <h1>{sp.q ? `“${sp.q}” araması` : "Arama"}</h1>
+          {hits.length > 0 && (
+            <p className="catalog-count">
+              {hits.length >= 24
+                ? "En uygun 24 sonuç gösteriliyor. Daha net sonuç için ürün kodu, OEM numarası veya araç modeli ekle."
+                : `${hits.length} ürün bulundu`}
+            </p>
+          )}
+        </div>
+      </div>
       {hits.length > 0 && (
         <div className="product-grid">
           {hits.map((h) => {
@@ -63,7 +74,10 @@ export default async function SearchPage({
         <>
           <div className="empty-state">
             <h2>Bu arama için sonuç yok</h2>
-            <p>Popüler ürünlere göz atabilir veya marka/model seçerek devam edebilirsin.</p>
+            <p>
+              Parça adı, ürün kodu veya OEM numarasıyla tekrar dene; ya da marka ve model seçerek aracına uygun
+              parçaları listele.
+            </p>
             <Link className="btn btn-primary" href="/">Marka seç</Link>
           </div>
           {fallback.length > 0 && (

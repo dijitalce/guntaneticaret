@@ -50,6 +50,7 @@ export function ProductCard({
       <div className="product-card-body">
         <ManufacturerLogo name={product.manufacturerName} className="product-card-mfr" height={20} />
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
+        {product.oem && <p className="product-card-oem">OEM {product.oem}</p>}
         {fitments.length > 0 && (
           <p className="product-card-fit">
             <span>Uyumlu</span>
@@ -62,16 +63,23 @@ export function ProductCard({
             {product.fitmentExtra ? <em>+{product.fitmentExtra}</em> : null}
           </p>
         )}
-        {product.price != null && product.price !== "" && (
-          <div className="product-card-price">
-            {product.compareAtPrice && <s>{formatPrice(product.compareAtPrice)}</s>}
-            <strong>{formatPrice(product.price)}</strong>
-          </div>
-        )}
-        <div className="product-card-foot">
+        <div className="product-card-price">
+          {product.price != null && product.price !== "" && (
+            <span>
+              {product.compareAtPrice && <s>{formatPrice(product.compareAtPrice)}</s>}
+              <strong>{formatPrice(product.price)}</strong>
+            </span>
+          )}
           <span className={inStock ? "badge badge-stock" : "badge badge-out"}>
-            {inStock ? "Stokta" : "Stokta yok"}
+            {inStock ? "Stokta" : "Tükendi"}
           </span>
+        </div>
+        <div className="product-card-foot">
+          {!inStock && (
+            <Link className="btn btn-secondary" href={`/urun/${product.slug}`}>
+              İncele
+            </Link>
+          )}
           {inStock && product.slug && (
             <AddToCartForm
               slug={product.slug}

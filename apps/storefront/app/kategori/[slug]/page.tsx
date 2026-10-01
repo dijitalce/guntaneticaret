@@ -104,6 +104,7 @@ export default async function CategoryPage({
     cat.seoContent ??
     `${sentenceCaseTr(cat.name)} için uyumlu oto yedek parçalar. ${tenant.siteName} güvencesiyle KDV dahil fiyat.`;
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+  const activeFilterCount = [inStock, manufacturerSlug, brandSlug].filter(Boolean).length;
 
   function href(overrides: Record<string, string | undefined> = {}) {
     const params = new URLSearchParams();
@@ -162,7 +163,7 @@ export default async function CategoryPage({
       {cat.seoContent && <p className="category-seo-lead">{cat.seoContent}</p>}
 
       <div className="catalog-layout">
-        <aside className="catalog-aside">
+        <aside className="catalog-aside has-mobile-filters">
           <CategoryFilters
             manufacturers={facets.manufacturers}
             brands={facets.brands}
@@ -173,6 +174,20 @@ export default async function CategoryPage({
           />
         </aside>
         <section>
+          <details className="mobile-filters">
+            <summary>
+              Filtrele
+              {activeFilterCount > 0 && <em>{activeFilterCount}</em>}
+            </summary>
+            <CategoryFilters
+              manufacturers={facets.manufacturers}
+              brands={facets.brands}
+              inStock={inStock}
+              manufacturerSlug={manufacturerSlug}
+              brandSlug={brandSlug}
+              href={href}
+            />
+          </details>
           <CategoryVehicleFinder
             brands={allBrands}
             initialBrandSlug={brandSlug}
