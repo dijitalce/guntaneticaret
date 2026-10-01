@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { manufacturerLogoUrl } from "./manufacturer-logo";
 
-type FacetItem = { id: string; name: string; slug: string; count: number };
+type FacetItem = { id: string; name: string; slug: string; count: number; logo?: string | null };
 
 export function CategoryFilters({
   manufacturers,
@@ -63,9 +63,9 @@ export function CategoryFilters({
               href={href({ mfr: m.slug, page: undefined })}
             >
               <span className="filter-mfr">
-                {manufacturerLogoUrl(m.name) && (
+                {manufacturerLogoUrl(m.name, m.logo) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={manufacturerLogoUrl(m.name)!} alt="" height={16} loading="lazy" />
+                  <img src={manufacturerLogoUrl(m.name, m.logo)!} alt="" height={16} loading="lazy" />
                 )}
                 {m.name}
               </span>

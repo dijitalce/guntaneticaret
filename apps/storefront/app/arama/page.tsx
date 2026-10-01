@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { searchProducts } from "@guntan/search";
-import { cardFitmentsByProductIds, searchCatalog } from "@guntan/catalog";
+import { cardFitmentsByProductIds, manufacturerLogosByName, searchCatalog } from "@guntan/catalog";
 import { getTenant } from "../../src/tenant";
 import { ProductCard } from "../../src/product-card";
 import { cachedFeaturedProducts } from "../../src/cached-catalog";
@@ -35,7 +35,9 @@ export default async function SearchPage({
         in_stock: h.stockStatus === "in_stock",
       }));
   const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
-  const fitBy = hits.length > 0 ? await cardFitmentsByProductIds(hits.map((h) => h.id)) : new Map();
+  const [fitBy, logoBy] = hits.length > 0
+    ? await Promise.all([cardFitmentsByProductIds(hits.map((h) => h.id)), manufacturerLogosByName(hits.map((h) => h.manufacturer))])
+    : [new Map(), new Map<string, string>()];
 
   return (
     <div className="container page-surface">
@@ -65,6 +67,7 @@ export default async function SearchPage({
                   sku: h.sku,
                   price: "price" in h && h.price != null ? String(h.price) : undefined,
                   manufacturerName: h.manufacturer,
+                  manufacturerLogo: h.manufacturer ? logoBy.get(h.manufacturer) : null,
                   imageUrl: "thumbnail" in h && h.thumbnail ? String(h.thumbnail) : null,
                   stockStatus: h.in_stock === false ? "out_of_stock" : "in_stock",
                   fitments: fit?.items,

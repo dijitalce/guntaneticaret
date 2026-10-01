@@ -29,6 +29,23 @@ function tenantVisibleSql(tenantId: string, seesAll: boolean) {
   )`;
 }
 
+/** Yüklenen (data URI) logolar sorguda taşınmaz; vitrin rotasının adresi döner. */
+export const manufacturerLogoSql = sql<string | null>`case
+  when ${manufacturers.logoUrl} like 'data:%' then concat('/uretici-logo/', ${manufacturers.slug}, '?v=', unix_timestamp(${manufacturers.updatedAt}))
+  else nullif(${manufacturers.logoUrl}, '')
+end`;
+
+/** Arama dizininden gelen sonuçlar için üretici adı → panelde girilen logo. */
+export async function manufacturerLogosByName(names: Array<string | null | undefined>) {
+  const unique = [...new Set(names.filter((n): n is string => Boolean(n)))];
+  if (!unique.length) return new Map<string, string>();
+  const rows = await db
+    .select({ name: manufacturers.name, logo: manufacturerLogoSql })
+    .from(manufacturers)
+    .where(and(inArray(manufacturers.name, unique), sql`${manufacturers.logoUrl} is not null and ${manufacturers.logoUrl} <> ''`));
+  return new Map(rows.filter((r) => r.logo).map((r) => [r.name, r.logo!]));
+}
+
 const listingSelect = {
   id: products.id,
   name: products.name,
@@ -38,6 +55,7 @@ const listingSelect = {
   compareAtPrice: products.compareAtPrice,
   stockStatus: products.stockStatus,
   manufacturerName: manufacturers.name,
+  manufacturerLogo: manufacturerLogoSql,
   createdAt: products.createdAt,
   stockQty: products.stockQty,
 };
@@ -466,6 +484,7 @@ async function attachListingExtras(
     compareAtPrice: string | null;
     stockStatus: string;
     manufacturerName: string | null;
+    manufacturerLogo: string | null;
     createdAt: Date;
     stockQty: number;
   }>,
@@ -525,12 +544,13 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
         id: manufacturers.id,
         name: manufacturers.name,
         slug: manufacturers.slug,
+        logo: manufacturerLogoSql,
       })
       .from(products)
       .innerJoin(productFitments, eq(productFitments.productId, products.id))
       .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
       .where(and(...scope))
-      .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug),
+      .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug, manufacturers.logoUrl, manufacturers.updatedAt),
     db
       .select({
         id: vehicleEngines.id,
@@ -578,7 +598,7 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
 }
 
 type CategoryFacets = {
-  manufacturers: { id: string; name: string; slug: string; count: number }[];
+  manufacturers: { id: string; name: string; slug: string; logo: string | null; count: number }[];
   brands: { id: string; name: string; slug: string; count: number }[];
   children: { id: string; name: string; slug: string; count: number }[];
 };
@@ -613,13 +633,14 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
       id: manufacturers.id,
       name: manufacturers.name,
       slug: manufacturers.slug,
+      logo: manufacturerLogoSql,
       count: productCount,
     })
     .from(productCategories)
     .innerJoin(products, eq(products.id, productCategories.productId))
     .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(and(inTheseCategories, eq(products.status, "active"), visible))
-    .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug)
+    .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug, manufacturers.logoUrl, manufacturers.updatedAt)
     .orderBy(desc(productCount))
     .limit(40);
 
@@ -675,6 +696,7 @@ export async function getProductBySlug(tenantId: string, slug: string) {
     .select({
       product: products,
       manufacturerName: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
     })
     .from(products)
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
@@ -767,6 +789,7 @@ export async function featuredProducts(tenantId: string, limit = 8) {
       compareAtPrice: products.compareAtPrice,
       sku: products.sku,
       manufacturerName: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
       stockStatus: products.stockStatus,
     })
     .from(products)
@@ -905,6 +928,7 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       sku: products.sku,
       price: products.price,
       manufacturer: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
       stockStatus: products.stockStatus,
     })
     .from(products)

@@ -13,6 +13,7 @@ type Product = {
   price: string;
   compareAtPrice: string | null;
   manufacturerName?: string | null;
+  manufacturerLogo?: string | null;
   imageUrl?: string | null;
   oem?: string | null;
   stockStatus: string;

@@ -6,6 +6,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   tenant_bank: "Banka hesabı",
   vehicle_brand: "Araç markası",
   vehicle_model: "Araç modeli",
+  manufacturer: "Üretici",
   brand_group: "Marka grubu",
   price_tiers: "Fiyat oranları",
   pricing: "Fiyat oranları",
@@ -83,6 +84,8 @@ export function entityHref(entity: string, id: string): string | null {
       return `/catalog/models/${id}`;
     case "brand_group":
       return `/catalog/groups/${id}`;
+    case "manufacturer":
+      return "/catalog/manufacturers";
     case "admin_user":
       return `/system/users/${id}`;
     case "customer":

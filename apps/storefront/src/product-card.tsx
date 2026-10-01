@@ -21,6 +21,7 @@ export function ProductCard({
     price?: string;
     compareAtPrice?: string | null;
     manufacturerName?: string | null;
+    manufacturerLogo?: string | null;
     imageUrl?: string | null;
     oem?: string | null;
     stockStatus?: string;
@@ -48,7 +49,7 @@ export function ProductCard({
         />
       </Link>
       <div className="product-card-body">
-        <ManufacturerLogo name={product.manufacturerName} className="product-card-mfr" height={20} />
+        <ManufacturerLogo name={product.manufacturerName} src={product.manufacturerLogo} className="product-card-mfr" height={20} />
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
         {product.oem && <p className="product-card-oem">OEM {product.oem}</p>}
         {fitments.length > 0 && (

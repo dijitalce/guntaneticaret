@@ -18,6 +18,7 @@ export const RESERVED_PATH_SLUGS = [
   "sitemap.xml",
   "sitemaps",
   "llms.txt",
+  "uretici-logo",
   "api",
   "admin",
   "yonetim",

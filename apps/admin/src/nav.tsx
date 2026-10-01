@@ -71,6 +71,7 @@ const GROUPS: NavGroup[] = [
       { href: "/catalog/pricing", label: "Fiyat oranları", icon: IconWallet },
       { href: "/catalog/brands", label: "Araç markaları", icon: IconCar },
       { href: "/catalog/models", label: "Modeller", icon: IconLayers },
+      { href: "/catalog/manufacturers", label: "Üreticiler", icon: IconImage },
       { href: "/catalog/groups", label: "Marka grupları", icon: IconTag },
     ],
   },

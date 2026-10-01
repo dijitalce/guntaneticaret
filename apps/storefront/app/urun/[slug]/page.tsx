@@ -139,8 +139,8 @@ export default async function ProductPage({
         </div>
         <div className="pdp-info">
           {data.manufacturerName &&
-            (manufacturerLogoUrl(data.manufacturerName) ? (
-              <ManufacturerLogo name={data.manufacturerName} className="pdp-mfr" height={36} />
+            (manufacturerLogoUrl(data.manufacturerName, data.manufacturerLogo) ? (
+              <ManufacturerLogo name={data.manufacturerName} src={data.manufacturerLogo} className="pdp-mfr" height={36} />
             ) : (
               <div className="badge">{data.manufacturerName}</div>
             ))}
