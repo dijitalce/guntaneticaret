@@ -141,6 +141,30 @@ export function CheckoutForm({
   return (
     <div className="checkout-layout">
       <div className="checkout-main">
+        <details className="checkout-mobile-summary">
+          <summary>
+            <span>Sipariş özeti · {itemCount} ürün</span>
+            <strong>{money(payTotal)}</strong>
+          </summary>
+          <ul>
+            {items.map((i) => (
+              <li key={i.id}>
+                <span>{i.qty} × {i.name}</span>
+                <b>{money(Number(i.price) * i.qty)}</b>
+              </li>
+            ))}
+            {discount > 0 && (
+              <li>
+                <span>İndirim ({couponCode})</span>
+                <b>-{money(discount)}</b>
+              </li>
+            )}
+            <li>
+              <span>Kargo</span>
+              <b>{shippingFee === 0 ? "Ücretsiz" : money(shippingFee)}</b>
+            </li>
+          </ul>
+        </details>
         <form
           className="checkout-form-stack"
           action="/api/checkout"
