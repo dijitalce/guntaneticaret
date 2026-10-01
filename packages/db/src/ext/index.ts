@@ -15,3 +15,4 @@ export * from "./marketing";
 export * from "./people";
 export * from "./feeds";
 export * from "./catalog-export";
+export * from "./site-structure";

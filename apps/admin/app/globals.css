@@ -1885,3 +1885,16 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
 .mfr-actions .is-loading { opacity: 0.6; pointer-events: none; }
 .mfr-error { flex-basis: 100%; font-size: 0.74rem; color: var(--a-bad); }
 @media (max-width: 760px) { .mfr-hint { flex-basis: 100%; margin-left: 0; } }
+
+/* SEO ve site haritası */
+.seo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 1rem; align-items: start; margin-top: 1rem; }
+.seo-grid .panel + .panel { margin-top: 0; }
+.kpis + .alert, .kpis + .panel, .alert + .panel { margin-top: 1rem; }
+.seo-checklist-list { display: grid; gap: 0.55rem; margin: 0; padding: 1rem 1.2rem 0.4rem; list-style: none; }
+.seo-checklist-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.88rem; }
+.seo-checklist-list .badge { min-width: 52px; justify-content: center; }
+.seo-links { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.8rem 1.2rem 1.1rem; }
+.seo-empty { padding: 0.75rem 1.2rem; border-top: 1px solid var(--a-border); }
+.seo-empty:first-of-type { border-top: 0; }
+.seo-empty summary { cursor: pointer; font-weight: 600; font-size: 0.88rem; }
+.seo-empty p { margin: 0.5rem 0 0; color: var(--a-muted); max-height: 220px; overflow: auto; }

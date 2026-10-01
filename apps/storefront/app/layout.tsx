@@ -201,6 +201,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/sayfa/mesafeli-satis">Mesafeli satış sözleşmesi</Link>
                 <Link href="/sayfa/gizlilik">Gizlilik</Link>
                 <Link href="/sayfa/iade">İade ve değişim</Link>
+                <Link href="/site-haritasi">Site haritası</Link>
               </div>
               <div>
                 <h3>Alışveriş</h3>

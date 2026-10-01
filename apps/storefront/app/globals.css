@@ -2924,3 +2924,21 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 .pdp-specs th { width: 34%; color: var(--muted-foreground); font-weight: 600; background: color-mix(in srgb, var(--muted) 60%, #fff); }
 .pdp-specs td { overflow-wrap: anywhere; }
 .pdp-specs a { color: var(--primary); font-weight: 600; }
+
+/* HTML site haritası */
+.html-sitemap h1 { margin: 0 0 0.4rem; }
+.html-sitemap-lead { margin: 0 0 1rem; color: var(--muted-foreground); }
+.html-sitemap-jump { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+.html-sitemap-jump a { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; font-weight: 600; color: var(--foreground); text-decoration: none; background: var(--card); }
+.html-sitemap-jump a:hover { border-color: var(--primary); color: var(--primary); }
+.html-sitemap section { margin-bottom: 2rem; scroll-margin-top: 140px; }
+.html-sitemap h2 { margin: 0 0 0.9rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); font-size: 1.15rem; }
+.html-sitemap-cols { columns: 4 230px; column-gap: 1.5rem; }
+.html-sitemap-group { break-inside: avoid; margin-bottom: 1.1rem; }
+.html-sitemap-head { display: block; margin-bottom: 0.3rem; font-weight: 700; color: var(--foreground); text-decoration: none; }
+.html-sitemap ul { margin: 0; padding: 0; list-style: none; }
+.html-sitemap li a { display: block; padding: 0.15rem 0; font-size: 0.88rem; color: var(--muted-foreground); text-decoration: none; }
+.html-sitemap a:hover { color: var(--primary); }
+.html-sitemap a span { font-size: 0.75rem; color: var(--muted-foreground); opacity: 0.75; }
+.html-sitemap-inline { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+.html-sitemap-note { margin-top: 1rem; font-size: 0.85rem; color: var(--muted-foreground); }

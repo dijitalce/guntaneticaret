@@ -91,6 +91,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/tenants", label: "Tüm siteler", icon: IconGlobe },
       { href: "/tenants/new", label: "Yeni site", icon: IconPlus },
+      { href: "/seo", label: "SEO ve site haritası", icon: IconSearch },
       { href: "/content/pages", label: "Sayfalar", icon: IconFile },
       { href: "/content/banners", label: "Bannerlar", icon: IconImage },
     ],

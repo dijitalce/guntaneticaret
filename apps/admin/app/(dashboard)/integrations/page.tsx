@@ -1,11 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { eq } from "drizzle-orm";
-import { db, getIntegrationSecrets, getTenantContext, tenantDomains, tenantSettings, tenants } from "@guntan/db";
-import { BrandLogo } from "@/src/brand-logo";
+import { db, getIntegrationSecrets, getTenantContext, tenantSettings } from "@guntan/db";
 import { IconExternal } from "@/src/icons";
 import { withBase } from "@/src/paths";
-import { assetUrl } from "@/src/storefront";
+import { loadSites, SitePicker } from "@/src/site-picker";
 import { Alert, EmptyState, PageHeader, StatusBadge } from "@/src/ui";
 import { Toggle } from "@/src/ui-ext";
 
@@ -13,7 +12,6 @@ export const metadata = { title: "Eklentiler" };
 export const dynamic = "force-dynamic";
 
 const MASK = "••••••••";
-const MAIN_SLUG = "guntan";
 
 function Item({
   title,
@@ -84,12 +82,8 @@ function CopyUrl({ url }: { url: string }) {
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ site?: string; ok?: string; hata?: string }> }) {
   const sp = await searchParams;
-  const [tenantRows, domainRows, settingRows] = await Promise.all([
-    db.select({ id: tenants.id, name: tenants.name, slug: tenants.slug, createdAt: tenants.createdAt }).from(tenants),
-    db.select({ tenantId: tenantDomains.tenantId, hostname: tenantDomains.hostname, isPrimary: tenantDomains.isPrimary }).from(tenantDomains),
-    db.select({ tenantId: tenantSettings.tenantId, siteName: tenantSettings.siteName, logoUrl: tenantSettings.logoUrl, faviconUrl: tenantSettings.faviconUrl }).from(tenantSettings),
-  ]);
-  if (!tenantRows.length) {
+  const sites = await loadSites();
+  if (!sites.length) {
     return (
       <>
         <PageHeader title="Eklentiler" />
@@ -97,21 +91,6 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       </>
     );
   }
-  const sites = tenantRows
-    .map((t) => {
-      const s = settingRows.find((r) => r.tenantId === t.id);
-      const ds = domainRows.filter((d) => d.tenantId === t.id);
-      const primary = ds.find((d) => d.isPrimary) ?? ds[0];
-      return {
-        id: t.id,
-        main: t.slug === MAIN_SLUG,
-        name: s?.siteName?.trim() || t.name,
-        host: primary?.hostname ?? "Alan adı yok",
-        logo: assetUrl(s?.faviconUrl ?? s?.logoUrl),
-        createdAt: t.createdAt,
-      };
-    })
-    .sort((a, b) => Number(b.main) - Number(a.main) || a.createdAt.getTime() - b.createdAt.getTime() || a.name.localeCompare(b.name, "tr"));
   const current = sites.find((t) => t.id === sp.site) ?? sites[0]!;
   const tenantId = current.id;
   const [[settings], secrets, ctx] = await Promise.all([
@@ -155,17 +134,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       {sp.ok ? <Alert tone="ok">Eklenti ayarları kaydedildi. Sitede birkaç saniye içinde etkin olur.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
 
-      <nav className="int-sites" aria-label="Site seçimi">
-        {sites.map((t) => (
-          <Link key={t.id} href={`/integrations?site=${t.id}`} className={t.id === tenantId ? "is-active" : undefined} aria-current={t.id === tenantId ? "page" : undefined}>
-            <BrandLogo src={t.logo} name={t.name} size={32} />
-            <span>
-              <strong>{t.name}</strong>
-              <small>{t.host}</small>
-            </span>
-          </Link>
-        ))}
-      </nav>
+      <SitePicker sites={sites} current={tenantId} href={(id) => `/integrations?site=${id}`} />
 
       <form action={withBase("/api/integrations")} method="post" className="int-form">
         <input type="hidden" name="tenantId" value={tenantId} />
