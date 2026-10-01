@@ -106,7 +106,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
               </div>
               <div>
                 <dt>Kaydet</dt>
-                <dd>Yeni oranlar bir sonraki otomatik senkronda (günde 2 kez) tedarikçi maliyetinden hesaplanır.</dd>
+                <dd>Yeni oranlar bir sonraki otomatik senkronda tedarikçi maliyetinden hesaplanır.</dd>
               </div>
               <div>
                 <dt>Şimdi güncelle</dt>

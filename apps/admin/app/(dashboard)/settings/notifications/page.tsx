@@ -82,7 +82,15 @@ export default async function NotificationsPage({
         <Kpi label="Gönderilen (30 gün)" value={Number(s?.sent ?? 0).toLocaleString("tr-TR")} tone="ok" />
         <Kpi label="Atlanan (30 gün)" value={Number(s?.skipped ?? 0).toLocaleString("tr-TR")} hint="sağlayıcı kapalıyken" />
         <Kpi label="Hatalı" value={Number(s?.failed ?? 0)} tone={Number(s?.failed ?? 0) ? "warn" : undefined} />
-        <Kpi label="Kanallar" value={<span style={{ fontSize: "1rem" }}>{emailReady ? "E-posta ✓" : "E-posta ✗"} · {smsReady ? "SMS ✓" : "SMS ✗"}</span>} />
+        <Kpi
+          label="Kanallar"
+          value={
+            <span className="channel-badges">
+              <StatusBadge tone={emailReady ? "ok" : "bad"}>E-posta {emailReady ? "açık" : "kapalı"}</StatusBadge>
+              <StatusBadge tone={smsReady ? "ok" : "bad"}>SMS {smsReady ? "açık" : "kapalı"}</StatusBadge>
+            </span>
+          }
+        />
       </div>
 
       <TabNav label="Bildirim bölümleri" active={tab} items={tabs} />

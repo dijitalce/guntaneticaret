@@ -97,7 +97,9 @@ export default async function DashboardPage() {
   const ageH = lastSuccessMs ? (now.getTime() - lastSuccessMs) / 3600_000 : Infinity;
   const freshness = anyRunning
     ? { tone: "info" as const, label: "Güncelleniyor", note: "Tedarikçi verileri şu an işleniyor." }
-    : ageH <= intervalH + 1
+    : !feedStatus.length
+      ? { tone: "neutral" as const, label: "Kayıt yok", note: "Henüz tamamlanmış bir senkron yok." }
+      : ageH <= intervalH + 1
       ? { tone: "ok" as const, label: "Güncel", note: "Fiyat ve stoklar planlandığı gibi güncelleniyor." }
       : ageH <= intervalH * 2 + 1
         ? { tone: "warn" as const, label: "Bir senkron atlandı", note: "Son planlı güncelleme çalışmamış görünüyor; cron kaydını kontrol edin." }

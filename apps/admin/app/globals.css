@@ -751,7 +751,7 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
   border-bottom: 1px solid var(--a-border);
 }
 .feed-card:last-child { border-bottom: 0; }
-.feed-card p { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--a-muted); word-break: break-all; }
+.feed-card p { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--a-muted); overflow-wrap: anywhere; }
 
 /* ——— Tanım listesi (detay kartları) ——— */
 .dl { display: grid; gap: 0.7rem; margin: 0; }
@@ -1020,7 +1020,7 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
 .pick-tile.is-on .pick-check { background: var(--a-brand); border-color: var(--a-brand); color: #fff; }
 .form-stack { display: grid; gap: 1.1rem; }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
-.field-hint { font-size: 0.75rem; color: var(--a-muted); word-break: break-all; }
+.field-hint { font-size: 0.75rem; color: var(--a-muted); overflow-wrap: anywhere; }
 .field-hint strong { color: var(--a-text); font-weight: 600; }
 .field-hint code { font-size: 0.72rem; background: var(--a-surface-2); padding: 0 0.25rem; border-radius: 4px; }
 .admin-body .input:disabled { background: var(--a-surface-2); color: var(--a-muted); cursor: not-allowed; }
@@ -1791,3 +1791,33 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
 .export-summary { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--a-border); }
 .export-format { margin-top: 1.2rem; }
 .export-format summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+
+/* ——— Arayüz düzeltmeleri ——— */
+/* Izgara içindeki kartların aralığını ızgara boşluğu verir; kardeş kart kuralı sütunları kaydırmasın. */
+[class*="grid"] > .panel + .panel { margin-top: 0; }
+
+.chart-labels span { white-space: nowrap; overflow: visible; }
+
+.op-block.op-collapse { border: 0; border-top: 1px solid var(--a-border); border-radius: 0; padding: 0.8rem 1.2rem; }
+.op-block.op-collapse:first-child { border-top: 0; }
+.op-block.op-collapse > summary { color: var(--a-bad); }
+.op-block.op-collapse > summary::before { color: var(--a-bad); }
+.op-block.op-collapse[open] > form { margin-top: 0.8rem; }
+
+.customer-box + .dl { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--a-border); }
+
+.channel-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.15rem; }
+
+.item-thumb.is-empty { display: grid; place-items: center; color: var(--a-muted); }
+
+@media (max-width: 560px) {
+  .step span:not(.step-dot) { font-size: 0.66rem; letter-spacing: -0.01em; line-height: 1.25; }
+}
+
+@media (max-width: 720px) {
+  .product-table thead { display: none; }
+  .product-table tr { display: grid; gap: 0.7rem; padding: 0.85rem 1rem; border-bottom: 1px solid var(--a-border); }
+  .product-table td { display: block; padding: 0; border: 0; }
+  .product-table .inline-edit { grid-template-columns: 1.2fr 0.8fr 1fr; }
+  .product-table .inline-edit .btn { grid-column: 1 / -1; }
+}

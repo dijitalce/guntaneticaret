@@ -18,7 +18,7 @@ import { arasConfigFromEnv, arasTrackingUrl, getAdminOrder, orderStatusLabel } f
 import { IconArrowLeft, IconCheck, IconExternal, IconPrinter, IconTruck } from "@/src/icons";
 import { ConfirmButton } from "@/src/form-fields";
 import { OrderTimeline } from "@/src/order-timeline";
-import { durationText, relativeTime } from "@/src/ui-ext";
+import { durationText, initials, relativeTime } from "@/src/ui-ext";
 import { withBase } from "@/src/paths";
 import { Alert, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
@@ -193,26 +193,6 @@ export default async function OrderDetailPage({
               </div>
             )}
 
-            {["pending_payment", "paid", "preparing"].includes(order.status) && (
-              <details className="op-block op-collapse">
-                <summary>Siparişi iptal et</summary>
-                <form action={withBase(`/api/orders/${order.id}/cancel`)} method="post" className="form-stack">
-                  <div className="field">
-                    <label htmlFor="cancel-reason">İptal sebebi</label>
-                    <input className="input" id="cancel-reason" name="reason" placeholder="Örn. Stokta kalmadı, müşteri vazgeçti" />
-                  </div>
-                  <label className="check">
-                    <input type="checkbox" name="notify" value="1" defaultChecked /> Müşteriye iptal bildirimi gönder
-                  </label>
-                  <div className="op-actions">
-                    <ConfirmButton className="btn btn-danger" message="Sipariş iptal edilsin mi? Stok rezervasyonu serbest bırakılır.">
-                      Siparişi iptal et
-                    </ConfirmButton>
-                  </div>
-                </form>
-              </details>
-            )}
-
             {order.status === "paid" && (
               <div className="op-block">
                 <h3>Hazırlığa al</h3>
@@ -278,6 +258,26 @@ export default async function OrderDetailPage({
                   </button>
                 </form>
               </div>
+            )}
+
+            {["pending_payment", "paid", "preparing"].includes(order.status) && (
+              <details className="op-block op-collapse">
+                <summary>Siparişi iptal et</summary>
+                <form action={withBase(`/api/orders/${order.id}/cancel`)} method="post" className="form-stack">
+                  <div className="field">
+                    <label htmlFor="cancel-reason">İptal sebebi</label>
+                    <input className="input" id="cancel-reason" name="reason" placeholder="Örn. Stokta kalmadı, müşteri vazgeçti" />
+                  </div>
+                  <label className="check">
+                    <input type="checkbox" name="notify" value="1" defaultChecked /> Müşteriye iptal bildirimi gönder
+                  </label>
+                  <div className="op-actions">
+                    <ConfirmButton className="btn btn-danger" message="Sipariş iptal edilsin mi? Stok rezervasyonu serbest bırakılır.">
+                      Siparişi iptal et
+                    </ConfirmButton>
+                  </div>
+                </form>
+              </details>
             )}
 
             {["completed", "cancelled", "refunded"].includes(order.status) && (
@@ -428,12 +428,7 @@ export default async function OrderDetailPage({
           >
             <div className="customer-box">
               <span className="customer-avatar" aria-hidden>
-                {order.fullName
-                  .split(" ")
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((p) => p[0]!.toLocaleUpperCase("tr-TR"))
-                  .join("")}
+                {initials(order.fullName)}
               </span>
               <div>
                 <strong>{order.fullName}</strong>
@@ -444,10 +439,6 @@ export default async function OrderDetailPage({
               </div>
             </div>
             <dl className="dl">
-              <div>
-                <dt>Ad soyad</dt>
-                <dd>{order.fullName}</dd>
-              </div>
               <div>
                 <dt>E-posta</dt>
                 <dd>

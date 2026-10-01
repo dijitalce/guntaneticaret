@@ -141,7 +141,7 @@ export default async function ProductsPage({
           />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table product-table">
               <thead>
                 <tr>
                   <th>Ürün</th>
@@ -160,7 +160,7 @@ export default async function ProductsPage({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img className="item-thumb" src={img} alt="" loading="lazy" />
                           ) : (
-                            <span className="item-thumb" style={{ display: "grid", placeItems: "center", color: "var(--a-muted)" }}>
+                            <span className="item-thumb is-empty">
                               <IconBox width={18} height={18} />
                             </span>
                           )}

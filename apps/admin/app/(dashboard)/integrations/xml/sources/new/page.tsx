@@ -33,7 +33,7 @@ export default async function NewXmlSource({ searchParams }: { searchParams: Pro
         <ol className="text-sm" style={{ margin: 0, paddingLeft: "1.1rem", lineHeight: 1.7 }}>
           <li>Sunucu XML adresine bağlanır, ürün listesini ve alanlarını (stok kodu, ad, fiyat, stok…) algılar.</li>
           <li>Önerilen alan eşleştirmesini, para birimini, KDV ve kâr marjı ayarını kontrol edip kaydedersiniz.</li>
-          <li>Kaynak aktif edilince 12 saatte bir diğer tedarikçilerle birlikte otomatik güncellenir.</li>
+          <li>Kaynak aktif edilince zamanlanmış senkronda diğer tedarikçilerle birlikte otomatik güncellenir.</li>
           <li>Aynı OEM + marka birden fazla tedarikçide varsa stokta olan ve en ucuz olan satışta kalır.</li>
         </ol>
       </Panel>
