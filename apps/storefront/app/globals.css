@@ -2877,3 +2877,46 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .checkout-mobile-summary li span { color: var(--muted-foreground); min-width: 0; }
   .checkout-mobile-summary li b { flex: none; }
 }
+
+/* —— Ana sayfa: mobilde yatay marka şeridi —— */
+@media (max-width: 900px) {
+  .home-ia > .vehicle-nav { max-height: none; overflow: hidden; }
+  .home-ia .vehicle-nav-list {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.7rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .home-ia .vehicle-nav-list::-webkit-scrollbar { display: none; }
+  .home-ia .vehicle-nav li { flex: 0 0 auto; scroll-snap-align: start; }
+  .home-ia .vehicle-nav li + li { border-top: 0; }
+  .home-ia .vehicle-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    width: 78px;
+    padding: 0.6rem 0.3rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    text-align: center;
+  }
+  .home-ia .vehicle-nav-label {
+    font-size: 0.74rem;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .home-ia .vehicle-nav-chevron { display: none; }
+  .home-ia .vehicle-nav-empty { white-space: nowrap; }
+}
+@media (max-width: 640px) {
+  .trust-item { gap: 0.5rem; line-height: 1.25; }
+  .trust-item span { display: grid; flex: none; }
+  .trust-item svg { width: 18px; height: 18px; }
+}
