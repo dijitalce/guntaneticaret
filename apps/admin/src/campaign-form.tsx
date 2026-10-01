@@ -40,7 +40,7 @@ export async function CampaignForm({ campaign, channel, segment }: { campaign?: 
         </div>
         <div className="field">
           <label htmlFor="c-tenant">Site</label>
-          <select className="input" id="c-tenant" name="tenantId" defaultValue={campaign?.tenant_id ?? ""}>
+          <select className="select" id="c-tenant" name="tenantId" defaultValue={campaign?.tenant_id ?? ""}>
             <option value="">Tüm siteler (gönderen: kişinin sipariş verdiği site)</option>
             {tenantRows.map((t) => (
               <option key={t.id} value={t.id}>

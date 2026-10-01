@@ -173,7 +173,7 @@ export default async function NotificationsPage({
               <input type="hidden" name="_action" value="provider" />
               <div className="field">
                 <label htmlFor="emailProvider">Sağlayıcı</label>
-                <select className="input" id="emailProvider" name="emailProvider" defaultValue={settings.emailProvider}>
+                <select className="select" id="emailProvider" name="emailProvider" defaultValue={settings.emailProvider}>
                   <option value="none">Kapalı</option>
                   <option value="resend">Resend</option>
                   <option value="brevo">Brevo (Sendinblue)</option>
@@ -207,7 +207,7 @@ export default async function NotificationsPage({
               <h3 className="subhead">SMS (Netgsm)</h3>
               <div className="field">
                 <label htmlFor="smsProvider">Sağlayıcı</label>
-                <select className="input" id="smsProvider" name="smsProvider" defaultValue={settings.smsProvider}>
+                <select className="select" id="smsProvider" name="smsProvider" defaultValue={settings.smsProvider}>
                   <option value="none">Kapalı</option>
                   <option value="netgsm">Netgsm</option>
                 </select>

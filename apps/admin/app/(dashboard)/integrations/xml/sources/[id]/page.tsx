@@ -133,7 +133,7 @@ export default async function XmlSourcePage({
                         {f.label}
                         {f.required ? " *" : ""}
                       </label>
-                      <select className="input" id={`m-${f.key}`} name={`field_${f.key}`} defaultValue={cfg.mapping[f.key] ?? ""}>
+                      <select className="select" id={`m-${f.key}`} name={`field_${f.key}`} defaultValue={cfg.mapping[f.key] ?? ""}>
                         {fieldOptions}
                       </select>
                       {f.hint ? <small className="field-hint">{f.hint}</small> : null}
@@ -145,7 +145,7 @@ export default async function XmlSourcePage({
                 <div className="form-row">
                   <div className="field">
                     <label htmlFor="m-cur">Fiyat para birimi</label>
-                    <select className="input" id="m-cur" name="currency" defaultValue={cfg.currency}>
+                    <select className="select" id="m-cur" name="currency" defaultValue={cfg.currency}>
                       <option value="TRY">Türk lirası (TL)</option>
                       <option value="USD">Dolar (USD) → TL’ye çevrilir</option>
                       <option value="EUR">Euro (EUR) → TL’ye çevrilir</option>
@@ -155,13 +155,13 @@ export default async function XmlSourcePage({
                   </div>
                   <div className="field">
                     <label htmlFor="m-curf">Para birimi alanı</label>
-                    <select className="input" id="m-curf" name="currencyField" defaultValue={cfg.currencyField}>
+                    <select className="select" id="m-curf" name="currencyField" defaultValue={cfg.currencyField}>
                       {fieldOptions}
                     </select>
                   </div>
                   <div className="field">
                     <label htmlFor="m-vat">XML fiyatı</label>
-                    <select className="input" id="m-vat" name="vat" defaultValue={cfg.vat}>
+                    <select className="select" id="m-vat" name="vat" defaultValue={cfg.vat}>
                       <option value="incl">KDV dahil</option>
                       <option value="excl">KDV hariç (KDV eklenir)</option>
                     </select>
@@ -172,7 +172,7 @@ export default async function XmlSourcePage({
                   </div>
                   <div className="field">
                     <label htmlFor="m-mar">Satış fiyatı</label>
-                    <select className="input" id="m-mar" name="margin" defaultValue={cfg.margin}>
+                    <select className="select" id="m-mar" name="margin" defaultValue={cfg.margin}>
                       <option value="tiers">Fiyat oranları sayfasındaki kâr dilimleri</option>
                       <option value="fixed">Sabit kâr oranı</option>
                       <option value="none">XML fiyatını aynen kullan</option>

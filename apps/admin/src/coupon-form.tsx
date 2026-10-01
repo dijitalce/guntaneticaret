@@ -22,7 +22,7 @@ export async function CouponForm({ coupon }: { coupon?: CouponRow }) {
         </div>
         <div className="field">
           <label htmlFor="k-tenant">Site</label>
-          <select className="input" id="k-tenant" name="tenantId" defaultValue={c?.tenant_id ?? "all"} disabled={Boolean(c)}>
+          <select className="select" id="k-tenant" name="tenantId" defaultValue={c?.tenant_id ?? "all"} disabled={Boolean(c)}>
             {!c ? <option value="all">Tüm siteler (her siteye ayrı kupon)</option> : null}
             {tenantRows.map((t) => (
               <option key={t.id} value={t.id}>

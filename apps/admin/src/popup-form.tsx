@@ -58,7 +58,7 @@ export async function PopupForm({ popup }: { popup?: Popup }) {
         </div>
         <div className="field">
           <label htmlFor="p-tenant">Site</label>
-          <select className="input" id="p-tenant" name="tenant_id" defaultValue={p?.tenant_id ?? ""}>
+          <select className="select" id="p-tenant" name="tenant_id" defaultValue={p?.tenant_id ?? ""}>
             <option value="">Tüm siteler</option>
             {tenantRows.map((t) => (
               <option key={t.id} value={t.id}>
@@ -118,7 +118,7 @@ export async function PopupForm({ popup }: { popup?: Popup }) {
       <div className="form-row">
         <div className="field">
           <label htmlFor="p-trigger">Tetikleyici</label>
-          <select className="input" id="p-trigger" name="trigger_type" defaultValue={p?.trigger_type ?? "delay"}>
+          <select className="select" id="p-trigger" name="trigger_type" defaultValue={p?.trigger_type ?? "delay"}>
             <option value="delay">Belirli saniye sonra</option>
             <option value="exit">Sayfadan çıkarken (masaüstü)</option>
             <option value="scroll">Sayfa kaydırılınca</option>
@@ -136,7 +136,7 @@ export async function PopupForm({ popup }: { popup?: Popup }) {
       <div className="form-row">
         <div className="field">
           <label htmlFor="p-pages">Sayfalar</label>
-          <select className="input" id="p-pages" name="pages" defaultValue={p?.pages ?? "all"}>
+          <select className="select" id="p-pages" name="pages" defaultValue={p?.pages ?? "all"}>
             <option value="all">Tüm sayfalar</option>
             <option value="home">Yalnızca ana sayfa</option>
             <option value="product">Ürün sayfaları</option>
@@ -145,7 +145,7 @@ export async function PopupForm({ popup }: { popup?: Popup }) {
         </div>
         <div className="field">
           <label htmlFor="p-device">Cihaz</label>
-          <select className="input" id="p-device" name="device" defaultValue={p?.device ?? "all"}>
+          <select className="select" id="p-device" name="device" defaultValue={p?.device ?? "all"}>
             <option value="all">Tümü</option>
             <option value="mobile">Mobil</option>
             <option value="desktop">Masaüstü</option>

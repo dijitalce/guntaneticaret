@@ -71,7 +71,7 @@ export async function PageForm({ page, defaultTenant }: { page?: PageRow; defaul
         </div>
         <div className="field">
           <label htmlFor="pg-tenant">Site</label>
-          <select className="input" id="pg-tenant" name="tenantId" defaultValue={page?.tenantId ?? defaultTenant ?? tenantRows[0]?.id} required>
+          <select className="select" id="pg-tenant" name="tenantId" defaultValue={page?.tenantId ?? defaultTenant ?? tenantRows[0]?.id} required>
             {tenantRows.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -132,7 +132,7 @@ export async function BannerForm({ banner, defaultTenant }: { banner?: BannerRow
         </div>
         <div className="field">
           <label htmlFor="bn-tenant">Site</label>
-          <select className="input" id="bn-tenant" name="tenantId" defaultValue={banner?.tenantId ?? defaultTenant ?? tenantRows[0]?.id} required>
+          <select className="select" id="bn-tenant" name="tenantId" defaultValue={banner?.tenantId ?? defaultTenant ?? tenantRows[0]?.id} required>
             {tenantRows.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}

@@ -154,7 +154,7 @@ export default async function SegmentsPage({ searchParams }: { searchParams: Pro
               </div>
               <div className="field">
                 <label>Site</label>
-                <select className="input" name="tenantId" defaultValue="">
+                <select className="select" name="tenantId" defaultValue="">
                   <option value="">Tüm siteler</option>
                   {tenantRows.map((t) => (
                     <option key={t.id} value={t.id}>

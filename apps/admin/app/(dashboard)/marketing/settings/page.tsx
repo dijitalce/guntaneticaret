@@ -51,7 +51,7 @@ export default async function MarketingSettingsPage({ searchParams }: { searchPa
           <div className="form-row">
             <div className="field">
               <label htmlFor="smsQuietStart">Başlangıç</label>
-              <select className="input" id="smsQuietStart" name="smsQuietStart" defaultValue={s.smsQuietStart}>
+              <select className="select" id="smsQuietStart" name="smsQuietStart" defaultValue={s.smsQuietStart}>
                 {hours.map((h) => (
                   <option key={h} value={h}>
                     {String(h).padStart(2, "0")}:00
@@ -61,7 +61,7 @@ export default async function MarketingSettingsPage({ searchParams }: { searchPa
             </div>
             <div className="field">
               <label htmlFor="smsQuietEnd">Bitiş</label>
-              <select className="input" id="smsQuietEnd" name="smsQuietEnd" defaultValue={s.smsQuietEnd}>
+              <select className="select" id="smsQuietEnd" name="smsQuietEnd" defaultValue={s.smsQuietEnd}>
                 {hours.map((h) => (
                   <option key={h} value={h}>
                     {String(h).padStart(2, "0")}:00
