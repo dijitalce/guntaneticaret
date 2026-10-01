@@ -37,15 +37,50 @@ export function validateEryazXml(xml: string, minItems: number): number {
   return count;
 }
 
+class RetryableError extends Error {}
+
+/** HTML hata sayfası yerine okunur bir açıklama üretir. */
+export function eryazHttpError(status: number, body: string): Error {
+  const isHtml = /^\s*<(!doctype|html)/i.test(body);
+  const title = isHtml ? body.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() : null;
+  const detail = isHtml ? (title ? ` (${title})` : "") : `: ${body.slice(0, 200)}`;
+  const text =
+    status >= 500
+      ? `Eryaz sunucusu geçici hata verdi (HTTP ${status})${detail}. Sorun Eryaz tarafında; bir sonraki senkronda tekrar denenir.`
+      : `Eryaz HTTP ${status}${detail}`;
+  return status >= 500 || status === 429 ? new RetryableError(text) : new Error(text);
+}
+
 /**
  * Eryaz GetProduct → XML dosyası. Önce geçici dosyaya yazar, doğrulanırsa
  * yerine taşır; hatalı/boş yanıt mevcut products.xml'i ezmez.
+ * Sunucu hatası, zaman aşımı ve bağlantı kopmasında bekleyip tekrar dener.
  */
 export async function fetchEryazXml(
   config: EryazConfig,
   outPath: string,
-  { minItems = 1000, timeoutMs = 300_000 } = {},
+  {
+    minItems = 1000,
+    timeoutMs = 300_000,
+    retryDelaysMs = [60_000, 180_000],
+    onRetry,
+  }: { minItems?: number; timeoutMs?: number; retryDelaysMs?: number[]; onRetry?: (attempt: number, waitMs: number, err: Error) => void } = {},
 ): Promise<{ count: number; bytes: number }> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchOnce(config, outPath, minItems, timeoutMs);
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      const retryable = e instanceof RetryableError || e.name === "TimeoutError" || e.name === "AbortError" || e instanceof TypeError;
+      const wait = retryDelaysMs[attempt];
+      if (!retryable || wait === undefined) throw e;
+      onRetry?.(attempt + 1, wait, e);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
+async function fetchOnce(config: EryazConfig, outPath: string, minItems: number, timeoutMs: number) {
   const res = await fetch(config.endpoint, {
     method: "POST",
     headers: {
@@ -63,7 +98,7 @@ export async function fetchEryazXml(
     signal: AbortSignal.timeout(timeoutMs),
   });
   const xml = await res.text();
-  if (!res.ok) throw new Error(`Eryaz HTTP ${res.status}: ${xml.slice(0, 300)}`);
+  if (!res.ok) throw eryazHttpError(res.status, xml);
   const count = validateEryazXml(xml, minItems);
 
   const tmpPath = `${outPath}.tmp`;

@@ -158,7 +158,9 @@ async function main() {
       const eryaz = eryazConfigFromEnv();
       if (eryaz) {
         altayReady = await step("Altay XML indir", async () => {
-          const { count, bytes } = await fetchEryazXml(eryaz, altayPath);
+          const { count, bytes } = await fetchEryazXml(eryaz, altayPath, {
+            onRetry: (attempt, waitMs, err) => log(`Altay indirme denemesi ${attempt} başarısız (${err.message}); ${Math.round(waitMs / 60_000)} dk sonra tekrar denenecek.`),
+          });
           log(`Altay: ${count} ürün, ${(bytes / 1e6).toFixed(1)} MB`);
         });
       } else {
