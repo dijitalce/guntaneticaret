@@ -33,6 +33,7 @@ export default async function SearchPage({
         manufacturer: h.manufacturer ?? "",
         price: h.price,
         in_stock: h.stockStatus === "in_stock",
+        thumbnail: h.thumbnail,
       }));
   const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
   const [fitBy, logoBy] = hits.length > 0

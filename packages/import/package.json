@@ -15,13 +15,16 @@
     "dedupe-cheapest": "tsx src/dedupe-cli.ts",
     "price-tiers": "tsx src/apply-price-tiers-cli.ts",
     "supplier-sync": "tsx src/sync-cli.ts",
-    "shipment-sync": "tsx src/shipment-sync-cli.ts"
+    "shipment-sync": "tsx src/shipment-sync-cli.ts",
+    "altay-image-report": "tsx src/altay-image-report.ts",
+    "otoparcasan-images": "tsx src/otoparcasan-images-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "saxes": "^6.0.0"
+    "saxes": "^6.0.0",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "tsx": "^4.19.3"

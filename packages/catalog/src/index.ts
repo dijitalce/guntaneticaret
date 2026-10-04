@@ -930,6 +930,7 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       manufacturer: manufacturers.name,
       manufacturerLogo: manufacturerLogoSql,
       stockStatus: products.stockStatus,
+      thumbnail: sql<string | null>`(select pi.url from product_images pi where pi.product_id = ${products.id} order by pi.sort_order limit 1)`,
     })
     .from(products)
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))

@@ -119,6 +119,19 @@ Kurulum:
 Aynı anda iki senkron çalışmaz (kilit dosyası). Başbuğ tek oturuma izin verir; senkron bitince oturumu kapatır.
 Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
+### Altay ürün görselleri (otoparcasan.com, izinli)
+
+Altay XML'inde `PicturePath` boş geldiği için görseller otoparcasan.com'dan alınır. Cron (30 dakikada bir, `*/30 * * * *`):
+
+```bash
+/home/KULLANICI/.../hbuilds/current/nodejs/scripts/otoparcasan-images.sh
+```
+
+- Haftada bir site haritalarından eşleme tablosu kurulur; ürün yalnızca marka ve üretici parça no birlikte tutarsa eşlenir.
+- Görseli olmayan aktif Altay ürünleri stoktakilerden başlayarak işlenir. robots.txt gereği 5 sn'de bir istek atılır, her çalışma en fazla 25 dk sürer.
+- Görseller `public_html/urun-gorsel/` altına yazılır (deploy'da silinmez), `product_images`'a eklenir.
+- Durum ve log: `guntan-images/` (guntan-sync.env ile aynı klasör). Eşlemeyi elle yenilemek için `--rebuild-map`.
+
 ### Garanti BBVA sanal POS
 
 - `GARANTI_*` değerleri hPanel → Node.js → Ortam değişkenleri'ne girilir (`.env.example`'a bak). Dördü (merchant, terminal, prov şifresi, 3D store key) dolmadan kart seçeneği görünmez.
