@@ -1878,12 +1878,65 @@ function sendHealth(res) {
 
 const adminBuildReady = fs.existsSync(join(adminDir, ".next"));
 
+/**
+ * Ürün görselleri deploy klasörü dışında tutulur (Hostinger deploy public_html'i sıfırlıyor).
+ * Klasör guntan-sync.env ile aynı yerdeki guntan-images/files; uygulama kökünün üst dizinlerinde aranır.
+ */
+let productImageDir = process.env.PRODUCT_IMAGE_DIR || null;
+function resolveProductImageDir() {
+  if (productImageDir) return productImageDir;
+  let dir = dirname(root);
+  for (let i = 0; i < 8; i++) {
+    const candidate = join(dir, "guntan-images", "files");
+    if (fs.existsSync(candidate)) return (productImageDir = candidate);
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+const PRODUCT_IMAGE_PATH = /^\/urun-gorsel\/([0-9a-f]{2})\/([a-z0-9][a-z0-9-]*\.webp)$/;
+function serveProductImage(req, res, pathOnly) {
+  const m = PRODUCT_IMAGE_PATH.exec(pathOnly);
+  const dir = m ? resolveProductImageDir() : null;
+  let st = null;
+  if (dir) {
+    try {
+      st = fs.statSync(join(dir, m[1], m[2]));
+    } catch {
+      st = null;
+    }
+  }
+  if (!st?.isFile()) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=300" });
+    res.end("Not found");
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": "image/webp",
+    "content-length": st.size,
+    "cache-control": "public, max-age=604800",
+    "last-modified": st.mtime.toUTCString(),
+  });
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
+  fs.createReadStream(join(dir, m[1], m[2])).pipe(res);
+}
+
 async function routeRequest(req, res) {
   const parsedUrl = parse(req.url ?? "/", true);
   const pathOnly = parsedUrl.pathname ?? "/";
 
   if (pathOnly === "/api/health") {
     sendHealth(res);
+    return;
+  }
+
+  if (pathOnly.startsWith("/urun-gorsel/")) {
+    serveProductImage(req, res, pathOnly);
     return;
   }
 

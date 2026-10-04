@@ -4,13 +4,13 @@
  *   1. Haftada bir: otoparcasan ürün site haritalarını indirir, Altay ürünlerini
  *      "marka + üretici parça no" ile ürün adresine eşler (yalnızca ikisi birlikte tutarsa).
  *   2. Görseli olmayan aktif Altay ürünleri için (stoktakiler önce) ürün sayfasından
- *      ürünün kendi tam boyutlu görselini indirir, public_html/urun-gorsel altına yazar,
+ *      ürünün kendi tam boyutlu görselini indirir, guntan-images/files altına yazar,
  *      product_images'a ekler.
  *
  * robots.txt Crawl-delay: 5 → otoparcasan.com'a 5 sn'de en fazla bir istek.
  * Her çalışma OTOPARCASAN_MAX_MINUTES (varsayılan 25) dk sürer; kaldığı yeri dosyaya yazar.
  *
- * Kullanım: ./scripts/otoparcasan-images.sh  [--rebuild-map] [--limit=N]
+ * Kullanım: bash scripts/otoparcasan-images.sh  [--rebuild-map] [--repair] [--limit=N]
  */
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
@@ -37,7 +37,9 @@ const MAP_FILE = join(STATE_DIR, "otoparcasan-map.tsv");
 const DONE_FILE = join(STATE_DIR, "otoparcasan-done.tsv");
 const LOCK_FILE = join(STATE_DIR, "otoparcasan.lock");
 const LOG_FILE = join(STATE_DIR, "otoparcasan.log");
-const IMAGE_DIR = process.env.PRODUCT_IMAGE_DIR || join(SYNC_HOME, "public_html/urun-gorsel");
+// Hostinger deploy public_html'i sıfırlıyor; dosyalar burada durur, /urun-gorsel/* adresini hostinger-start.mjs sunar.
+const IMAGE_DIR = process.env.PRODUCT_IMAGE_DIR || join(STATE_DIR, "files");
+const REPAIR = process.argv.includes("--repair");
 const IMAGE_BASE = `${(process.env.STOREFRONT_URL || "https://guntanotoyedekparca.com").replace(/\/$/, "")}/urun-gorsel`;
 
 /** Altay marka adı → otoparcasan adresindeki marka yazımları. */
@@ -226,6 +228,24 @@ async function processProduct(p: Candidate, slug: string): Promise<"ok" | "noima
   return "ok";
 }
 
+/** Dosyası kaybolmuş görsel kayıtlarını siler ve ürünleri yeniden sıraya alır. */
+async function repairMissingFiles() {
+  const { pool } = await import("@guntan/db");
+  const [rows] = await pool.query(`select id, product_id, s3_key from product_images where s3_key like 'urun-gorsel/%'`);
+  const missing = (rows as { id: string; product_id: string; s3_key: string }[]).filter(
+    (r) => !existsSync(join(IMAGE_DIR, r.s3_key.slice("urun-gorsel/".length))),
+  );
+  if (missing.length > 0) {
+    for (let i = 0; i < missing.length; i += 500) {
+      await pool.query(`delete from product_images where id in (?)`, [missing.slice(i, i + 500).map((r) => r.id)]);
+    }
+    const lost = new Set(missing.map((r) => r.product_id));
+    const kept = readTsv(DONE_FILE).filter(([id]) => !lost.has(id!));
+    writeFileSync(DONE_FILE, kept.map((r) => `${r.join("\t")}\n`).join(""));
+  }
+  log(`Onarım: ${(rows as unknown[]).length} görsel kaydından ${missing.length} tanesinin dosyası yoktu; silindi, ürünler yeniden sırada.`);
+}
+
 async function acquireLock(): Promise<boolean> {
   if (existsSync(LOCK_FILE) && Date.now() - statSync(LOCK_FILE).mtimeMs > MAX_MS + 10 * 60_000) await rm(LOCK_FILE, { force: true });
   try {
@@ -245,6 +265,7 @@ async function main() {
     return;
   }
   try {
+    if (REPAIR) await repairMissingFiles();
     if (REBUILD || !existsSync(MAP_FILE) || Date.now() - statSync(MAP_FILE).mtimeMs > MAP_MAX_AGE_MS) await rebuildMap();
 
     const map = new Map(readTsv(MAP_FILE).map(([id, slug]) => [id!, slug!]));

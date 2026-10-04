@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cron: */30 * * * *  /path/to/guntaneticaret/scripts/otoparcasan-images.sh
+# Cron: */30 * * * *  bash /path/to/guntaneticaret/scripts/otoparcasan-images.sh
 # Her çalışma en fazla 25 dk sürer, kilit dosyası sayesinde üst üste binmez.
 set -uo pipefail
 
