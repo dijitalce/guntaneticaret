@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Cron: */30 * * * *  bash /path/to/guntaneticaret/scripts/otoparcasan-images.sh
-# Her çalışma en fazla 25 dk sürer, kilit dosyası sayesinde üst üste binmez.
+# Cron: */15 * * * *  bash /path/to/guntaneticaret/scripts/otoparcasan-images.sh
+# Her çalışma en fazla 14 dk sürer, kilit dosyası sayesinde üst üste binmez.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

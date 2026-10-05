@@ -7,8 +7,9 @@
  *      ürünün kendi tam boyutlu görselini indirir, guntan-images/files altına yazar,
  *      product_images'a ekler.
  *
- * robots.txt Crawl-delay: 5 → otoparcasan.com'a 5 sn'de en fazla bir istek.
- * Her çalışma OTOPARCASAN_MAX_MINUTES (varsayılan 25) dk sürer; kaldığı yeri dosyaya yazar.
+ * otoparcasan.com'a OTOPARCASAN_DELAY_MS (varsayılan 2000, izinli) aralıkla en fazla bir istek.
+ * Her çalışma OTOPARCASAN_MAX_MINUTES (varsayılan 14) dk sürer; kaldığı yeri dosyaya yazar.
+ * Hostinger cron süreçlerini ~16 dk'da öldürüyor, süre bunun altında kalmalı.
  *
  * Kullanım: bash scripts/otoparcasan-images.sh  [--rebuild-map] [--repair] [--limit=N]
  */
@@ -24,10 +25,10 @@ const SYNC_HOME = syncHomeDir(loadSyncEnv(root));
 
 const SITE = "https://otoparcasan.com";
 const UA = "Mozilla/5.0 (compatible; GuntanImageSync/1.0; +https://guntanotoyedekparca.com)";
-const CRAWL_DELAY_MS = 5_000;
+const CRAWL_DELAY_MS = Number(process.env.OTOPARCASAN_DELAY_MS || 2_000);
 const MAP_MAX_AGE_MS = 7 * 24 * 3600_000;
 const ERROR_RETRY_MS = 24 * 3600_000;
-const MAX_MS = Number(process.env.OTOPARCASAN_MAX_MINUTES || 25) * 60_000;
+const MAX_MS = Number(process.env.OTOPARCASAN_MAX_MINUTES || 14) * 60_000;
 const LIMIT = Number(process.argv.find((a) => a.startsWith("--limit="))?.slice(8) || Infinity);
 const REBUILD = process.argv.includes("--rebuild-map");
 const SUPPLIER_CODE = "DEMO";
@@ -246,8 +247,21 @@ async function repairMissingFiles() {
   log(`Onarım: ${(rows as unknown[]).length} görsel kaydından ${missing.length} tanesinin dosyası yoktu; silindi, ürünler yeniden sırada.`);
 }
 
+function lockOwnerAlive(): boolean {
+  const pid = Number(readFileSync(LOCK_FILE, "utf8").trim());
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 async function acquireLock(): Promise<boolean> {
-  if (existsSync(LOCK_FILE) && Date.now() - statSync(LOCK_FILE).mtimeMs > MAX_MS + 10 * 60_000) await rm(LOCK_FILE, { force: true });
+  if (existsSync(LOCK_FILE) && (!lockOwnerAlive() || Date.now() - statSync(LOCK_FILE).mtimeMs > MAX_MS + 10 * 60_000)) {
+    await rm(LOCK_FILE, { force: true });
+  }
   try {
     const fh = await open(LOCK_FILE, "wx");
     await fh.write(String(process.pid));

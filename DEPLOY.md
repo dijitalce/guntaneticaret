@@ -121,14 +121,14 @@ Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
 ### Altay ürün görselleri (otoparcasan.com, izinli)
 
-Altay XML'inde `PicturePath` boş geldiği için görseller otoparcasan.com'dan alınır. Cron (30 dakikada bir, `*/30 * * * *`). Deploy betiklerin çalıştırma iznini düşürdüğü için başında `bash` olmalı:
+Altay XML'inde `PicturePath` boş geldiği için görseller otoparcasan.com'dan alınır. Cron (15 dakikada bir, `*/15 * * * *`). Deploy betiklerin çalıştırma iznini düşürdüğü için başında `bash` olmalı:
 
 ```bash
 bash /home/KULLANICI/.../hbuilds/current/nodejs/scripts/otoparcasan-images.sh
 ```
 
 - Haftada bir site haritalarından eşleme tablosu kurulur; ürün yalnızca marka ve üretici parça no birlikte tutarsa eşlenir.
-- Görseli olmayan aktif Altay ürünleri stoktakilerden başlayarak işlenir. robots.txt gereği 5 sn'de bir istek atılır, her çalışma en fazla 25 dk sürer.
+- Görseli olmayan aktif Altay ürünleri stoktakilerden başlayarak işlenir. İzinli olduğumuz için 2 sn'de bir istek atılır (`OTOPARCASAN_DELAY_MS`). Hostinger cron süreçlerini ~16 dk'da öldürdüğü için her çalışma en fazla 14 dk sürer; ölen sürecin kilidi bir sonraki çalışmada temizlenir.
 - Görseller `guntan-images/files/` altına yazılır (guntan-sync.env ile aynı klasör), `product_images`'a eklenir. `/urun-gorsel/*` adresini `hostinger-start.mjs` bu klasörden sunar. `public_html`'e yazılmaz: Hostinger deploy onu sıfırlıyor.
 - Durum ve log: `guntan-images/`. Eşlemeyi elle yenilemek için `--rebuild-map`; dosyası kaybolan görselleri silip yeniden sıraya almak için `--repair`.
 
