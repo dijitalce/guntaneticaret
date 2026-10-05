@@ -6,71 +6,160 @@ function tenantFilter(column: string, tenantId?: string | null): SQL {
   return tenantId ? sql`and ${sql.raw(column)} = ${tenantId}` : sql``;
 }
 
-export async function liveOverview(tenantId?: string | null) {
+export const LIVE_RANGES = {
+  "30dk": { label: "Son 30 dk", unit: "minute", span: 30 },
+  "1sa": { label: "Son 1 saat", unit: "minute", span: 60 },
+  bugun: { label: "Bugün", unit: "hour", span: 0 },
+  "24sa": { label: "Son 24 saat", unit: "hour", span: 24 },
+  "7gun": { label: "Son 7 gün", unit: "day", span: 7 },
+} as const;
+export type LiveRange = keyof typeof LIVE_RANGES;
+
+/** Türkiye 2016'dan beri sabit UTC+3; sunucu ve veritabanı UTC olsa da etiketler Türkiye saatiyle çıkar. */
+const TR_OFFSET_MS = 3 * 3600_000;
+const trTime = (col: string) => sql.raw(`convert_tz(${col}, @@session.time_zone, '+03:00')`);
+const TR_TODAY_START = sql.raw(`convert_tz(timestamp(date(convert_tz(now(), @@session.time_zone, '+03:00'))), '+03:00', @@session.time_zone)`);
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function rangeStart(range: LiveRange): SQL {
+  if (range === "30dk") return sql`now() - interval 30 minute`;
+  if (range === "1sa") return sql`now() - interval 60 minute`;
+  if (range === "bugun") return TR_TODAY_START;
+  if (range === "24sa") return sql`now() - interval 24 hour`;
+  return sql`now() - interval 7 day`;
+}
+
+function rangeBuckets(range: LiveRange): { key: string; label: string }[] {
+  const tr = new Date(Date.now() + TR_OFFSET_MS);
+  const out: { key: string; label: string }[] = [];
+  const unit = LIVE_RANGES[range].unit;
+  if (unit === "minute") {
+    for (let i = LIVE_RANGES[range].span - 1; i >= 0; i--) {
+      const d = new Date(tr.getTime() - i * 60_000);
+      const key = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+      out.push({ key, label: key });
+    }
+  } else if (unit === "hour") {
+    const count = range === "bugun" ? tr.getUTCHours() + 1 : 24;
+    for (let i = count - 1; i >= 0; i--) {
+      const d = new Date(tr.getTime() - i * 3600_000);
+      out.push({ key: `${d.toISOString().slice(0, 10)} ${pad(d.getUTCHours())}`, label: `${pad(d.getUTCHours())}:00` });
+    }
+  } else {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(tr.getTime() - i * 86_400_000);
+      out.push({ key: d.toISOString().slice(0, 10), label: `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}` });
+    }
+  }
+  return out;
+}
+
+const BUCKET_FORMAT = { minute: "%H:%i", hour: "%Y-%m-%d %H", day: "%Y-%m-%d" } as const;
+
+export type LiveSession = {
+  id: string;
+  first_seen: Date;
+  last_seen: Date;
+  pageviews: number;
+  device: string | null;
+  browser: string | null;
+  source: string | null;
+  city: string | null;
+  landing: string | null;
+  last_path: string | null;
+  stage: string;
+  customer_id: string | null;
+  active: boolean;
+};
+
+export type LiveEvent = {
+  id: number;
+  type: string;
+  path: string | null;
+  title: string | null;
+  created_at: Date;
+  session_id: string;
+  source: string | null;
+  device: string | null;
+  city: string | null;
+};
+
+export async function liveOverview(tenantId?: string | null, range: LiveRange = "bugun") {
   await ensureExtTables();
   const t = (col: string) => tenantFilter(col, tenantId);
-  const [active, todayVisitors, todayOrders, history, funnel, bestSellers, pages, sources, devices, feed] = await Promise.all([
+  const since = rangeStart(range);
+  const fmt = sql.raw(`'${BUCKET_FORMAT[LIVE_RANGES[range].unit]}'`);
+  const views = sql`type in ('pv','product')`;
+  const [active, visitors, pageviews, orderTotals, chart, funnel, bestSellers, topPages, sources, devices, cities, sessions, feed] = await Promise.all([
     rows<{ c: number }>(sql`select count(*) c from visitor_sessions where last_seen >= now() - interval 5 minute ${t("tenant_id")}`),
-    rows<{ c: number }>(sql`select count(*) c from visitor_sessions where last_seen >= curdate() ${t("tenant_id")}`),
+    rows<{ c: number }>(sql`select count(*) c from visitor_sessions where last_seen >= ${since} ${t("tenant_id")}`),
+    rows<{ c: number }>(sql`select count(*) c from visitor_events where created_at >= ${since} and ${views} ${t("tenant_id")}`),
     rows<{ c: number; s: string | null }>(
-      sql`select count(*) c, sum(grand_total) s from orders where created_at >= curdate() and status not in ('cancelled','refunded') ${t("tenant_id")}`,
+      sql`select count(*) c, sum(grand_total) s from orders where created_at >= ${since} and status not in ('cancelled','refunded') ${t("tenant_id")}`,
     ),
-    rows<{ m: string; c: number }>(
-      sql`select date_format(created_at, '%H:%i') m, count(distinct session_id) c from visitor_events
-        where created_at >= now() - interval 30 minute ${t("tenant_id")} group by m order by m`,
+    rows<{ b: string; v: number; p: number }>(
+      sql`select date_format(${trTime("created_at")}, ${fmt}) b, count(distinct session_id) v, sum(${views}) p
+        from visitor_events where created_at >= ${since} ${t("tenant_id")} group by b`,
     ),
     rows<{ stage: string; c: number }>(
-      sql`select stage, count(*) c from visitor_sessions where last_seen >= now() - interval 30 minute ${t("tenant_id")} group by stage`,
+      sql`select stage, count(*) c from visitor_sessions where last_seen >= ${since} ${t("tenant_id")} group by stage`,
     ),
     rows<{ product_id: string; name: string; image_url: string | null; qty: number; amount: string }>(
       sql`select oi.product_id, max(oi.name) name, max(oi.image_url) image_url, sum(oi.qty) qty, sum(oi.qty * oi.unit_price) amount
         from order_items oi join orders o on o.id = oi.order_id
-        where o.created_at >= curdate() and o.status not in ('cancelled','refunded') ${t("o.tenant_id")}
+        where o.created_at >= ${since} and o.status not in ('cancelled','refunded') ${t("o.tenant_id")}
         group by oi.product_id order by qty desc limit 8`,
     ),
-    rows<{ path: string; c: number }>(
-      sql`select last_path path, count(*) c from visitor_sessions where last_seen >= now() - interval 5 minute ${t("tenant_id")}
-        group by last_path order by c desc limit 8`,
+    rows<{ path: string | null; title: string | null; c: number; v: number }>(
+      sql`select path, max(title) title, count(*) c, count(distinct session_id) v from visitor_events
+        where created_at >= ${since} and ${views} ${t("tenant_id")} group by path order by c desc limit 10`,
     ),
     rows<{ source: string; c: number }>(
-      sql`select coalesce(source, 'Doğrudan') source, count(*) c from visitor_sessions where last_seen >= curdate() ${t("tenant_id")}
+      sql`select coalesce(source, 'Doğrudan') source, count(*) c from visitor_sessions where last_seen >= ${since} ${t("tenant_id")}
         group by source order by c desc limit 8`,
     ),
     rows<{ device: string; c: number }>(
-      sql`select coalesce(device, 'desktop') device, count(*) c from visitor_sessions where last_seen >= curdate() ${t("tenant_id")} group by device`,
+      sql`select coalesce(device, 'desktop') device, count(*) c from visitor_sessions where last_seen >= ${since} ${t("tenant_id")} group by device`,
     ),
-    rows<{ type: string; path: string | null; title: string | null; created_at: Date; source: string | null; device: string | null }>(
-      sql`select e.type, e.path, e.title, e.created_at, s.source, s.device from visitor_events e
+    rows<{ city: string; c: number }>(
+      sql`select city, count(*) c from visitor_sessions where last_seen >= ${since} and city is not null and city <> '' ${t("tenant_id")}
+        group by city order by c desc limit 8`,
+    ),
+    rows<Omit<LiveSession, "active"> & { is_active: number }>(
+      sql`select id, first_seen, last_seen, pageviews, device, browser, source, city, landing, last_path, stage, customer_id,
+        last_seen >= now() - interval 5 minute is_active
+        from visitor_sessions where 1 = 1 ${t("tenant_id")} order by last_seen desc limit 25`,
+    ),
+    rows<LiveEvent>(
+      sql`select e.id, e.type, e.path, e.title, e.created_at, e.session_id, s.source, s.device, s.city from visitor_events e
         left join visitor_sessions s on s.id = e.session_id
-        where e.created_at >= now() - interval 30 minute and e.type in ('add_to_cart','checkout','purchase','product') ${t("e.tenant_id")}
-        order by e.created_at desc limit 15`,
+        where 1 = 1 ${t("e.tenant_id")} order by e.created_at desc, e.id desc limit 60`,
     ),
   ]);
-  const minutes: { m: string; c: number }[] = [];
-  const byMinute = new Map(history.map((h) => [h.m, num(h.c)]));
-  const now = new Date();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 60_000);
-    const key = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    minutes.push({ m: key, c: byMinute.get(key) ?? 0 });
-  }
+
+  const byBucket = new Map(chart.map((c) => [c.b, { v: num(c.v), p: num(c.p) }]));
   const stageCount = new Map(funnel.map((f) => [f.stage, num(f.c)]));
-  const totalRecent = [...stageCount.values()].reduce((a, b) => a + b, 0);
+  const totalSessions = [...stageCount.values()].reduce((a, b) => a + b, 0);
   const order = stageCount.get("order") ?? 0;
   const checkout = (stageCount.get("checkout") ?? 0) + order;
   const cart = (stageCount.get("cart") ?? 0) + checkout;
+  const product = (stageCount.get("product") ?? 0) + cart;
   return {
+    range,
     activeVisitors: num(active[0]?.c),
-    todayVisitors: num(todayVisitors[0]?.c),
-    todayOrders: num(todayOrders[0]?.c),
-    todaySales: num(todayOrders[0]?.s),
-    history: minutes,
-    funnel: { visitors: totalRecent, cart, checkout, order },
+    visitors: num(visitors[0]?.c),
+    pageviews: num(pageviews[0]?.c),
+    orders: num(orderTotals[0]?.c),
+    sales: num(orderTotals[0]?.s),
+    chart: rangeBuckets(range).map((b) => ({ ...b, visitors: byBucket.get(b.key)?.v ?? 0, pageviews: byBucket.get(b.key)?.p ?? 0 })),
+    funnel: { visitors: totalSessions, product, cart, checkout, order },
     bestSellers: bestSellers.map((b) => ({ ...b, qty: num(b.qty), amount: num(b.amount) })),
-    pages: pages.map((p) => ({ path: p.path ?? "/", c: num(p.c) })),
+    topPages: topPages.map((p) => ({ path: p.path ?? "/", title: p.title, c: num(p.c), v: num(p.v) })),
     sources: sources.map((s) => ({ source: s.source, c: num(s.c) })),
     devices: devices.map((d) => ({ device: d.device, c: num(d.c) })),
-    feed,
+    cities: cities.map((c) => ({ city: c.city, c: num(c.c) })),
+    sessions: sessions.map(({ is_active, ...s }): LiveSession => ({ ...s, pageviews: num(s.pageviews), active: num(is_active) === 1 })),
+    feed: feed.map((e) => ({ ...e, id: num(e.id) })),
   };
 }
 
