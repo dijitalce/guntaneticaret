@@ -126,6 +126,10 @@ const standbyIdleMs = (() => {
   return 0;
 })();
 const primarySockPath = join(os.tmpdir(), "guntan-primary.sock");
+// Süreç başına ayrı yol: net.Server.close() unix sock dosyasını unlink eder;
+// ortak yolda kapanan eski süreç yeni birincilin sock'unu silebiliyordu.
+const ownSockPath = join(os.tmpdir(), `guntan-primary.${process.pid}.sock`);
+const OWN_SOCK_RE = /^guntan-primary\.(\d+)\.sock$/;
 const primaryEndpointFile = join(os.tmpdir(), "guntan-primary.json");
 const aliveDir = join(os.tmpdir(), "guntan-alive");
 const startedAt = Date.now();
@@ -238,6 +242,8 @@ let primaryHttpBridge = null;
 /** @type {{ kind: "unix", path: string } | { kind: "tcp", host: string, port: number } | null} */
 let primaryEndpoint = null;
 let primarySockEventLogs = 0;
+let primarySockGen = 0;
+let primarySockWatch = null;
 let bindAttempts = 0;
 
 function warnBadEnv() {
@@ -1091,14 +1097,12 @@ function closePrimarySock() {
   primaryTcpServer = null;
   primaryHttpBridge = null;
   primaryEndpoint = null;
+  primarySockGen += 1;
 
+  // Sock dosyasını net.Server.close() zaten siler; burada yalnız endpoint json.
   const unlinkOwnedArtifacts = () => {
     if (!mayUnlink) return;
-    try {
-      fs.unlinkSync(primarySockPath);
-    } catch {
-      /* */
-    }
+    if (primaryNetServer || primaryEndpoint) return;
     try {
       const raw = fs.readFileSync(primaryEndpointFile, "utf8");
       const j = JSON.parse(raw);
@@ -1133,7 +1137,7 @@ function writePrimaryEndpoint(ep) {
   const payload = {
     pid: process.pid,
     t: Date.now(),
-    sockPath: primarySockPath,
+    sockPath: ownSockPath,
     ...ep,
   };
   const tmp = `${primaryEndpointFile}.${process.pid}.tmp`;
@@ -1240,7 +1244,7 @@ function selfTestPrimaryUnix() {
   return new Promise((resolve) => {
     const req = http.request(
       {
-        socketPath: primarySockPath,
+        socketPath: ownSockPath,
         path: "/api/health",
         method: "GET",
         headers: { host: canonicalHost },
@@ -1273,9 +1277,59 @@ function selfTestPrimaryUnix() {
  * LiteSpeed http.Server.prototype.listen'ı yamadığı için ikinci listen ignore olur.
  * Bu yüzden net.createServer dinler; http bridge'e connection emit edilir (listen YOK).
  */
+let lastSockPrune = 0;
+function prunePrimarySocks() {
+  try {
+    const dir = os.tmpdir();
+    for (const name of fs.readdirSync(dir)) {
+      const m = OWN_SOCK_RE.exec(name);
+      if (!m) continue;
+      const pid = Number(m[1]);
+      if (pid !== process.pid && !pidAlive(pid)) fs.rmSync(join(dir, name), { force: true });
+    }
+  } catch {
+    /* */
+  }
+}
+
+/** Birincil, sock/endpoint kaybolursa kendini onarır (yedekler aksi halde 503 döner). */
+function ensurePrimarySockWatch() {
+  if (primarySockWatch) return;
+  primarySockWatch = setInterval(() => {
+    if (shuttingDown || !useStandbyProxy) return;
+    if (readLockPid() !== process.pid) return;
+    if (Date.now() - lastSockPrune > 10 * 60_000) {
+      lastSockPrune = Date.now();
+      prunePrimarySocks();
+    }
+    const ep = primaryEndpoint;
+    if (!ep) return;
+    if (ep.kind !== "unix" || !fs.existsSync(ownSockPath)) {
+      console.warn(
+        `[hostinger] primary-sock onarım kind=${ep.kind} sockVar=${fs.existsSync(ownSockPath)} pid=${process.pid}`,
+      );
+      closePrimarySock();
+      startPrimarySock();
+      return;
+    }
+    let filePid = 0;
+    try {
+      filePid = Number(JSON.parse(fs.readFileSync(primaryEndpointFile, "utf8")).pid);
+    } catch {
+      /* */
+    }
+    if (filePid !== process.pid) {
+      console.warn(`[hostinger] primary-endpoint yeniden yazılıyor dosyaPid=${filePid} pid=${process.pid}`);
+      writePrimaryEndpoint(ep);
+    }
+  }, 15_000);
+  primarySockWatch.unref?.();
+}
+
 function startPrimarySock() {
   if (!useStandbyProxy || shuttingDown) return;
   if (readLockPid() !== process.pid) return;
+  ensurePrimarySockWatch();
   if (primaryNetServer?.listening) return;
 
   closePrimarySock();
@@ -1312,7 +1366,7 @@ function startPrimarySock() {
   const listenUnix = () =>
     new Promise((resolve) => {
       try {
-        fs.unlinkSync(primarySockPath);
+        fs.unlinkSync(ownSockPath);
       } catch {
         /* */
       }
@@ -1331,11 +1385,11 @@ function startPrimarySock() {
         }
         resolve(null);
       });
-      n.listen(primarySockPath, () => {
+      n.listen(ownSockPath, () => {
         if (settled) return;
         settled = true;
         try {
-          fs.chmodSync(primarySockPath, 0o600);
+          fs.chmodSync(ownSockPath, 0o600);
         } catch (err) {
           console.warn(
             `[hostinger] primary-sock chmod:`,
@@ -1343,7 +1397,7 @@ function startPrimarySock() {
           );
         }
         console.log(
-          `[hostinger] primary-sock dinliyor path=${primarySockPath} pid=${process.pid}`,
+          `[hostinger] primary-sock dinliyor path=${ownSockPath} pid=${process.pid}`,
         );
         resolve(n);
       });
@@ -1378,15 +1432,30 @@ function startPrimarySock() {
       });
     });
 
+  const gen = primarySockGen;
+  const stale = () => gen !== primarySockGen || shuttingDown;
+
   (async () => {
-    const unix = await listenUnix();
+    // Bu hostta TCP yedeği süreçler arası erişilemiyor; unix'i birkaç kez dene.
     let unixOk = false;
-    if (unix) {
+    for (let attempt = 1; attempt <= 4 && !unixOk; attempt++) {
+      if (attempt > 1) await new Promise((r) => setTimeout(r, 400 * attempt));
+      if (stale()) return;
+      const unix = await listenUnix();
+      if (stale()) {
+        unix?.close();
+        return;
+      }
+      if (!unix) {
+        console.warn(`[hostinger] primary-sock unix açılamadı deneme=${attempt}`);
+        continue;
+      }
       primaryNetServer = unix;
       unixOk = await selfTestPrimaryUnix();
+      if (stale()) return;
       if (!unixOk) {
         console.warn(
-          `[hostinger] primary-sock self-test başarısız — TCP yedeğe geçiliyor`,
+          `[hostinger] primary-sock self-test başarısız deneme=${attempt} pid=${process.pid}`,
         );
         try {
           unix.close();
@@ -1394,18 +1463,18 @@ function startPrimarySock() {
           /* */
         }
         primaryNetServer = null;
-        try {
-          fs.unlinkSync(primarySockPath);
-        } catch {
-          /* */
-        }
       }
-    } else {
-      console.warn(`[hostinger] primary-sock unix açılamadı`);
+    }
+    if (!unixOk) {
+      console.warn(`[hostinger] primary-sock unix başarısız — TCP yedeğe geçiliyor`);
     }
 
     // TCP her zaman aç (unix OK olsa bile GET retry için)
     const tcp = await listenTcp();
+    if (stale()) {
+      tcp?.server.close();
+      return;
+    }
     let tcpPort = null;
     if (tcp) {
       // unix dinliyorsa tcp ayrı server — primaryNetServer unix'te kalsın
@@ -1417,8 +1486,8 @@ function startPrimarySock() {
     if (unixOk) {
       writePrimaryEndpoint({
         kind: "unix",
-        path: primarySockPath,
-        sockPath: primarySockPath,
+        path: ownSockPath,
+        sockPath: ownSockPath,
         tcpPort,
         host: "127.0.0.1",
         port: tcpPort,
