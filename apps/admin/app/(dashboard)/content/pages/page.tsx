@@ -2,14 +2,14 @@ import Link from "next/link";
 import { asc, desc, eq } from "drizzle-orm";
 import { db, pages, tenants } from "@guntan/db";
 import { IconPlus } from "@/src/icons";
-import { withBase } from "@/src/paths";
+import { StatusToggle } from "@/src/status-toggle";
 import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { TabNav } from "@/src/ui-ext";
 
 export const metadata = { title: "Sayfalar" };
 export const dynamic = "force-dynamic";
 
-export default async function PagesAdmin({ searchParams }: { searchParams: Promise<{ site?: string; ok?: string }> }) {
+export default async function PagesAdmin({ searchParams }: { searchParams: Promise<{ site?: string; ok?: string; hata?: string }> }) {
   const sp = await searchParams;
   const tenantRows = await db.select({ id: tenants.id, name: tenants.name }).from(tenants).orderBy(asc(tenants.name));
   const tenantId = tenantRows.find((t) => t.id === sp.site)?.id ?? null;
@@ -35,6 +35,7 @@ export default async function PagesAdmin({ searchParams }: { searchParams: Promi
       />
       {sp.ok === "silindi" ? <Alert tone="ok">Sayfa silindi.</Alert> : null}
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Sayfa güncellendi.</Alert> : null}
+      {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {tenantRows.length > 1 ? (
         <TabNav
           label="Site"
@@ -64,7 +65,7 @@ export default async function PagesAdmin({ searchParams }: { searchParams: Promi
               </thead>
               <tbody>
                 {rows.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} className="row-link" data-href={`/content/pages/${p.id}`}>
                     <td>
                       <Link href={`/content/pages/${p.id}`}>
                         <strong>{p.title}</strong>
@@ -78,13 +79,15 @@ export default async function PagesAdmin({ searchParams }: { searchParams: Promi
                       {p.metaDescription ? <StatusBadge tone="ok">Tamam</StatusBadge> : <StatusBadge tone="warn">Açıklama yok</StatusBadge>}
                     </td>
                     <td>
-                      <form action={withBase(`/api/content/pages/${p.id}`)} method="post">
-                        <input type="hidden" name="_action" value="toggle" />
-                        <input type="hidden" name="back" value="list" />
-                        <button type="submit" className="badge-button" title="Durumu değiştir">
-                          <StatusBadge tone={p.isPublished ? "ok" : "neutral"}>{p.isPublished ? "Yayında" : "Taslak"}</StatusBadge>
-                        </button>
-                      </form>
+                      <StatusToggle
+                        action={`/api/content/pages/${p.id}`}
+                        fields={{ _action: "toggle", back: "list" }}
+                        on={Boolean(p.isPublished)}
+                        tone={p.isPublished ? "ok" : "neutral"}
+                        label={p.isPublished ? "Yayında" : "Taslak"}
+                        turnOn="Yayınla"
+                        turnOff="Taslağa al"
+                      />
                     </td>
                     <td className="text-sm muted">{formatDate(p.updatedAt, true)}</td>
                     <td className="table-actions">

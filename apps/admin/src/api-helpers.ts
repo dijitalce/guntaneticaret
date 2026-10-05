@@ -11,8 +11,11 @@ export async function apiAdminSession() {
 
 export function redirectTo(request: Request, path: string, query?: Record<string, string>) {
   const qs = query ? new URLSearchParams(query).toString() : "";
-  const sep = path.includes("?") ? "&" : "?";
-  return NextResponse.redirect(adminRedirect(qs ? `${path}${sep}${qs}` : path, request), 303);
+  const hashAt = path.indexOf("#");
+  const base = hashAt >= 0 ? path.slice(0, hashAt) : path;
+  const hash = hashAt >= 0 ? path.slice(hashAt) : "";
+  const sep = base.includes("?") ? "&" : "?";
+  return NextResponse.redirect(adminRedirect(`${qs ? `${base}${sep}${qs}` : base}${hash}`, request), 303);
 }
 
 /** Sadece panel içi göreli yollara yönlendir. */

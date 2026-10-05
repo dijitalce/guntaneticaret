@@ -18,6 +18,18 @@ import { Alert, PageHeader, Panel, formatDate } from "@/src/ui";
 export const metadata = { title: "Fiyat oranları" };
 export const dynamic = "force-dynamic";
 
+const TIER_COUNT_TTL_MS = 5 * 60_000;
+let tierCountCache: { key: string; at: number; counts: number[] } | null = null;
+
+/** 419 bin ürünü tarar; fiyat işi sürerken sayfa sık yenilendiği için sonuç birkaç dakika saklanır. */
+async function cachedCountByTier(tiers: PriceTier[], running: boolean): Promise<number[]> {
+  const key = JSON.stringify(tiers);
+  if (tierCountCache?.key === key && (running || Date.now() - tierCountCache.at < TIER_COUNT_TTL_MS)) return tierCountCache.counts;
+  const counts = await countByTier(tiers);
+  tierCountCache = { key, at: Date.now(), counts };
+  return counts;
+}
+
 async function countByTier(tiers: PriceTier[]): Promise<number[]> {
   const cases = sql.join(
     tiers.slice(0, -1).map((t, i) => sql`when ${products.price} <= ${(t.below * (1 + t.percent / 100)).toFixed(2)} then ${i}`),
@@ -43,15 +55,15 @@ const OK_MESSAGES: Record<string, string> = {
 export default async function PricingPage({ searchParams }: { searchParams: Promise<{ ok?: string; hata?: string }> }) {
   const sp = await searchParams;
   const [setting, applied, job] = await Promise.all([loadPriceTiers(), loadAppliedPriceTiers(), getRepriceJob()]);
-  const counts = await countByTier(applied ?? setting.tiers);
   const running = isRepriceRunning(job);
+  const counts = await cachedCountByTier(applied ?? setting.tiers, running);
   const pending = !running && applied != null && !sameTiers(applied, setting.tiers);
   const stored = toStoredTiers(setting.tiers);
   const pct = job && job.total ? Math.min(100, Math.round((job.scanned / job.total) * 100)) : 0;
 
   return (
     <>
-      {running || (sp.ok === "basladi" && job?.status !== "done" && job?.status !== "failed") ? <AutoRefresh /> : null}
+      {running || (sp.ok === "basladi" && job?.status !== "done" && job?.status !== "failed") ? <AutoRefresh everyMs={8000} /> : null}
       <PageHeader
         title="Fiyat oranları"
         description="Tedarikçi maliyetine uygulanan kademeli kâr marjları. Oranı maliyetin düştüğü dilim belirler."

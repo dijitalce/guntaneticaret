@@ -113,7 +113,7 @@ export default async function AbandonedCartsPage({
                 </thead>
                 <tbody>
                   {list.rows.map((c) => (
-                    <tr key={c.id}>
+                    <tr key={c.id} className="row-link" data-href={`/abandoned-carts/${c.id}`}>
                       <td>
                         <Link href={`/abandoned-carts/${c.id}`}>
                           <strong>{c.name || c.email || "Anonim ziyaretçi"}</strong>

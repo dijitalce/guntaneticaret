@@ -230,6 +230,29 @@ body.admin-body code {
   color: var(--a-text);
   transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
+.gsearch {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 320px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--a-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  z-index: 50;
+  padding: 0.3rem;
+}
+.gsearch-group { padding: 0.5rem 0.6rem 0.25rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--a-muted); }
+.gsearch-item { all: unset; box-sizing: border-box; display: grid; width: 100%; gap: 0.1rem; padding: 0.45rem 0.6rem; border-radius: 7px; cursor: pointer; }
+.gsearch-item strong { font-size: 0.85rem; font-weight: 600; color: var(--a-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsearch-item span { font-size: 0.75rem; color: var(--a-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsearch-item.is-active { background: var(--a-brand-50); }
+.gsearch-item.is-active strong { color: var(--a-brand-600); }
+.gsearch-empty { padding: 0.8rem 0.6rem; font-size: 0.82rem; color: var(--a-muted); }
+.gsearch-foot { border-top: 1px solid var(--a-border); margin-top: 0.3rem; padding: 0.4rem 0.6rem 0.15rem; font-size: 0.7rem; color: var(--a-faint); }
 .admin-search input::placeholder { color: var(--a-faint); }
 .admin-search input:focus { outline: 0; background: #fff; border-color: #e8948e; box-shadow: var(--a-ring); }
 .admin-search kbd {
@@ -1134,6 +1157,23 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
   .inline-edit { grid-template-columns: 1fr 1fr; }
 }
 
+.btn.is-pending { position: relative; color: transparent !important; pointer-events: none; }
+.btn.is-pending > * { visibility: hidden; }
+.btn.is-pending::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-color: var(--a-muted) transparent var(--a-muted) transparent;
+  animation: btn-spin 0.7s linear infinite;
+}
+.btn-primary.is-pending::after { border-color: #fff transparent #fff transparent; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
 /* ——— Veri tablosu (ürünler) ——— */
 .dt-toolbar .select { width: auto; min-width: 150px; }
 .dt-table th, .dt-table td { padding: 0.55rem 0.8rem; }
@@ -1574,6 +1614,7 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
 .subhead { margin: 1rem 0 0.5rem; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--a-muted); }
 .table-actions { text-align: right; white-space: nowrap; }
 .table-actions > * { display: inline-flex; vertical-align: middle; margin-left: 0.35rem; }
+.status-toggle { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
 .badge-button { all: unset; cursor: pointer; display: inline-flex; border-radius: 999px; }
 .badge-button:hover .badge { filter: brightness(0.96); box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.06); }
 .badge-button:focus-visible { box-shadow: var(--a-ring); }

@@ -75,7 +75,9 @@ export function entityHref(entity: string, id: string): string | null {
     case "order":
       return `/orders/${id}`;
     case "product":
-      return `/catalog/products/${id}`;
+      return /^[0-9a-f-]{36}$/i.test(id) ? `/catalog/products?id=${id}` : "/catalog/products";
+    case "abandoned_cart":
+      return `/abandoned-carts/${id}`;
     case "tenant":
       return `/tenants/${id}`;
     case "vehicle_brand":

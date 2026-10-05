@@ -106,7 +106,7 @@ export default async function CustomersPage({
               </thead>
               <tbody>
                 {rows.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} className="row-link" data-href={`/customers/${c.id}`}>
                     <td>
                       <div className="customer-cell">
                         <span className="customer-avatar" aria-hidden>

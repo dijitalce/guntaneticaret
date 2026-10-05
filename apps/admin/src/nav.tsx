@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { GlobalSearch, type SearchPage } from "./global-search";
 import { withBase } from "./paths";
 import {
   IconBox,
@@ -115,6 +116,8 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
+const SEARCH_PAGES: SearchPage[] = GROUPS.flatMap((g) => g.items.map((i) => ({ href: i.href, label: i.label, group: g.label })));
+
 function matches(pathname: string, item: NavItem) {
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -155,7 +158,6 @@ export function AdminShellClient({
 }) {
   const pathname = usePathname() || "/";
   const current = activeHref(pathname);
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -181,14 +183,6 @@ export function AdminShellClient({
     setOpen(false);
     if (menuRef.current) menuRef.current.open = false;
   }, [pathname]);
-
-  function onSearch(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const q = String(new FormData(e.currentTarget).get("q") ?? "").trim();
-    if (!q) return;
-    const looksLikeOrder = /^gnt-/i.test(q) || q.includes("@");
-    router.push(`${looksLikeOrder ? "/orders" : "/catalog/products"}?q=${encodeURIComponent(q)}`);
-  }
 
   return (
     <div className={`admin-shell${open ? " nav-open" : ""}`}>
@@ -249,18 +243,7 @@ export function AdminShellClient({
             <IconMenu />
           </button>
 
-          <form className="admin-search" role="search" onSubmit={onSearch}>
-            <IconSearch />
-            <input
-              ref={searchRef}
-              name="q"
-              type="search"
-              placeholder="Sipariş no, e-posta, SKU veya OEM ara…"
-              aria-label="Ara"
-              autoComplete="off"
-            />
-            <kbd>⌘K</kbd>
-          </form>
+          <GlobalSearch pages={SEARCH_PAGES} inputRef={searchRef} />
 
           <div className="admin-topbar-right">
             <a className="admin-topbar-link" href={storefrontUrl} target="_blank" rel="noreferrer">

@@ -26,6 +26,15 @@ export const metadata = { title: "Sipariş detayı" };
 export const dynamic = "force-dynamic";
 
 const RETURN_LABELS: Record<string, string> = { open: "Açık", approved: "Onaylandı", rejected: "Reddedildi" };
+const SHIPMENT_STATUS: Record<string, string> = {
+  pending: "Hazırlanıyor",
+  created: "Gönderi oluşturuldu",
+  shipped: "Kargoda",
+  in_transit: "Yolda",
+  delivered: "Teslim edildi",
+  returned: "İade döndü",
+  cancelled: "İptal",
+};
 const JOURNEY_LABEL: Record<string, string> = {
   pv: "Sayfa",
   product: "Ürün",
@@ -234,11 +243,11 @@ export default async function OrderDetailPage({
                 <form action={withBase(`/api/orders/${order.id}/ship`)} method="post" className="op-actions">
                   <div className="field">
                     <label htmlFor="carrier">Kargo firması</label>
-                    <input className="input" id="carrier" name="carrier" placeholder="Yurtiçi, MNG…" defaultValue={shipments[0]?.carrier ?? ""} />
+                    <input className="input" id="carrier" name="carrier" placeholder="Yurtiçi, MNG…" required defaultValue={shipments[0]?.carrier ?? ""} />
                   </div>
                   <div className="field">
                     <label htmlFor="trackingNo">Takip no</label>
-                    <input className="input" id="trackingNo" name="trackingNo" placeholder="Takip numarası" defaultValue={shipments[0]?.trackingNo ?? ""} />
+                    <input className="input" id="trackingNo" name="trackingNo" placeholder="Takip numarası" required defaultValue={shipments[0]?.trackingNo ?? ""} />
                   </div>
                   <button className={arasReady ? "btn btn-secondary" : "btn btn-primary"} type="submit">
                     Kargoya ver
@@ -676,7 +685,7 @@ export default async function OrderDetailPage({
                     <dt>{s.carrier ?? "Firma belirtilmedi"}</dt>
                     <dd style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
                       <span>{s.trackingNo ?? "Takip no bekleniyor"}</span>
-                      <StatusBadge tone={statusTone(s.status)}>{s.status}</StatusBadge>
+                      <StatusBadge tone={statusTone(s.status)}>{SHIPMENT_STATUS[s.status] ?? s.status}</StatusBadge>
                     </dd>
                   </div>
                 ))}

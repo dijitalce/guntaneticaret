@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { automationStats, getAutomationSettings, getNotifySettings, recentAutomationRuns } from "@guntan/db";
+import { ConfirmButton } from "@/src/form-fields";
 import { IconZap } from "@/src/icons";
 import { MarketingNav } from "@/src/marketing-nav";
 import { withBase } from "@/src/paths";
@@ -74,7 +75,7 @@ function Card({
   );
 }
 
-export default async function AutomationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; adet?: string }> }) {
+export default async function AutomationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; hata?: string; adet?: string }> }) {
   const sp = await searchParams;
   const [s, stats, runs, notify] = await Promise.all([getAutomationSettings(), automationStats(), recentAutomationRuns(25), getNotifySettings()]);
   const st = (k: string) => stats.byKey.get(k);
@@ -89,14 +90,15 @@ export default async function AutomationsPage({ searchParams }: { searchParams: 
         actions={
           <form action={withBase("/api/automations")} method="post">
             <input type="hidden" name="_action" value="run" />
-            <button className="btn btn-secondary" type="submit">
+            <ConfirmButton className="btn btn-secondary" message="Tüm otomasyonlar şimdi çalıştırılsın mı? Koşulu tutan müşterilere e-posta/SMS gidebilir.">
               <IconZap />
               Şimdi çalıştır
-            </button>
+            </ConfirmButton>
           </form>
         }
       />
       <MarketingNav active="automations" />
+      {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Otomasyon ayarı kaydedildi.</Alert> : null}
       {sp.ok === "calisti" ? <Alert tone="ok">Tüm otomasyonlar çalıştırıldı · {sp.adet ?? 0} mesaj gönderildi.</Alert> : null}
       {!emailReady ? (

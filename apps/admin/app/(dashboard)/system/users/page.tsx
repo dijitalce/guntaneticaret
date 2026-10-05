@@ -71,7 +71,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                 {users.map((u) => {
                   const m = metas.get(u.id);
                   return (
-                    <tr key={u.id}>
+                    <tr key={u.id} className="row-link" data-href={`/system/users/${u.id}`}>
                       <td>
                         <Link href={`/system/users/${u.id}`}>
                           <strong>{u.name}</strong>

@@ -25,6 +25,7 @@ const SORTS = {
 type SortKey = keyof typeof SORTS;
 
 type Params = {
+  id?: string;
   q?: string;
   status?: string;
   tedarikci?: string;
@@ -51,6 +52,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const page = Math.max(1, Number.parseInt(sp.sayfa ?? "1", 10) || 1);
 
   const conditions: SQL[] = [];
+  const onlyId = sp.id && /^[0-9a-f-]{36}$/i.test(sp.id) ? sp.id : "";
+  if (onlyId) conditions.push(eq(products.id, onlyId));
   if (q) {
     const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     conditions.push(
@@ -121,6 +124,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const current: Record<string, string | undefined> = {
+    id: onlyId || undefined,
     q: q || undefined,
     status: status || undefined,
     tedarikci: supplierId || undefined,
@@ -158,7 +162,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const storefrontUrl = (process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com").replace(/\/$/, "");
   const from = total ? (page - 1) * pageSize + 1 : 0;
   const to = Math.min(total, page * pageSize);
-  const hasFilter = Boolean(q || supplierId || image || stock);
+  const hasFilter = Boolean(q || supplierId || image || stock || onlyId);
 
   const pageLinks: number[] = [];
   for (let i = Math.max(1, page - 2); i <= Math.min(pages, page + 2); i++) pageLinks.push(i);
@@ -225,7 +229,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             Filtrele
           </button>
           {hasFilter ? (
-            <Link className="btn btn-ghost" href={href({ q: undefined, tedarikci: undefined, gorsel: undefined, stok: undefined, sayfa: undefined })}>
+            <Link className="btn btn-ghost" href={href({ id: undefined, q: undefined, tedarikci: undefined, gorsel: undefined, stok: undefined, sayfa: undefined })}>
               Temizle
             </Link>
           ) : null}

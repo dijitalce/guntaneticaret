@@ -2,9 +2,12 @@ import Link from "next/link";
 import { and, count, desc, eq, like, or, type SQL } from "drizzle-orm";
 import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
-import { IconBank, IconCard, IconCart, IconPrinter, IconSearch } from "@/src/icons";
+import { ConfirmButton } from "@/src/form-fields";
+import { IconBank, IconCard, IconCart, IconSearch } from "@/src/icons";
+import { BulkLabelButton, SelectAllOrders } from "@/src/order-bulk";
 import { withBase } from "@/src/paths";
-import { EmptyState, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
+import { Alert, EmptyState, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
+import { Pager } from "@/src/ui-ext";
 
 export const metadata = { title: "Siparişler" };
 
@@ -17,12 +20,13 @@ const TABS = [
   { value: "shipped", label: "Kargoda" },
   { value: "completed", label: "Tamamlandı" },
   { value: "cancelled", label: "İptal" },
+  { value: "refunded", label: "İade" },
 ];
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tenant?: string; status?: string; q?: string; sayfa?: string }>;
+  searchParams: Promise<{ tenant?: string; status?: string; q?: string; sayfa?: string; ok?: string; hata?: string; mesaj?: string }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
@@ -58,8 +62,6 @@ export default async function OrdersPage({
   const nameBy = Object.fromEntries(tenantRows.map((t) => [t.id, t.name]));
   const countBy = Object.fromEntries(statusCounts.map((r) => [r.status, r.n]));
   const allCount = statusCounts.reduce((a, r) => a + r.n, 0);
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   const href = (patch: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
     const merged = { tenant: sp.tenant, status: sp.status, q: q || undefined, ...patch };
@@ -75,13 +77,12 @@ export default async function OrdersPage({
         description="Ödeme, hazırlık, kargo ve teslim adımlarını sipariş detayından yönetin."
         actions={
           <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank">
-            <button className="btn btn-secondary" type="submit">
-              <IconPrinter />
-              Seçilenlerin etiketini yazdır
-            </button>
+            <BulkLabelButton form="bulk-labels" />
           </form>
         }
       />
+      {sp.ok === "1" ? <Alert tone="ok">Ödeme alındı olarak işaretlendi; müşteriye bilgi gönderildi.</Alert> : null}
+      {sp.hata ? <Alert>{sp.mesaj || "İşlem yapılamadı."}</Alert> : null}
 
       <Panel>
         <nav className="tabs" aria-label="Sipariş durumu">
@@ -134,7 +135,9 @@ export default async function OrdersPage({
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 28 }} aria-label="Seç" />
+                  <th style={{ width: 28 }}>
+                    <SelectAllOrders form="bulk-labels" />
+                  </th>
                   <th>Sipariş</th>
                   <th>Müşteri</th>
                   {tenantRows.length > 1 ? <th>Site</th> : null}
@@ -149,7 +152,7 @@ export default async function OrdersPage({
                   const card = o.shippingAddress?.paymentMethod === "credit_card";
                   const inst = Number(o.shippingAddress?.installments ?? "1");
                   return (
-                    <tr key={o.id}>
+                    <tr key={o.id} className="row-link" data-href={`/orders/${o.id}`}>
                       <td>
                         <input type="checkbox" name="ids" value={o.id} form="bulk-labels" aria-label={`${o.orderNo} seç`} />
                       </td>
@@ -185,9 +188,13 @@ export default async function OrdersPage({
                         <div className="row-actions">
                           {o.status === "pending_payment" && !card ? (
                             <form action={withBase(`/api/orders/${o.id}/confirm`)} method="post">
-                              <button className="btn btn-primary btn-sm" type="submit">
+                              <input type="hidden" name="next" value={href({})} />
+                              <ConfirmButton
+                                className="btn btn-primary btn-sm"
+                                message={`${o.orderNo} numaralı siparişin havale ödemesi alındı olarak işaretlensin mi? Müşteriye bilgi e-postası gider.`}
+                              >
                                 Ödeme alındı
-                              </button>
+                              </ConfirmButton>
                             </form>
                           ) : null}
                           <Link className="btn btn-secondary btn-sm" href={`/orders/${o.id}`}>
@@ -203,25 +210,7 @@ export default async function OrdersPage({
           </div>
         )}
 
-        {pages > 1 ? (
-          <div className="toolbar" style={{ justifyContent: "space-between", borderTop: "1px solid var(--a-border)", borderBottom: 0 }}>
-            <span className="muted text-sm">
-              {total.toLocaleString("tr-TR")} sipariş · Sayfa {page}/{pages}
-            </span>
-            <div className="row-actions">
-              {page > 1 ? (
-                <Link className="btn btn-secondary btn-sm" href={href({ sayfa: String(page - 1) })}>
-                  Önceki
-                </Link>
-              ) : null}
-              {page < pages ? (
-                <Link className="btn btn-secondary btn-sm" href={href({ sayfa: String(page + 1) })}>
-                  Sonraki
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        <Pager base="/orders" page={page} total={total} perPage={PAGE_SIZE} params={{ tenant: sp.tenant, status: sp.status, q: q || undefined }} />
       </Panel>
     </>
   );

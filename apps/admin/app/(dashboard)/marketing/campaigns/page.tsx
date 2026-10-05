@@ -9,7 +9,7 @@ import { TabNav, percent } from "@/src/ui-ext";
 export const metadata = { title: "Kampanyalar" };
 export const dynamic = "force-dynamic";
 
-export default async function CampaignsPage({ searchParams }: { searchParams: Promise<{ kanal?: string; ok?: string }> }) {
+export default async function CampaignsPage({ searchParams }: { searchParams: Promise<{ kanal?: string; ok?: string; hata?: string }> }) {
   const sp = await searchParams;
   const channel = sp.kanal === "sms" ? "sms" : "email";
   const list = await listCampaigns(channel);
@@ -32,6 +32,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Pr
       />
       <MarketingNav active="campaigns" />
       {sp.ok === "silindi" ? <Alert tone="ok">Kampanya silindi.</Alert> : null}
+      {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       <TabNav
         label="Kanal"
         active={channel}
@@ -67,7 +68,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Pr
                 {list.map((c) => {
                   const st = CAMPAIGN_STATUS[c.status] ?? { label: c.status, tone: "neutral" as const };
                   return (
-                    <tr key={c.id}>
+                    <tr key={c.id} className="row-link" data-href={`/marketing/campaigns/${c.id}`}>
                       <td>
                         <Link href={`/marketing/campaigns/${c.id}`}>
                           <strong>{c.name}</strong>

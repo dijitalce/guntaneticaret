@@ -148,7 +148,7 @@ export default async function ModelsPage({
                   const brand = brandBy.get(m.brandId);
                   const img = assetUrl(m.imageUrl) ?? assetUrl(brand?.logoUrl);
                   return (
-                    <tr key={m.id}>
+                    <tr key={m.id} className="row-link" data-href={`/catalog/models/${m.id}`}>
                       <td>
                         <div className="item-row">
                           <BrandLogo src={img} name={m.name} size={40} />

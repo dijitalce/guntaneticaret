@@ -21,10 +21,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       const result = await shipOrderWithAras(id, { pieceCount, weightKg }, session.user.name || session.user.email);
       after = { carrier: "Aras Kargo", integration: true, pieceCount, weightKg, arasMessage: result.message };
     } else {
-      await shipOrder(id, {
-        carrier: String(form.get("carrier") ?? ""),
-        trackingNo: String(form.get("trackingNo") ?? ""),
-      }, session.user.name || session.user.email);
+      const carrier = String(form.get("carrier") ?? "").trim();
+      const trackingNo = String(form.get("trackingNo") ?? "").trim();
+      if (!carrier || !trackingNo) {
+        const url = adminRedirect(`/orders/${id}?hata=1`, request);
+        url.searchParams.set("mesaj", "Kargo firması ve takip numarası zorunlu; müşteriye takip bilgisi gönderilir.");
+        return NextResponse.redirect(url, 303);
+      }
+      await shipOrder(id, { carrier, trackingNo }, session.user.name || session.user.email);
       after = { carrier: form.get("carrier"), trackingNo: form.get("trackingNo") };
     }
     await writeAudit({

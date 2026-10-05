@@ -37,6 +37,24 @@ async function revenueSince(from: Date) {
   return { total: Number(row?.total ?? 0), n: row?.n ?? 0 };
 }
 
+const PRODUCT_STATS_TTL_MS = 5 * 60_000;
+let productStatsCache: { at: number; rows: { total: number; active: number; oos: number; fresh24: number }[] } | null = null;
+
+/** Tüm ürün tablosunu tarar; özet her açıldığında tekrar saymamak için 5 dk saklanır. */
+async function cachedProductStats() {
+  if (productStatsCache && Date.now() - productStatsCache.at < PRODUCT_STATS_TTL_MS) return productStatsCache.rows;
+  const rows = await db
+    .select({
+      total: count(),
+      active: sql<number>`sum(${products.status} = 'active')`,
+      oos: sql<number>`sum(${products.stockStatus} = 'out_of_stock')`,
+      fresh24: sql<number>`sum(${products.updatedAt} >= now() - interval 24 hour)`,
+    })
+    .from(products);
+  productStatsCache = { at: Date.now(), rows };
+  return rows;
+}
+
 export default async function DashboardPage() {
   const now = new Date();
   const startOfTrDay = new Date(`${trDayKey(now)}T00:00:00${TR_OFFSET}`);
@@ -56,14 +74,7 @@ export default async function DashboardPage() {
       .where(and(inArray(orders.status, REVENUE_STATUSES), gte(orders.createdAt, daysAgo(DAYS - 1))))
       .groupBy(sql`1`),
     db.select().from(orders).orderBy(desc(orders.createdAt)).limit(8),
-    db
-      .select({
-        total: count(),
-        active: sql<number>`sum(${products.status} = 'active')`,
-        oos: sql<number>`sum(${products.stockStatus} = 'out_of_stock')`,
-        fresh24: sql<number>`sum(${products.updatedAt} >= now() - interval 24 hour)`,
-      })
-      .from(products),
+    cachedProductStats(),
     db.select({ n: count() }).from(tenants),
     db.select({ id: xmlFeeds.id, name: xmlFeeds.name, isActive: xmlFeeds.isActive }).from(xmlFeeds),
     db.select().from(xmlImportRuns).orderBy(desc(xmlImportRuns.createdAt)).limit(40),

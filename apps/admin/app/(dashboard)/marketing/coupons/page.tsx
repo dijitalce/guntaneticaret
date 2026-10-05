@@ -4,13 +4,13 @@ import { db, extRows, listCoupons, tenants } from "@guntan/db";
 import { IconPlus } from "@/src/icons";
 import { couponValueText } from "@/src/coupon-form";
 import { MarketingNav } from "@/src/marketing-nav";
-import { withBase } from "@/src/paths";
-import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry } from "@/src/ui";
+import { StatusToggle } from "@/src/status-toggle";
+import { Alert, EmptyState, Kpi, PageHeader, Panel, formatDate, formatTry } from "@/src/ui";
 
 export const metadata = { title: "Kuponlar" };
 export const dynamic = "force-dynamic";
 
-export default async function CouponsPage({ searchParams }: { searchParams: Promise<{ ok?: string; adet?: string; atlanan?: string }> }) {
+export default async function CouponsPage({ searchParams }: { searchParams: Promise<{ ok?: string; hata?: string; adet?: string; atlanan?: string }> }) {
   const sp = await searchParams;
   const [list, tenantRows, usage] = await Promise.all([
     listCoupons(),
@@ -42,6 +42,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
       <MarketingNav active="coupons" />
       {sp.ok === "silindi" ? <Alert tone="ok">Kupon silindi.</Alert> : null}
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Kaydedildi.</Alert> : null}
+      {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {sp.ok === "coklu" ? (
         <Alert tone="ok">
           {sp.adet} sitede kupon oluşturuldu{Number(sp.atlanan) ? ` (${sp.atlanan} sitede bu kod zaten vardı)` : ""}.
@@ -76,7 +77,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                   const expired = c.ends_at && new Date(c.ends_at).getTime() < now;
                   const exhausted = c.usage_limit != null && Number(c.used_count) >= Number(c.usage_limit);
                   return (
-                    <tr key={c.id}>
+                    <tr key={c.id} className="row-link" data-href={`/marketing/coupons/${c.id}`}>
                       <td>
                         <Link className="mono" href={`/marketing/coupons/${c.id}`}>
                           <strong>{c.code}</strong>
@@ -97,14 +98,15 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                         {c.starts_at || c.ends_at ? `${c.starts_at ? formatDate(c.starts_at, false) : "…"} – ${c.ends_at ? formatDate(c.ends_at, false) : "…"}` : "Süresiz"}
                       </td>
                       <td>
-                        <form action={withBase(`/api/coupons/${c.id}`)} method="post">
-                          <input type="hidden" name="_action" value="toggle" />
-                          <button className="badge-button" type="submit" title="Durumu değiştir">
-                            <StatusBadge tone={!Number(c.is_active) ? "neutral" : expired || exhausted ? "warn" : "ok"}>
-                              {!Number(c.is_active) ? "Kapalı" : expired ? "Süresi doldu" : exhausted ? "Limit doldu" : "Aktif"}
-                            </StatusBadge>
-                          </button>
-                        </form>
+                        <StatusToggle
+                          action={`/api/coupons/${c.id}`}
+                          fields={{ _action: "toggle" }}
+                          on={Boolean(Number(c.is_active))}
+                          tone={!Number(c.is_active) ? "neutral" : expired || exhausted ? "warn" : "ok"}
+                          label={!Number(c.is_active) ? "Kapalı" : expired ? "Süresi doldu" : exhausted ? "Limit doldu" : "Aktif"}
+                          turnOn="Aç"
+                          turnOff="Kapat"
+                        />
                       </td>
                     </tr>
                   );

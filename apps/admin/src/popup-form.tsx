@@ -5,8 +5,10 @@ import { text } from "./api-helpers";
 import { withBase } from "./paths";
 import { Toggle } from "./ui-ext";
 
+const trDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" });
+
 function dateInput(d: Date | null) {
-  return d ? new Date(d).toISOString().slice(0, 10) : "";
+  return d ? trDate.format(new Date(d)) : "";
 }
 
 export function popupFromForm(form: FormData): PopupInput | { error: string } {
