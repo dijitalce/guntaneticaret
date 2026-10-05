@@ -1142,7 +1142,7 @@ a.kpi:hover { border-color: var(--a-border-strong); box-shadow: var(--a-shadow);
 .text-warn { color: var(--a-warn); }
 .text-bad { color: var(--a-bad); }
 .icon-btn.is-danger:hover { background: var(--a-bad-50); border-color: #fecdca; color: var(--a-bad); }
-.tabs-page { padding: 0; margin: 0 0 1.1rem; }
+.tabs-page { padding: 0; margin: 0 0 1.1rem; flex-wrap: wrap; }
 .tabs a .tab-score { color: #fff; }
 .tabs a .tab-score.is-ok { background: #12b76a; color: #fff; }
 .tabs a .tab-score.is-warn { background: #f79009; color: #fff; }

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { catalogExportPlan, db, EXPORT_PART_BYTES, getCatalogExport, getTenantContext, tenantSeesAllCatalog, tenants } from "@guntan/db";
+import { VISIBILITY_MODE } from "@guntan/types";
 import { CopyButton } from "./copy-button";
 import { IconExternal } from "./icons";
 import { withBase } from "./paths";
@@ -31,7 +32,10 @@ function LinkRow({ url, title, meta }: { url: string; title: string; meta?: stri
 }
 
 export async function CatalogExportTab({ site, ok }: { site?: string; ok?: string }) {
-  const tenantRows = await db.select({ id: tenants.id, name: tenants.name }).from(tenants).orderBy(asc(tenants.name));
+  const tenantRows = await db
+    .select({ id: tenants.id, name: tenants.name })
+    .from(tenants)
+    .orderBy(sql`${tenants.visibilityMode} = ${VISIBILITY_MODE.ALL} desc`, asc(tenants.name));
   if (!tenantRows.length) return <EmptyState title="Önce bir site oluşturun" />;
   const tenantId = tenantRows.find((t) => t.id === site)?.id ?? tenantRows[0]!.id;
   const [settings, ctx] = await Promise.all([getCatalogExport(tenantId), getTenantContext(tenantId)]);
