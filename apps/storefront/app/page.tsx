@@ -4,8 +4,9 @@ import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedV
 import { getTenant } from "../src/tenant";
 import { ProductCard } from "../src/product-card";
 import { VehicleFinder } from "../src/vehicle-finder";
-import { VehicleNav } from "../src/vehicle-nav";
 import { HomeSlider } from "../src/home-slider";
+import { HomeSideBanners } from "../src/home-side-banners";
+import { BrandMark } from "../src/brand-mark";
 import { sentenceCaseTr } from "../src/format";
 import { IconBox, IconShield, IconTag, IconTruck } from "../src/icons";
 import { LaunchNotice } from "../src/launch-notice";
@@ -50,6 +51,7 @@ export default async function HomePage() {
   ]);
   const sliderBanners = bannerRows.filter((b) => b.placement === "home_slider");
   const middleBanners = bannerRows.filter((b) => b.placement === "home_middle").slice(0, 3);
+  const sideBanners = bannerRows.filter((b) => b.placement === "home_side").slice(0, 4);
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const seoBody =
@@ -90,36 +92,25 @@ export default async function HomePage() {
           itemListJsonLd(host, "Çok satanlar", featured),
         ]}
       />
-      <div className="home-ia">
-        <VehicleNav
-          title="Markalar"
-          searchable
-          items={brands.map((b) => ({
-            name: b.name,
-            slug: b.slug,
-            href: `/${b.slug}`,
-            logoUrl: b.logoUrl,
-          }))}
+      <div className="home-hero2">
+        <HomeSideBanners banners={sideBanners} whatsapp={tenant.whatsapp ?? null} />
+        <HomeSlider
+          slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
+            {
+              alt: "Aracınıza uygun parçalar — motor, fren, süspansiyon. Hemen incele.",
+              href: "#finder",
+              image: "/slider/araciniza-uygun.jpg",
+            },
+            {
+              alt: "Güvenilir oto yedek parça — 140.000+ ürün, kaliteli ürünler, hızlı tedarik.",
+              href: "/arama",
+              image: "/slider/guvenilir-yedek-parca.jpg",
+            },
+          ]}
         />
-        <div className="home-ia-main">
-          <HomeSlider
-            slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
-              {
-                alt: "Aracınıza uygun parçalar — motor, fren, süspansiyon. Hemen incele.",
-                href: "#finder",
-                image: "/slider/araciniza-uygun.jpg",
-              },
-              {
-                alt: "Güvenilir oto yedek parça — 140.000+ ürün, kaliteli ürünler, hızlı tedarik.",
-                href: "/arama",
-                image: "/slider/guvenilir-yedek-parca.jpg",
-              },
-            ]}
-          />
-          <div id="finder" className="home-finder">
-            <VehicleFinder brands={brands} compact />
-          </div>
-        </div>
+      </div>
+      <div id="finder" className="home-finder">
+        <VehicleFinder brands={brands} compact />
       </div>
 
       <div className="trust-bar">
@@ -152,6 +143,25 @@ export default async function HomePage() {
               <Link key={c.id} className="category-tile" href={`/kategori/${c.slug}`}>
                 <strong>{sentenceCaseTr(c.name)}</strong>
                 <span>İncele</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {brands.length > 0 && (
+        <section className="home-brands" aria-labelledby="home-brands-title">
+          <div className="section-head">
+            <div>
+              <h2 id="home-brands-title">Markalar</h2>
+              <p>Aracının markasını seç, uyumlu parçaları gör</p>
+            </div>
+          </div>
+          <div className="home-brand-grid">
+            {brands.map((b) => (
+              <Link key={b.id} href={`/${b.slug}`} className="home-brand">
+                <BrandMark name={b.name} logoUrl={b.logoUrl} size={40} />
+                <span>{b.name}</span>
               </Link>
             ))}
           </div>

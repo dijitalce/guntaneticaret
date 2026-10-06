@@ -9,7 +9,8 @@ type PageRow = typeof pages.$inferSelect;
 type BannerRow = typeof banners.$inferSelect;
 
 export const BANNER_PLACEMENTS = [
-  { key: "home_slider", label: "Ana sayfa slider", hint: "Büyük kayan görsel · önerilen 1200×480" },
+  { key: "home_slider", label: "Ana sayfa slider", hint: "Büyük kayan görsel · önerilen 1200×514" },
+  { key: "home_side", label: "Slider yanı (4 küçük alan)", hint: "Slider'ın solunda alt alta, en fazla 4 adet · önerilen 600×220 (ör. kolay ödeme, taksit)" },
   { key: "home_middle", label: "Ana sayfa orta alan", hint: "Güven çubuğunun altı, en fazla 3 adet · önerilen 1200×525" },
 ];
 
