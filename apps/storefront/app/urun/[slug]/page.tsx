@@ -23,6 +23,7 @@ import { QtyStepper } from "../../../src/qty-stepper";
 import { StickyAtc } from "../../../src/sticky-atc";
 import { IconBox, IconShield, IconTag, IconTruck } from "../../../src/icons";
 import { sentenceCaseTr } from "../../../src/format";
+import { getSalesStatus } from "../../../src/sales";
 
 export const revalidate = 300;
 
@@ -79,7 +80,8 @@ export default async function ProductPage({
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
-  const seo = seoInput(tenant, data);
+  const sales = await getSalesStatus();
+  const seo = { ...seoInput(tenant, data), available: sales.open };
   const factsSummary = productFactsSummary(seo);
   const host = tenant.tenant.canonicalHost;
   const vehicleCount = fitmentSummary(data.fitments).count;
@@ -175,29 +177,44 @@ export default async function ProductPage({
               Sepete eklenemedi. Lütfen tekrar deneyin.
             </p>
           )}
-          <AddToCartForm
-            id="pdp-cart-form"
-            className="pdp-cart"
-            slug={product.slug}
-            track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
-          >
-            <div className="pdp-buy" id="pdp-buy">
-              <QtyStepper />
-              <button className="btn btn-primary" type="submit">
-                Sepete ekle
-              </button>
-            </div>
-            <div className="pdp-actions">
-              <button className="btn btn-secondary" type="submit" name="intent" value="buy">
-                Hemen al
-              </button>
+          {sales.open ? (
+            <AddToCartForm
+              id="pdp-cart-form"
+              className="pdp-cart"
+              slug={product.slug}
+              track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
+            >
+              <div className="pdp-buy" id="pdp-buy">
+                <QtyStepper />
+                <button className="btn btn-primary" type="submit">
+                  Sepete ekle
+                </button>
+              </div>
+              <div className="pdp-actions">
+                <button className="btn btn-secondary" type="submit" name="intent" value="buy">
+                  Hemen al
+                </button>
+                {whatsappHref && (
+                  <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
+                    WhatsApp ile sor
+                  </a>
+                )}
+              </div>
+            </AddToCartForm>
+          ) : (
+            <div className="pdp-closed">
+              <p className="account-alert is-bad" role="status">
+                {sales.message}
+              </p>
               {whatsappHref && (
-                <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
-                  WhatsApp ile sor
-                </a>
+                <div className="pdp-actions">
+                  <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
+                    WhatsApp ile sor
+                  </a>
+                </div>
               )}
             </div>
-          </AddToCartForm>
+          )}
           <ul className="pdp-trust">
             <li><IconTag /> KDV dahil fiyat, ek ücret yok</li>
             <li><IconTruck /> Kargo takip bilgisi SMS ve e-posta ile</li>
@@ -280,7 +297,7 @@ export default async function ProductPage({
           </div>
         </>
       )}
-      <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} />
+      {sales.open ? <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} /> : null}
     </div>
   );
 }

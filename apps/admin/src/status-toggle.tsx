@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ConfirmButton } from "./form-fields";
 import { withBase } from "./paths";
 import { StatusBadge, type Tone } from "./ui";
 
@@ -11,6 +12,7 @@ export function StatusToggle({
   label,
   turnOn,
   turnOff,
+  confirmOff,
 }: {
   action: string;
   fields: Record<string, string>;
@@ -19,6 +21,8 @@ export function StatusToggle({
   label: ReactNode;
   turnOn: string;
   turnOff: string;
+  /** Verilirse kapatma işlemi bu mesajla onay ister. */
+  confirmOff?: string;
 }) {
   return (
     <form action={withBase(action)} method="post" className="status-toggle">
@@ -26,9 +30,15 @@ export function StatusToggle({
         <input key={k} type="hidden" name={k} value={v} />
       ))}
       <StatusBadge tone={tone}>{label}</StatusBadge>
-      <button type="submit" className="btn btn-ghost btn-xs">
-        {on ? turnOff : turnOn}
-      </button>
+      {on && confirmOff ? (
+        <ConfirmButton className="btn btn-ghost btn-xs" message={confirmOff}>
+          {turnOff}
+        </ConfirmButton>
+      ) : (
+        <button type="submit" className="btn btn-ghost btn-xs">
+          {on ? turnOff : turnOn}
+        </button>
+      )}
     </form>
   );
 }

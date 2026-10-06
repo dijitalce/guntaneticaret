@@ -236,6 +236,22 @@ export const SEO_SOCIAL_KEYS = {
   twitterHandle: "twitterHandle",
 } as const;
 
+/** tenant_settings.social_json içindeki satış anahtarları; anahtar yoksa site satışa açıktır. */
+export const SALES_SOCIAL_KEYS = {
+  closed: "salesClosed",
+  message: "salesClosedMessage",
+} as const;
+
+export const DEFAULT_SALES_CLOSED_MESSAGE = "Şu an sipariş alınmamaktadır.";
+
+export type SalesStatus = { open: boolean; message: string };
+
+export function salesStatusFromSocial(social: Record<string, string> | null | undefined): SalesStatus {
+  const closed = social?.[SALES_SOCIAL_KEYS.closed] === "1";
+  const message = social?.[SALES_SOCIAL_KEYS.message]?.trim() || DEFAULT_SALES_CLOSED_MESSAGE;
+  return { open: !closed, message };
+}
+
 export const DEFAULT_SEO_TITLE_TEMPLATE = "{page} | {siteName}";
 
 export function applySeoTitleTemplate(template: string | null | undefined, page: string, siteName: string) {

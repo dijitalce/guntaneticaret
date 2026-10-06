@@ -5,6 +5,7 @@ import { COOKIE_CART } from "@guntan/config";
 import { getCartSummary, getOrCreateCart } from "@guntan/ecommerce";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
+import { getSalesStatus } from "../../src/sales";
 import { VAT_RATE, vatBreakdown } from "../../src/vat";
 
 function money(n: number) {
@@ -35,6 +36,7 @@ export default async function CartPage({
 }) {
   const sp = await searchParams;
   const tenant = await getTenant();
+  const sales = await getSalesStatus();
   const user = await getCurrentCustomer();
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
@@ -66,6 +68,12 @@ export default async function CartPage({
           {sp.uyelik === "1"
             ? "Hesabın oluşturuldu. Sepetin hesabına bağlandı."
             : "Giriş yaptın. Sepetin hesabına bağlandı."}
+        </p>
+      )}
+
+      {!sales.open && (
+        <p className="account-alert is-bad" role="alert">
+          {sales.message} Sepetindeki ürünler saklanır; satışlar yeniden açıldığında siparişini tamamlayabilirsin.
         </p>
       )}
 
@@ -155,9 +163,13 @@ export default async function CartPage({
             </div>
           </dl>
           <p className="cart-summary-note muted">KDV dahil · Havale / EFT ile ödeme</p>
-          <Link className="btn btn-primary" href="/odeme">
-            Ödemeye geç
-          </Link>
+          {sales.open ? (
+            <Link className="btn btn-primary" href="/odeme">
+              Ödemeye geç
+            </Link>
+          ) : (
+            <span className="sales-closed-note">{sales.message}</span>
+          )}
           <Link className="cart-continue" href="/">
             Alışverişe devam et
           </Link>

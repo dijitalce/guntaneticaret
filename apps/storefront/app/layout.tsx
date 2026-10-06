@@ -17,6 +17,7 @@ import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
+import { getSalesStatus } from "../src/sales";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 
@@ -85,10 +86,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
   }
-  const [brands, categories, popup] = await Promise.all([
+  const [brands, categories, popup, sales] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedPopularCategories(8),
     getActivePopup(tenant.tenant.id),
+    getSalesStatus(),
   ]);
   const social = (tenant.social ?? {}) as Record<string, string>;
   const navCats = categories.filter((c) => !c.parentId);
@@ -110,6 +112,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <p className="topbar-note">Havale / EFT · KDV dahil fiyat</p>
           </div>
         </div>
+        {!sales.open ? (
+          <p className="sales-closed-bar" role="status">
+            {sales.message}
+          </p>
+        ) : null}
         <header className="site-header">
           <div className="container header-inner">
             <Link className="logo" href="/" aria-label={tenant.siteName}>

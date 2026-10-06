@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { asc, count } from "drizzle-orm";
 import { db, tenantDomains, tenantSettings, tenants, tenantVisibleBrands } from "@guntan/db";
+import { salesStatusFromSocial } from "@guntan/types";
 import { BrandLogo } from "@/src/brand-logo";
 import { IconExternal, IconGlobe, IconPlus } from "@/src/icons";
 import { ScoreRing } from "@/src/seo-checklist";
+import { StatusToggle } from "@/src/status-toggle";
 import { assetUrl } from "@/src/storefront";
 import { TENANT_STATUS_META, seoAudit } from "@/src/tenant-seo";
 import { Alert, EmptyState, PageHeader, StatusBadge } from "@/src/ui";
@@ -64,6 +66,8 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
         }
       />
       {sp.ok === "silindi" ? <Alert tone="ok">Site silindi.</Alert> : null}
+      {sp.ok === "satis-kapali" ? <Alert tone="ok">Site satışa kapatıldı. Birkaç saniye içinde sipariş ve ödeme alınmaz.</Alert> : null}
+      {sp.ok === "satis-acik" ? <Alert tone="ok">Site yeniden satışa açıldı.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
 
       {cards.length === 0 ? (
@@ -75,6 +79,7 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
           {cards.map(({ t, s, ds, primary, audit, todo }) => {
             const status = TENANT_STATUS_META[t.status] ?? TENANT_STATUS_META.draft!;
             const name = s?.siteName ?? t.name;
+            const sales = salesStatusFromSocial(s?.socialJson);
             return (
               <article key={t.id} className="site-card">
                 <Link href={`/tenants/${t.id}`} className="site-card-main">
@@ -92,6 +97,16 @@ export default async function TenantsPage({ searchParams }: { searchParams: Prom
                   </StatusBadge>
                   {ds.length > 1 ? <StatusBadge tone="neutral">{ds.length} alan adı</StatusBadge> : null}
                 </div>
+                <StatusToggle
+                  action={`/api/tenants/${t.id}/sales`}
+                  fields={{ _action: sales.open ? "close" : "open", next: "/tenants" }}
+                  on={sales.open}
+                  tone={sales.open ? "ok" : "bad"}
+                  label={sales.open ? "Satışa açık" : "Satışa kapalı"}
+                  turnOn="Satışa aç"
+                  turnOff="Satışa kapat"
+                  confirmOff={`${name} satışa kapatılsın mı? Müşteriler sepete ürün ekleyemez, sipariş veremez ve ödeme yapamaz.`}
+                />
                 <p className="site-card-desc">{s?.defaultMetaDescription || <em>Meta açıklama girilmemiş.</em>}</p>
                 <div className="site-card-foot">
                   <Link href={`/tenants/${t.id}?sekme=seo`} className={todo ? "text-warn" : "text-ok"}>

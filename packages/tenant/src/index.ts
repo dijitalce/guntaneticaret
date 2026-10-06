@@ -4,6 +4,8 @@ import { CACHE_KEYS, TENANT_CONFIG_CACHE_TTL_SECONDS, TENANT_HOST_CACHE_TTL_SECO
 import {
   DEFAULT_THEME_TOKENS,
   TENANT_STATUS,
+  salesStatusFromSocial,
+  type SalesStatus,
   type TenantPublicConfig,
   type ThemeTokens,
 } from "@guntan/types";
@@ -233,8 +235,35 @@ export function themeToCssVars(theme: ThemeTokens): string {
   ].join(";");
 }
 
+const salesCache = new Map<string, { value: SalesStatus; exp: number }>();
+const SALES_TTL_MS = 5_000;
+
+/**
+ * Satışa açık/kapalı durumu. Tenant yapılandırması dakikalarca önbellekte kalabildiği için
+ * bu değer doğrudan veritabanından okunur; panelden kapatma birkaç saniye içinde etkili olur.
+ */
+export async function getTenantSalesStatus(tenantId: string): Promise<SalesStatus> {
+  const hit = salesCache.get(tenantId);
+  if (hit && hit.exp > Date.now()) return hit.value;
+  try {
+    const [row] = await db
+      .select({ socialJson: tenantSettings.socialJson })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+    const value = salesStatusFromSocial(row?.socialJson);
+    if (salesCache.size > 80) salesCache.clear();
+    salesCache.set(tenantId, { value, exp: Date.now() + SALES_TTL_MS });
+    return value;
+  } catch (err) {
+    console.error("[tenant] satış durumu okunamadı:", tenantId, err instanceof Error ? err.message : err);
+    return hit?.value ?? salesStatusFromSocial(null);
+  }
+}
+
 export async function invalidateTenantCache(tenantId: string, hostnames: string[]) {
   memCache.clear();
+  salesCache.delete(tenantId);
   const cache = await liveRedis();
   if (!cache) return;
   try {

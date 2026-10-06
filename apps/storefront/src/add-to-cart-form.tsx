@@ -52,8 +52,9 @@ export function AddToCartForm({
       window.dispatchEvent(new CustomEvent("cart:updated", { detail: { ...json, openDrawer: true } }));
       setDone(true);
       window.setTimeout(() => setDone(false), 1800);
-    } catch {
-      window.location.assign(`/urun/${encodeURIComponent(slug)}?sepet=hata`);
+    } catch (err) {
+      const flag = err instanceof Error && err.message === "sales_closed" ? "kapali" : "hata";
+      window.location.assign(`/urun/${encodeURIComponent(slug)}?sepet=${flag}`);
       return;
     } finally {
       setPending(false);

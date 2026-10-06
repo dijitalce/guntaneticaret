@@ -1,4 +1,5 @@
 import { feedProductsPage, tenantSeesAllCatalog, type FeedProduct } from "@guntan/db";
+import { getTenantSalesStatus } from "@guntan/tenant";
 import { requestHost, tenantFromRequest } from "./request-tenant";
 
 const PAGE = 2000;
@@ -49,8 +50,10 @@ function productFields(p: FeedProduct, base: string, siteName: string) {
   return { price, compare, onSale, image, gtin, brand };
 }
 
+type Availability = "in_stock" | "out_of_stock";
+
 /** OpenAI (ChatGPT alışveriş) ürün beslemesi: satır başına bir JSON kaydı. */
-function itemJsonl(p: FeedProduct, base: string, siteName: string) {
+function itemJsonl(p: FeedProduct, base: string, siteName: string, availability: Availability) {
   const { price, compare, onSale, image, gtin, brand } = productFields(p, base, siteName);
   if (!image || !(price > 0)) return "";
   const record: Record<string, string | boolean> = {
@@ -62,7 +65,7 @@ function itemJsonl(p: FeedProduct, base: string, siteName: string) {
     seller_name: siteName,
     seller_url: base,
     image_url: image,
-    availability: "in_stock",
+    availability,
     price: `${(onSale ? compare : price).toFixed(2)} TRY`,
     is_eligible_search: true,
     is_eligible_checkout: false,
@@ -75,7 +78,7 @@ function itemJsonl(p: FeedProduct, base: string, siteName: string) {
   return `${JSON.stringify(record)}\n`;
 }
 
-function itemXml(p: FeedProduct, base: string, siteName: string) {
+function itemXml(p: FeedProduct, base: string, siteName: string, availability: Availability) {
   const { price, compare, onSale, image, gtin, brand } = productFields(p, base, siteName);
   const parts = [
     `<g:id>${xml(p.id)}</g:id>`,
@@ -83,7 +86,7 @@ function itemXml(p: FeedProduct, base: string, siteName: string) {
     `<description>${xml(plain(p.description, p.name))}</description>`,
     `<link>${xml(`${base}/urun/${p.slug}`)}</link>`,
     image ? `<g:image_link>${xml(image)}</g:image_link>` : "",
-    "<g:availability>in_stock</g:availability>",
+    `<g:availability>${availability}</g:availability>`,
     `<g:price>${(onSale ? compare : price).toFixed(2)} TRY</g:price>`,
     onSale ? `<g:sale_price>${price.toFixed(2)} TRY</g:sale_price>` : "",
     `<g:brand>${xml(brand)}</g:brand>`,
@@ -111,6 +114,7 @@ export async function productFeedResponse(kind: FeedKind) {
   const host = await requestHost();
   const base = `https://${host.split(":")[0]}`;
   const seesAll = await tenantSeesAllCatalog(tenant.tenant.id);
+  const availability: Availability = (await getTenantSalesStatus(tenant.tenant.id)).open ? "in_stock" : "out_of_stock";
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -128,7 +132,7 @@ export async function productFeedResponse(kind: FeedKind) {
         while (count < MAX_ITEMS) {
           const page = await feedProductsPage({ tenantId: tenant.tenant.id, seesAll, afterId, limit: PAGE, inStockOnly });
           if (!page.length) break;
-          controller.enqueue(encoder.encode(page.map((p) => render(p, base, tenant.siteName)).join("")));
+          controller.enqueue(encoder.encode(page.map((p) => render(p, base, tenant.siteName, availability)).join("")));
           count += page.length;
           afterId = page[page.length - 1]!.id;
           if (page.length < PAGE) break;

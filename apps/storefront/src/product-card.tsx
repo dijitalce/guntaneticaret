@@ -4,12 +4,13 @@ import { productImageUrl } from "@guntan/catalog";
 import { discountPercent } from "@guntan/ecommerce";
 import { AddToCartForm } from "./add-to-cart-form";
 import { ManufacturerLogo } from "./manufacturer-logo";
+import { getSalesStatus } from "./sales";
 
 function formatPrice(value: string) {
   return `${Number(value).toLocaleString("tr-TR")} TL`;
 }
 
-export function ProductCard({
+export async function ProductCard({
   product,
   placeholder,
   priority = false,
@@ -33,6 +34,7 @@ export function ProductCard({
   const img = productImageUrl(product.imageUrl, placeholder);
   const disc = product.price ? discountPercent(product.price, product.compareAtPrice ?? null) : null;
   const fitments = product.fitments ?? [];
+  const sales = await getSalesStatus();
   return (
     <article className="product-card">
       <Link className="product-card-media" href={`/urun/${product.slug}`}>
@@ -70,7 +72,9 @@ export function ProductCard({
           )}
         </div>
         <div className="product-card-foot">
-          {product.slug && (
+          {!sales.open ? (
+            <span className="sales-closed-note">Satışa kapalı</span>
+          ) : product.slug && (
             <AddToCartForm
               slug={product.slug}
               track={{ id: product.slug, name: product.name, price: Number(product.price ?? 0), qty: 1, brand: product.manufacturerName ?? null }}

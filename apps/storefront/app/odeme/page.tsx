@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
 import {
@@ -13,6 +14,7 @@ import { customerAddresses, db, evaluateCoupon } from "@guntan/db";
 import { CommerceEvent } from "../../src/visitor-tracker";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
+import { getSalesStatus } from "../../src/sales";
 import { CheckoutForm } from "./form";
 
 export default async function CheckoutPage({
@@ -23,6 +25,7 @@ export default async function CheckoutPage({
   const sp = await searchParams;
   const garanti = garantiConfigFromEnv();
   const tenant = await getTenant();
+  if (!(await getSalesStatus()).open) redirect("/sepet?satis=kapali");
   const jar = await cookies();
   const sessionId = jar.get(COOKIE_CART)?.value;
   const user = await getCurrentCustomer();

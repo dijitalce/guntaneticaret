@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { buildOosPayForm, checkout, garantiConfigFromEnv, getOrCreateCart } from "@guntan/ecommerce";
-import { resolveTenantByHost } from "@guntan/tenant";
+import { getTenantSalesStatus, resolveTenantByHost } from "@guntan/tenant";
 import { getCustomerBySession } from "@guntan/auth";
 import { autoPostHtml, clientIp } from "../../../src/garanti-redirect";
 import { COOKIE_VISITOR } from "../../../src/request-tenant";
@@ -15,6 +15,9 @@ export async function POST(request: Request) {
   const host = (await headers()).get("x-request-host") ?? (await headers()).get("host") ?? "";
   const tenant = await resolveTenantByHost(host);
   if (!tenant) return NextResponse.json({ error: "tenant" }, { status: 404 });
+  if (!(await getTenantSalesStatus(tenant.tenant.id)).open) {
+    return NextResponse.redirect(publicRedirect("/sepet?satis=kapali", request), 303);
+  }
   const form = await request.formData();
   const jar = await cookies();
   let sessionId = jar.get(COOKIE_CART)?.value;

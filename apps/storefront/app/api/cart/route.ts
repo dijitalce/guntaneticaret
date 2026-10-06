@@ -11,7 +11,7 @@ import {
   removeCartItem,
   updateCartItemQty,
 } from "@guntan/ecommerce";
-import { resolveTenantByHost } from "@guntan/tenant";
+import { getTenantSalesStatus, resolveTenantByHost } from "@guntan/tenant";
 import { db, products } from "@guntan/db";
 
 function withCartCookie(res: NextResponse, sessionId: string) {
@@ -40,7 +40,7 @@ function stripSepetParam(path: string) {
   }
 }
 
-function withSepetFlag(path: string, flag: "ok" | "hata") {
+function withSepetFlag(path: string, flag: "ok" | "hata" | "kapali") {
   const u = new URL(stripSepetParam(path), "https://local.invalid");
   u.searchParams.set("sepet", flag);
   const q = u.searchParams.toString();
@@ -147,6 +147,19 @@ export async function POST(request: Request) {
   }
 
   const slug = String(form.get("slug") ?? "");
+  const sales = await getTenantSalesStatus(tenant.tenant.id);
+  if (!sales.open) {
+    if (json) {
+      return withCartCookie(
+        NextResponse.json({ ok: false, error: "sales_closed", message: sales.message }, { status: 403 }),
+        sessionId,
+      );
+    }
+    return withCartCookie(
+      NextResponse.redirect(publicRedirect(withSepetFlag(resolveStayPath(request, form, slug), "kapali"), request), 303),
+      sessionId,
+    );
+  }
   const qty = Number(form.get("qty") ?? 1);
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
   if (!product) {

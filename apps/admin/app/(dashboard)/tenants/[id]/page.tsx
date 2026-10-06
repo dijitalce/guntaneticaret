@@ -14,7 +14,15 @@ import {
   tenantVisibleBrands,
   vehicleBrands,
 } from "@guntan/db";
-import { CATALOG_RULE_KIND, DEFAULT_THEME_TOKENS, SEO_SOCIAL_KEYS, SOCIAL_LINKS } from "@guntan/types";
+import {
+  CATALOG_RULE_KIND,
+  DEFAULT_SALES_CLOSED_MESSAGE,
+  DEFAULT_THEME_TOKENS,
+  SALES_SOCIAL_KEYS,
+  SEO_SOCIAL_KEYS,
+  SOCIAL_LINKS,
+  salesStatusFromSocial,
+} from "@guntan/types";
 import { ConfirmButton, ImageUrlField } from "@/src/form-fields";
 import { IconBank, IconCheck, IconExternal, IconGlobe, IconPlus, IconTrash } from "@/src/icons";
 import { withBase } from "@/src/paths";
@@ -49,6 +57,9 @@ const OK: Record<string, string> = {
   birincil: "Birincil alan adı güncellendi. Canonical adresler ve site haritası artık bu alan adını kullanır.",
   "banka-eklendi": "Banka hesabı eklendi.",
   "banka-silindi": "Banka hesabı silindi.",
+  "satis-kapali": "Site satışa kapatıldı. Birkaç saniye içinde sepete ekleme, sipariş ve ödeme kabul edilmez.",
+  "satis-acik": "Site yeniden satışa açıldı.",
+  "satis-mesaj": "Satış kapalı mesajı kaydedildi.",
 };
 
 export default async function TenantEditPage({
@@ -76,6 +87,7 @@ export default async function TenantEditPage({
   ]);
   const settings = settingsRow ?? null;
   const social = (settings?.socialJson ?? {}) as Record<string, string>;
+  const sales = salesStatusFromSocial(social);
   const theme = { ...DEFAULT_THEME_TOKENS, ...((settings?.themeTokens ?? {}) as Record<string, string>) };
   const primary = domains.find((d) => d.isPrimary) ?? domains[0];
   const siteName = settings?.siteName ?? tenant.name;
@@ -111,6 +123,7 @@ export default async function TenantEditPage({
         actions={
           <>
             <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+            {!sales.open ? <StatusBadge tone="bad">Satışa kapalı</StatusBadge> : null}
             {siteUrl && tenant.status !== "draft" ? (
               <a className="btn btn-secondary" href={siteUrl} target="_blank" rel="noreferrer">
                 <IconExternal />
@@ -174,6 +187,49 @@ export default async function TenantEditPage({
                 <div className="form-actions">
                   <button className="btn btn-primary" type="submit">
                     Kaydet
+                  </button>
+                </div>
+              </form>
+            </Panel>
+            <Panel
+              title="Satış durumu"
+              description="Kapalıyken site gezilebilir ama müşteriler sepete ürün ekleyemez, sipariş veremez ve ödeme yapamaz."
+              action={<StatusBadge tone={sales.open ? "ok" : "bad"}>{sales.open ? "Satışa açık" : "Satışa kapalı"}</StatusBadge>}
+              padded
+            >
+              <form action={withBase(`/api/tenants/${id}/sales`)} method="post" className="form-stack">
+                <input type="hidden" name="next" value={`/tenants/${id}`} />
+                <div className="field">
+                  <label htmlFor="salesMessage">Müşteriye gösterilecek mesaj</label>
+                  <textarea
+                    id="salesMessage"
+                    name="message"
+                    rows={2}
+                    maxLength={300}
+                    defaultValue={social[SALES_SOCIAL_KEYS.message] ?? ""}
+                    placeholder={DEFAULT_SALES_CLOSED_MESSAGE}
+                  />
+                  <small className="field-hint">
+                    Satış kapalıyken sitenin üstündeki bantta, ürün sayfasında ve sepette görünür. Boş bırakılırsa “{DEFAULT_SALES_CLOSED_MESSAGE}” yazar.
+                  </small>
+                </div>
+                <div className="form-actions">
+                  {sales.open ? (
+                    <ConfirmButton
+                      className="btn btn-danger"
+                      name="_action"
+                      value="close"
+                      message={`${siteName} satışa kapatılsın mı? Müşteriler sepete ürün ekleyemez, sipariş veremez ve ödeme yapamaz.`}
+                    >
+                      Satışa kapat
+                    </ConfirmButton>
+                  ) : (
+                    <button className="btn btn-primary" type="submit" name="_action" value="open">
+                      Satışa aç
+                    </button>
+                  )}
+                  <button className="btn btn-secondary" type="submit" name="_action" value="message">
+                    Sadece mesajı kaydet
                   </button>
                 </div>
               </form>

@@ -25,6 +25,28 @@ body {
 }
 .topbar-wa { font-weight: 650; color: #128c4b; }
 .topbar-note { margin: 0; }
+.sales-closed-bar {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  background: #fef3c7;
+  border-bottom: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-align: center;
+}
+.sales-closed-note {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+}
+.pdp-closed { display: grid; gap: 0.75rem; margin: 1rem 0; }
+.pdp-closed .account-alert { margin: 0; }
 
 .site-header {
   position: sticky;

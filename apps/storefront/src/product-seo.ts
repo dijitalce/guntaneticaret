@@ -28,6 +28,8 @@ export type ProductSeoInput = {
   images: { url: string | null }[];
   categories: { name: string }[];
   fitments: Fitment[];
+  /** Site satışa kapalıyken false; teklif stok dışı işaretlenir. */
+  available?: boolean;
 };
 
 function years(f: Fitment) {
@@ -134,7 +136,7 @@ export function productJsonLd(input: ProductSeoInput) {
       url,
       priceCurrency: "TRY",
       price: Number(product.price).toFixed(2),
-      availability: "https://schema.org/InStock",
+      availability: input.available === false ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
       itemCondition: "https://schema.org/NewCondition",
       seller: { "@type": "Organization", name: input.siteName, url: absoluteUrl(host, "/") },
       hasMerchantReturnPolicy: {
