@@ -12,6 +12,7 @@ import {
   listPopularCategories,
   listProducts,
   listVisibleBrands,
+  listVisibleModels,
   listingFacets,
   listingFacetsForCategory,
   relatedProducts,
@@ -61,6 +62,14 @@ export const cachedPopularCategories = cache((limit = 8) => {
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 });
+
+export const cachedVisibleModels = cache((tenantId: string) =>
+  unstable_cache(
+    () => listVisibleModels(tenantId),
+    ["nav-all-models", tenantId, "v1"],
+    { revalidate: NAV_CACHE_TTL_SECONDS },
+  )(),
+);
 
 export function cachedModelsForBrand(tenantId: string, brandId: string) {
   return unstable_cache(

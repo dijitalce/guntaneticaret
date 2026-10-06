@@ -12,11 +12,11 @@ import { CookieConsent, CookieSettingsLink } from "../src/cookie-consent";
 import { VisitorTracker } from "../src/visitor-tracker";
 import { MarketingPopup } from "../src/marketing-popup";
 import { getActivePopup } from "@guntan/db";
-import { cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
-import { BrandMark } from "../src/brand-mark";
+import { cachedPopularCategories, cachedVisibleBrands, cachedVisibleModels } from "../src/cached-catalog";
 import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
-import { IconHeart, IconMenu, IconParts, IconUser } from "../src/icons";
+import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
+import { IconHeart, IconUser } from "../src/icons";
 import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
@@ -75,6 +75,25 @@ function cssVars(css: string): CSSProperties {
   ) as CSSProperties;
 }
 
+const OTHER_MODEL = /^di[gğ]er/i;
+
+function buildNavBrands(
+  brands: { id: string; name: string; slug: string; logoUrl: string | null }[],
+  models: { brandId: string; name: string; slug: string; imageUrl: string | null }[],
+): NavBrand[] {
+  const byBrand = new Map<string, NavModel[]>();
+  for (const m of models) {
+    const list = byBrand.get(m.brandId) ?? [];
+    list.push({ name: OTHER_MODEL.test(m.name) ? "Diğer modeller" : m.name, slug: m.slug, imageUrl: m.imageUrl });
+    byBrand.set(m.brandId, list);
+  }
+  return brands.map((b) => {
+    const list = byBrand.get(b.id) ?? [];
+    const named = list.filter((m) => m.name !== "Diğer modeller");
+    return { ...b, models: [...named, ...list.filter((m) => m.name === "Diğer modeller")] };
+  });
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tenant = await tryGetTenant();
   if (!tenant) {
@@ -87,14 +106,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
   }
-  const [brands, categories, popup, sales] = await Promise.all([
+  const [brands, models, categories, popup, sales] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
+    cachedVisibleModels(tenant.tenant.id),
     cachedPopularCategories(8),
     getActivePopup(tenant.tenant.id),
     getSalesStatus(),
   ]);
   const social = (tenant.social ?? {}) as Record<string, string>;
   const navCats = categories.filter((c) => !c.parentId);
+  const navBrands = buildNavBrands(brands, models);
   const allParts = allCatalogHref(tenant);
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
 
@@ -110,7 +131,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 WhatsApp destek {tenant.phone ? `· ${tenant.phone}` : ""}
               </a>
             ) : <span>{tenant.phone}</span>}
-            <p className="topbar-note">Havale / EFT · KDV dahil fiyat</p>
+            <div className="topbar-links">
+              <p className="topbar-note">Havale / EFT · KDV dahil fiyat</p>
+              <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
+              <Link href="/iletisim">İletişim</Link>
+            </div>
           </div>
         </div>
         {!sales.open ? (
@@ -139,33 +164,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </nav>
           </div>
           <nav className="site-nav" aria-label="Ana menü">
-            <div className="container site-nav-inner">
-              <details className="nav-brands">
-                <summary><IconMenu /> Markalar</summary>
-                <div className="nav-brands-menu">
-                  {brands.map((b) => (
-                    <Link key={b.id} href={`/${b.slug}`}>
-                      <BrandMark name={b.name} logoUrl={b.logoUrl} size={36} />
-                      {b.name}
-                    </Link>
-                  ))}
-                </div>
-              </details>
-              <div className="site-nav-links">
-                <Link href="/">Ana sayfa</Link>
-                {navCats.map((c) => (
-                  <Link key={c.id} href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
-                ))}
-                <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
-                <Link href="/iletisim">İletişim</Link>
-              </div>
-              {allParts && (
-                <a className="nav-all-parts" href={allParts}>
-                  <IconParts />
-                  Tüm parçalar
-                </a>
-              )}
-            </div>
+            <MegaNav
+              brands={navBrands}
+              categories={navCats.map((c) => ({ id: c.id, name: sentenceCaseTr(c.name), slug: c.slug }))}
+              allPartsHref={allParts ?? null}
+            />
           </nav>
         </header>
         <main id="main">{children}</main>

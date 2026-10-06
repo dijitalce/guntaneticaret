@@ -161,6 +161,23 @@ export async function listModelsForBrand(tenantId: string, brandId: string) {
     .orderBy(asc(vehicleModels.sortOrder), asc(vehicleModels.name));
 }
 
+export async function listVisibleModels(tenantId: string) {
+  return db
+    .select({
+      brandId: vehicleModels.brandId,
+      name: vehicleModels.name,
+      slug: vehicleModels.slug,
+      imageUrl: vehicleModels.imageUrl,
+    })
+    .from(vehicleModels)
+    .innerJoin(tenantVisibleBrands, and(
+      eq(tenantVisibleBrands.brandId, vehicleModels.brandId),
+      eq(tenantVisibleBrands.tenantId, tenantId),
+    ))
+    .where(eq(vehicleModels.isActive, true))
+    .orderBy(asc(vehicleModels.sortOrder), asc(vehicleModels.name));
+}
+
 export async function getModelBySlug(brandId: string, slug: string) {
   const [row] = await db
     .select()
