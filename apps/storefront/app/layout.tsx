@@ -152,11 +152,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="container topbar-inner">
             {tenant.whatsapp ? (
               <a className="topbar-wa" href={`https://wa.me/${tenant.whatsapp}`} target="_blank" rel="noreferrer">
-                WhatsApp destek {tenant.phone ? `· ${tenant.phone}` : ""}
+                <span className="topbar-dot" aria-hidden="true" />
+                WhatsApp destek {tenant.phone ? <b>{tenant.phone}</b> : null}
               </a>
             ) : <span>{tenant.phone}</span>}
+            <p className="topbar-note">Havale / EFT ile güvenli ödeme · Fiyatlara KDV dahildir</p>
             <div className="topbar-links">
-              <p className="topbar-note">Havale / EFT · KDV dahil fiyat</p>
               <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
               <Link href="/iletisim">İletişim</Link>
             </div>
@@ -174,7 +175,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Image src={logoSrc} alt="" width={320} height={157} loading="eager" />
               </span>
             </Link>
-            <SearchBox brands={brands} />
+            <SearchBox quickLinks={navCats.slice(0, 8).map((c) => ({ name: sentenceCaseTr(c.name), slug: c.slug }))} />
             <nav className="header-tools" aria-label="Hesap">
               <Link className="icon-btn" href="/hesabim">
                 <IconUser />
