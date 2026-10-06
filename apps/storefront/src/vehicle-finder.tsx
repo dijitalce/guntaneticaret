@@ -36,7 +36,7 @@ export function VehicleFinder({ brands, compact = false }: { brands: Brand[]; co
     <section className={compact ? "finder-card is-compact" : "finder-card"}>
       <p className="finder-kicker">Hızlı eşleşme</p>
       <h2>Aracına uygun parçayı bul</h2>
-      <p className="finder-lead">Marka ve model seç; stoktaki uyumlu parçalar hemen listelenir.</p>
+      <p className="finder-lead">Marka ve model seç; uyumlu parçalar hemen listelenir.</p>
       <ol className="finder-steps" aria-hidden>
         <li className={brand ? "is-done" : "is-current"}>Marka</li>
         <li className={model ? "is-done" : brand ? "is-current" : ""}>Model</li>

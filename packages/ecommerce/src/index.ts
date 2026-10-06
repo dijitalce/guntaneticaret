@@ -136,7 +136,6 @@ export async function addToCart(cartId: string, tenantId: string, productId: str
       .limit(1);
     if (!visible) throw new Error("Ürün bu sitede satılmıyor.");
   }
-  if (availableStock(product.stockQty, product.reservedQty) < qty) throw new Error("Yetersiz stok.");
 
   const [existing] = await db
     .select()
@@ -165,8 +164,6 @@ export async function updateCartItemQty(cartId: string, itemId: string, qty: num
     .select({
       id: cartItems.id,
       productId: cartItems.productId,
-      stockQty: products.stockQty,
-      reservedQty: products.reservedQty,
       status: products.status,
     })
     .from(cartItems)
@@ -175,7 +172,6 @@ export async function updateCartItemQty(cartId: string, itemId: string, qty: num
     .limit(1);
   if (!item) throw new Error("Sepet kalemi bulunamadı.");
   if (item.status !== "active") throw new Error("Ürün satışta değil.");
-  if (availableStock(item.stockQty, item.reservedQty) < nextQty) throw new Error("Yetersiz stok.");
 
   await db.update(cartItems).set({ qty: nextQty }).where(eq(cartItems.id, item.id));
 }
@@ -357,12 +353,6 @@ export async function checkout(input: {
   const nationalId = input.nationalId?.trim() ?? "";
   if (nationalId && !/^[1-9]\d{10}$/.test(nationalId)) throw new Error("T.C. kimlik no 11 haneli olmalı.");
 
-  for (const item of view.items) {
-    if (availableStock(item.stockQty, item.reservedQty) < item.qty) {
-      throw new Error(`${item.name} için yetersiz stok.`);
-    }
-  }
-
   let discount = 0;
   let couponId: string | null = null;
   let couponCode: string | null = null;
@@ -503,7 +493,7 @@ export async function confirmBankTransfer(orderId: string, actor?: string) {
     await db
       .update(products)
       .set({
-        stockQty: sql`${products.stockQty} - ${item.qty}`,
+        stockQty: sql`greatest(${products.stockQty} - ${item.qty}, 0)`,
         reservedQty: sql`greatest(${products.reservedQty} - ${item.qty}, 0)`,
       })
       .where(eq(products.id, item.productId));

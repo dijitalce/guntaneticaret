@@ -6,45 +6,27 @@ type FacetItem = { id: string; name: string; slug: string; count: number; logo?:
 export function CategoryFilters({
   manufacturers,
   brands,
-  inStock,
   manufacturerSlug,
   brandSlug,
   href,
 }: {
   manufacturers: FacetItem[];
   brands: FacetItem[];
-  inStock: boolean;
   manufacturerSlug?: string;
   brandSlug?: string;
   href: (overrides?: Record<string, string | undefined>) => string;
 }) {
-  const hasActiveFilters = Boolean(manufacturerSlug) || inStock;
+  const hasActiveFilters = Boolean(manufacturerSlug);
 
   return (
     <div className="filter-panel">
       <div className="filter-panel-head">
         Filtreler
         {hasActiveFilters && (
-          <Link className="filter-clear" href={href({ mfr: undefined, stock: undefined, page: undefined })}>
+          <Link className="filter-clear" href={href({ mfr: undefined, page: undefined })}>
             Temizle
           </Link>
         )}
-      </div>
-
-      <div className="filter-group">
-        <div className="filter-group-title">Stok durumu</div>
-        <Link
-          className={`filter-link${!inStock ? " is-active" : ""}`}
-          href={href({ stock: undefined, page: undefined })}
-        >
-          Tüm stok
-        </Link>
-        <Link
-          className={`filter-link${inStock ? " is-active" : ""}`}
-          href={href({ stock: "1", page: undefined })}
-        >
-          Stokta olanlar
-        </Link>
       </div>
 
       {manufacturers.length > 0 && (

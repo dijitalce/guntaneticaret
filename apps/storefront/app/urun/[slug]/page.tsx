@@ -18,7 +18,6 @@ import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
 import { CommerceEvent } from "../../../src/visitor-tracker";
-import { StockAlertForm } from "../../../src/stock-alert-form";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
 import { QtyStepper } from "../../../src/qty-stepper";
 import { StickyAtc } from "../../../src/sticky-atc";
@@ -76,9 +75,6 @@ export default async function ProductPage({
   const disc = discountPercent(product.price, product.compareAtPrice);
   const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
   const fit = data.fitments[0];
-  const inStock = product.stockStatus === "in_stock";
-  const available = Math.max(0, (product.stockQty ?? 0) - (product.reservedQty ?? 0));
-  const lowStock = inStock && available > 0 && available <= 5;
   const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
@@ -168,9 +164,6 @@ export default async function ProductPage({
               <small>KDV dahil</small>
               {disc != null && <span className="badge">%{disc}</span>}
             </p>
-            <p className={inStock ? "badge badge-stock" : "badge badge-out"}>
-              {!inStock ? "Stokta yok" : lowStock ? `Son ${available} adet` : "Stokta"}
-            </p>
           </div>
           {sp.sepet === "ok" && (
             <p className="account-alert" role="status">
@@ -179,46 +172,32 @@ export default async function ProductPage({
           )}
           {sp.sepet === "hata" && (
             <p className="account-alert is-bad" role="alert">
-              Sepete eklenemedi. Stok durumunu kontrol edin.
+              Sepete eklenemedi. Lütfen tekrar deneyin.
             </p>
           )}
-          {inStock ? (
-            <AddToCartForm
-              id="pdp-cart-form"
-              className="pdp-cart"
-              slug={product.slug}
-              track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
-            >
-              <div className="pdp-buy" id="pdp-buy">
-                <QtyStepper max={available || undefined} />
-                <button className="btn btn-primary" type="submit">
-                  Sepete ekle
-                </button>
-              </div>
-              <div className="pdp-actions">
-                <button className="btn btn-secondary" type="submit" name="intent" value="buy">
-                  Hemen al
-                </button>
-                {whatsappHref && (
-                  <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
-                    WhatsApp ile sor
-                  </a>
-                )}
-              </div>
-            </AddToCartForm>
-          ) : (
-            <div className="pdp-cart">
-              <p className="muted">Bu ürün şu an stokta yok. Tedarik durumu için bize ulaşın.</p>
-              <StockAlertForm productId={product.id} />
+          <AddToCartForm
+            id="pdp-cart-form"
+            className="pdp-cart"
+            slug={product.slug}
+            track={{ id: product.id, name: product.name, price: Number(product.price), qty: 1, brand: data.manufacturerName }}
+          >
+            <div className="pdp-buy" id="pdp-buy">
+              <QtyStepper />
+              <button className="btn btn-primary" type="submit">
+                Sepete ekle
+              </button>
+            </div>
+            <div className="pdp-actions">
+              <button className="btn btn-secondary" type="submit" name="intent" value="buy">
+                Hemen al
+              </button>
               {whatsappHref && (
-                <div className="pdp-actions">
-                  <a className="btn btn-primary" href={whatsappHref}>
-                    WhatsApp ile stok sor
-                  </a>
-                </div>
+                <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
+                  WhatsApp ile sor
+                </a>
               )}
             </div>
-          )}
+          </AddToCartForm>
           <ul className="pdp-trust">
             <li><IconTag /> KDV dahil fiyat, ek ücret yok</li>
             <li><IconTruck /> Kargo takip bilgisi SMS ve e-posta ile</li>
@@ -301,7 +280,7 @@ export default async function ProductPage({
           </div>
         </>
       )}
-      {inStock && <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} />}
+      <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} />
     </div>
   );
 }

@@ -71,7 +71,7 @@ export function productMetaDescription(input: ProductSeoInput) {
   const parts = [
     `${title}. Ürün kodu ${product.sku}.`,
     fit.text ? `Uyumlu araçlar: ${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""}.` : "",
-    `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL, ${product.stockStatus === "in_stock" ? "stokta" : "şu an stokta yok"}.`,
+    `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL.`,
     input.siteName,
   ];
   return parts.filter(Boolean).join(" ").slice(0, 300);
@@ -134,7 +134,7 @@ export function productJsonLd(input: ProductSeoInput) {
       url,
       priceCurrency: "TRY",
       price: Number(product.price).toFixed(2),
-      availability: product.stockStatus === "in_stock" ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      availability: "https://schema.org/InStock",
       itemCondition: "https://schema.org/NewCondition",
       seller: { "@type": "Organization", name: input.siteName, url: absoluteUrl(host, "/") },
       hasMerchantReturnPolicy: {

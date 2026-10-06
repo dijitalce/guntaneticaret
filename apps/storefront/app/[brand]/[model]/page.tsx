@@ -66,7 +66,6 @@ export default async function ModelListingPage({
       modelId: m.id,
       sort,
       page,
-      inStock: sp.stock === "1",
     }),
     cachedFeaturedProducts(tenant.tenant.id, 4),
   ]);

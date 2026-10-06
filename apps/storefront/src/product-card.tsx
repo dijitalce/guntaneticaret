@@ -32,7 +32,6 @@ export function ProductCard({
 }) {
   const img = productImageUrl(product.imageUrl, placeholder);
   const disc = product.price ? discountPercent(product.price, product.compareAtPrice ?? null) : null;
-  const inStock = product.stockStatus !== "out_of_stock";
   const fitments = product.fitments ?? [];
   return (
     <article className="product-card">
@@ -69,17 +68,9 @@ export function ProductCard({
               <strong>{formatPrice(product.price)}</strong>
             </span>
           )}
-          <span className={inStock ? "badge badge-stock" : "badge badge-out"}>
-            {inStock ? "Stokta" : "Tükendi"}
-          </span>
         </div>
         <div className="product-card-foot">
-          {!inStock && (
-            <Link className="btn btn-secondary" href={`/urun/${product.slug}`}>
-              İncele
-            </Link>
-          )}
-          {inStock && product.slug && (
+          {product.slug && (
             <AddToCartForm
               slug={product.slug}
               track={{ id: product.slug, name: product.name, price: Number(product.price ?? 0), qty: 1, brand: product.manufacturerName ?? null }}

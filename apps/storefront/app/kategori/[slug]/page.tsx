@@ -79,7 +79,6 @@ export default async function CategoryPage({
   if (!cat) notFound();
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
   const sort = (sp.sort as ListingSort | undefined) ?? LISTING_SORT.RECOMMENDED;
-  const inStock = sp.stock === "1";
   const model = brand && modelSlug ? await cachedModelBySlug(brand.id, modelSlug) : null;
 
   const [parent, facets, result] = await Promise.all([
@@ -93,7 +92,6 @@ export default async function CategoryPage({
       modelId: model?.id,
       sort,
       page,
-      inStock,
     }),
   ]);
 
@@ -104,13 +102,12 @@ export default async function CategoryPage({
     cat.seoContent ??
     `${sentenceCaseTr(cat.name)} için uyumlu oto yedek parçalar. ${tenant.siteName} güvencesiyle KDV dahil fiyat.`;
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
-  const activeFilterCount = [inStock, manufacturerSlug, brandSlug].filter(Boolean).length;
+  const activeFilterCount = [manufacturerSlug, brandSlug].filter(Boolean).length;
 
   function href(overrides: Record<string, string | undefined> = {}) {
     const params = new URLSearchParams();
     const next = {
       sort: sort !== LISTING_SORT.RECOMMENDED ? sort : undefined,
-      stock: inStock ? "1" : undefined,
       mfr: manufacturerSlug,
       brand: brandSlug,
       model: modelSlug,
@@ -118,7 +115,6 @@ export default async function CategoryPage({
       ...overrides,
     };
     if (next.sort) params.set("sort", next.sort);
-    if (next.stock === "1") params.set("stock", "1");
     if (next.mfr) params.set("mfr", next.mfr);
     if (next.brand) params.set("brand", next.brand);
     if (next.model) params.set("model", next.model);
@@ -167,7 +163,6 @@ export default async function CategoryPage({
           <CategoryFilters
             manufacturers={facets.manufacturers}
             brands={facets.brands}
-            inStock={inStock}
             manufacturerSlug={manufacturerSlug}
             brandSlug={brandSlug}
             href={href}
@@ -182,7 +177,6 @@ export default async function CategoryPage({
             <CategoryFilters
               manufacturers={facets.manufacturers}
               brands={facets.brands}
-              inStock={inStock}
               manufacturerSlug={manufacturerSlug}
               brandSlug={brandSlug}
               href={href}
