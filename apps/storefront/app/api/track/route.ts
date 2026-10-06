@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { COOKIE_CART, COOKIE_CUSTOMER_SESSION } from "@guntan/config";
 import { getCustomerBySession } from "@guntan/auth";
 import { bumpPopup, carts, db, isBot, recordVisit, saveCartContact } from "@guntan/db";
+import { CONSENT_COOKIE, parseConsent } from "../../../src/consent";
 import { clientIp } from "../../../src/garanti-redirect";
 import { COOKIE_VISITOR, VISITOR_SESSION_SECONDS, isValidEmail, requestHost, tenantFromRequest } from "../../../src/request-tenant";
 
@@ -34,6 +35,13 @@ export async function POST(request: Request) {
   if (!tenant) return new NextResponse(null, { status: 204 });
 
   const jar = await cookies();
+  const consent = parseConsent(jar.get(CONSENT_COOKIE)?.value);
+  const analyticsOk = consent?.analytics === true;
+  if (!(type === "contact" ? consent?.marketing === true : analyticsOk)) {
+    const res = new NextResponse(null, { status: 204 });
+    if (!analyticsOk && jar.get(COOKIE_VISITOR)) res.cookies.delete(COOKIE_VISITOR);
+    return res;
+  }
   let sid = jar.get(COOKIE_VISITOR)?.value;
   const isNew = !sid || !/^[a-f0-9-]{36}$/.test(sid);
   if (isNew) sid = randomUUID();
@@ -98,6 +106,7 @@ export async function POST(request: Request) {
   }
 
   const res = new NextResponse(null, { status: 204 });
+  if (!analyticsOk) return res;
   res.cookies.set(COOKIE_VISITOR, sid!, {
     httpOnly: true,
     sameSite: "lax",

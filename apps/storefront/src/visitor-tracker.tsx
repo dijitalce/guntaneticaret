@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { useConsent } from "./cookie-consent";
 import { beacon, trackCommerce, type TrackItem } from "./track";
 
 const HEARTBEAT_MS = 30_000;
@@ -10,8 +11,10 @@ const HEARTBEAT_MS = 30_000;
 export function VisitorTracker() {
   const pathname = usePathname();
   const first = useRef(true);
+  const allowed = useConsent()?.analytics === true;
 
   useEffect(() => {
+    if (!allowed) return;
     beacon({
       t: "pv",
       p: pathname,
@@ -20,14 +23,15 @@ export function VisitorTracker() {
       title: document.title,
     });
     first.current = false;
-  }, [pathname]);
+  }, [pathname, allowed]);
 
   useEffect(() => {
+    if (!allowed) return;
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") beacon({ t: "hb", p: location.pathname });
     }, HEARTBEAT_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [allowed]);
 
   return null;
 }

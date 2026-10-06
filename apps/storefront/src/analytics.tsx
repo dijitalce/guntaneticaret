@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useEffect } from "react";
+import { useConsent } from "./cookie-consent";
 
 const GA_RE = /^(G|UA|AW)-[A-Z0-9-]{4,}$/i;
 const GTM_RE = /^GTM-[A-Z0-9]{4,}$/i;
@@ -25,14 +26,27 @@ export function Analytics({
   googleAdsId?: string | null;
   googleAdsLabel?: string | null;
 }) {
-  const ga = gaId && GA_RE.test(gaId) ? gaId : null;
-  const gtm = gtmId && GTM_RE.test(gtmId) ? gtmId : null;
-  const meta = metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
-  const tiktok = tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
-  const ads = googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
+  const consent = useConsent();
+  const allowAnalytics = consent?.analytics === true;
+  const allowMarketing = consent?.marketing === true;
+  const ga = allowAnalytics && gaId && GA_RE.test(gaId) ? gaId : null;
+  const gtm = (allowAnalytics || allowMarketing) && gtmId && GTM_RE.test(gtmId) ? gtmId : null;
+  const meta = allowMarketing && metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
+  const tiktok = allowMarketing && tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
+  const ads = allowMarketing && googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
   const gtagId = ga ?? ads;
+  const consentState = JSON.stringify({
+    analytics_storage: allowAnalytics ? "granted" : "denied",
+    ad_storage: allowMarketing ? "granted" : "denied",
+    ad_user_data: allowMarketing ? "granted" : "denied",
+    ad_personalization: allowMarketing ? "granted" : "denied",
+  });
+  if (!ga && !gtm && !meta && !tiktok && !ads) return null;
   return (
     <>
+      <Script id="consent-mode" strategy="afterInteractive">
+        {`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments);};gtag('consent','default',${consentState});gtag('consent','update',${consentState});`}
+      </Script>
       {meta ? (
         <Script id="meta-pixel" strategy="afterInteractive">
           {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init',${JSON.stringify(meta)});fbq('track','PageView');`}
@@ -71,9 +85,11 @@ export function Analytics({
   );
 }
 
-/** Panelden girilen özel <script> / <noscript> / <meta> parçalarını sayfaya ekler. */
+/** Panelden girilen özel <script> / <noscript> / <meta> parçalarını sayfaya ekler; içerikleri bilinmediği için pazarlama izni ister. */
 export function CustomScripts({ html }: { html: string }) {
+  const allowed = useConsent()?.marketing === true;
   useEffect(() => {
+    if (!allowed) return;
     const tpl = document.createElement("template");
     tpl.innerHTML = html;
     const added: Node[] = [];
@@ -93,6 +109,6 @@ export function CustomScripts({ html }: { html: string }) {
     return () => {
       for (const n of added) n.parentNode?.removeChild(n);
     };
-  }, [html]);
+  }, [html, allowed]);
   return null;
 }

@@ -8,6 +8,7 @@ import "./globals.css";
 import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { metadataBaseForHost, pageTitle, tenantNoIndex, tenantVerification } from "../src/seo";
 import { Analytics, CustomScripts } from "../src/analytics";
+import { CookieConsent, CookieSettingsLink } from "../src/cookie-consent";
 import { VisitorTracker } from "../src/visitor-tracker";
 import { MarketingPopup } from "../src/marketing-popup";
 import { getActivePopup } from "@guntan/db";
@@ -207,6 +208,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <h3>Yardım</h3>
                 <Link href="/sayfa/mesafeli-satis">Mesafeli satış sözleşmesi</Link>
                 <Link href="/sayfa/gizlilik">Gizlilik</Link>
+                <Link href="/sayfa/cerez-politikasi">Çerez politikası</Link>
+                <CookieSettingsLink />
                 <Link href="/sayfa/iade">İade ve değişim</Link>
                 <Link href="/site-haritasi">Site haritası</Link>
               </div>
@@ -230,6 +233,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <VisitorTracker />
         {popup ? <MarketingPopup popup={popup} /> : null}
         {tenant.customScripts ? <CustomScripts html={tenant.customScripts} /> : null}
+        <CookieConsent />
       </body>
     </html>
   );

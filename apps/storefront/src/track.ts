@@ -1,5 +1,7 @@
 "use client";
 
+import { hasConsent, type ConsentCategory } from "./consent";
+
 export type TrackItem = { id: string; name: string; price: number; qty: number; brand?: string | null };
 
 type CommerceEvent = "view_item" | "add_to_cart" | "begin_checkout" | "purchase";
@@ -32,7 +34,8 @@ const BEACON_TYPE: Record<CommerceEvent, string> = {
   purchase: "purchase",
 };
 
-export function beacon(payload: Record<string, unknown>) {
+export function beacon(payload: Record<string, unknown>, category: ConsentCategory = "analytics") {
+  if (!hasConsent(category)) return;
   try {
     const body = JSON.stringify(payload);
     if (navigator.sendBeacon) {

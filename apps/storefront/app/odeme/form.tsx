@@ -177,7 +177,7 @@ export function CheckoutForm({
             const email = String(data.get("email") ?? "");
             const phone = String(data.get("phone") ?? "");
             if (!email.includes("@") && phone.replace(/\D/g, "").length < 10) return;
-            beacon({ t: "contact", p: "/odeme", email, phone, name: String(data.get("fullName") ?? "") });
+            beacon({ t: "contact", p: "/odeme", email, phone, name: String(data.get("fullName") ?? "") }, "marketing");
           }}
         >
           <input type="hidden" name="couponCode" value={couponCode} />
