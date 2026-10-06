@@ -29,7 +29,7 @@ export async function GET() {
     "",
     `> ${summary}`,
     "",
-    "Oto yedek parça (fren, filtre, süspansiyon, debriyaj, motor, elektrik vb.) satışı yapılır. Her ürün sayfasında marka, ürün kodu, OEM numaraları, barkod, KDV dahil fiyat, stok durumu ve uyumlu araç listesi bulunur.",
+    "Oto yedek parça (fren, filtre, süspansiyon, debriyaj, motor, elektrik vb.) satışı yapılır. Her ürün sayfasında marka, ürün kodu, barkod, KDV dahil fiyat, stok durumu ve uyumlu araç listesi bulunur.",
     "",
     "## Ürün bulma",
     "",

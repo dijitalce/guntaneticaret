@@ -15,7 +15,6 @@ type Product = {
   manufacturerName?: string | null;
   manufacturerLogo?: string | null;
   imageUrl?: string | null;
-  oem?: string | null;
   stockStatus: string;
   fitments?: { href: string; label: string }[];
   fitmentExtra?: number;

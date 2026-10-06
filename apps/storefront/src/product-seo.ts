@@ -26,7 +26,6 @@ export type ProductSeoInput = {
   };
   manufacturerName: string | null;
   images: { url: string | null }[];
-  oems: { raw: string }[];
   categories: { name: string }[];
   fitments: Fitment[];
 };
@@ -55,10 +54,6 @@ export function fitmentSummary(fitments: Fitment[], max = 3) {
   return { text: labels.slice(0, max).join(", "), extra: extra > 0 ? extra : 0, count: labels.length };
 }
 
-export function oemList(oems: { raw: string }[]) {
-  return [...new Set(oems.map((o) => o.raw.trim()).filter(Boolean))];
-}
-
 /** Marka adı ürün adında yoksa başa eklenir: arama ve yapay zekâ yanıtları marka + parça adıyla eşleştirir. */
 export function productDisplayTitle(name: string, brand: string | null) {
   if (!brand) return name;
@@ -72,10 +67,9 @@ function plainText(html: string | null) {
 export function productMetaDescription(input: ProductSeoInput) {
   const { product } = input;
   const title = productDisplayTitle(product.name, input.manufacturerName);
-  const oems = oemList(input.oems).slice(0, 3);
   const fit = fitmentSummary(input.fitments, 2);
   const parts = [
-    `${title}. Ürün kodu ${product.sku}${oems.length ? `, OEM ${oems.join(", ")}` : ""}.`,
+    `${title}. Ürün kodu ${product.sku}.`,
     fit.text ? `Uyumlu araçlar: ${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""}.` : "",
     `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL, ${product.stockStatus === "in_stock" ? "stokta" : "şu an stokta yok"}.`,
     input.siteName,
@@ -88,15 +82,11 @@ export function productFactsSummary(input: ProductSeoInput) {
   const text = plainText(input.product.description);
   if (text.length >= 40) return null;
   const title = productDisplayTitle(input.product.name, input.manufacturerName);
-  const oems = oemList(input.oems);
   const fit = fitmentSummary(input.fitments, 5);
   const sentences = [
     `${title}, ${input.product.sku} ürün koduyla ${input.siteName} kataloğunda yer alır.`,
     fit.text
       ? `${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""} ile uyumlu olarak kayıtlıdır; tam liste uyumluluk tablosundadır.`
-      : "",
-    oems.length
-      ? `Orijinal parça (OEM) numarası: ${oems.slice(0, 6).join(", ")}. Aracınızdaki parçanın numarasıyla karşılaştırarak doğrulayabilirsiniz.`
       : "",
   ];
   return sentences.filter(Boolean).join(" ");
@@ -109,7 +99,6 @@ export function productJsonLd(input: ProductSeoInput) {
     .map((i) => (i.url ? productImageUrl(i.url, null) : null))
     .filter((u): u is string => Boolean(u))
     .map((u) => (/^https?:\/\//i.test(u) ? u : absoluteUrl(host, u)));
-  const oems = oemList(input.oems);
   const gtin = product.barcode && validGtin(product.barcode) ? product.barcode : undefined;
   const description = plainText(product.description) || productFactsSummary(input) || productMetaDescription(input);
   const cars = new Map<string, Record<string, unknown>>();
@@ -139,9 +128,6 @@ export function productJsonLd(input: ProductSeoInput) {
     ...(images.length ? { image: images } : {}),
     ...(input.manufacturerName ? { brand: { "@type": "Brand", name: input.manufacturerName } } : {}),
     category: input.categories[0] ? `Oto Yedek Parça > ${sentenceCaseTr(input.categories[0].name)}` : "Oto Yedek Parça",
-    ...(oems.length
-      ? { additionalProperty: oems.map((value) => ({ "@type": "PropertyValue", name: "OEM numarası", value })) }
-      : {}),
     ...(cars.size ? { isAccessoryOrSparePartFor: [...cars.values()] } : {}),
     offers: {
       "@type": "Offer",

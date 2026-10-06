@@ -234,22 +234,6 @@ async function primaryImagesByProductIds(ids: string[]) {
   return imageBy;
 }
 
-async function primaryOemsByProductIds(ids: string[]) {
-  if (ids.length === 0) return new Map<string, string>();
-  const oems = await db
-    .select({
-      productId: productOems.productId,
-      raw: productOems.raw,
-    })
-    .from(productOems)
-    .where(inArray(productOems.productId, ids));
-  const oemBy = new Map<string, string>();
-  for (const oem of oems) {
-    if (!oemBy.has(oem.productId)) oemBy.set(oem.productId, oem.raw);
-  }
-  return oemBy;
-}
-
 export async function cardFitmentsByProductIds(ids: string[]) {
   const byProduct = new Map<string, { items: CardFitmentLink[]; extra: number }>();
   if (ids.length === 0) return byProduct;
@@ -492,9 +476,8 @@ async function attachListingExtras(
   page: number,
 ) {
   const ids = rows.map((r) => r.id);
-  const [imageBy, oemBy, fitBy] = await Promise.all([
+  const [imageBy, fitBy] = await Promise.all([
     primaryImagesByProductIds(ids),
-    primaryOemsByProductIds(ids),
     cardFitmentsByProductIds(ids),
   ]);
   return {
@@ -503,7 +486,6 @@ async function attachListingExtras(
       return {
         ...r,
         imageUrl: imageBy.get(r.id) ?? null,
-        oem: oemBy.get(r.id) ?? null,
         fitments: fit?.items ?? [],
         fitmentExtra: fit?.extra ?? 0,
       };

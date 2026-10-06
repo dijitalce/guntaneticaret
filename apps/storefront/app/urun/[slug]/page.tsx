@@ -8,7 +8,6 @@ import { getTenant } from "../../../src/tenant";
 import { JsonLd, breadcrumbJsonLd, pageTitle } from "../../../src/seo";
 import {
   fitmentSummary,
-  oemList,
   productDisplayTitle,
   productFactsSummary,
   productJsonLd,
@@ -37,7 +36,6 @@ function seoInput(tenant: Awaited<ReturnType<typeof getTenant>>, data: ProductDa
     product: data.product,
     manufacturerName: data.manufacturerName,
     images: data.images,
-    oems: data.oems,
     categories: data.categories,
     fitments: data.fitments,
   };
@@ -82,8 +80,6 @@ export default async function ProductPage({
   const available = Math.max(0, (product.stockQty ?? 0) - (product.reservedQty ?? 0));
   const lowStock = inStock && available > 0 && available <= 5;
   const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
-  const allOems = oemList(data.oems);
-  const oemCodes = allOems.slice(0, 4);
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
@@ -150,12 +146,6 @@ export default async function ProductPage({
               <dt>Ürün kodu</dt>
               <dd>{product.sku}</dd>
             </div>
-            {oemCodes.length > 0 && (
-              <div>
-                <dt>OEM</dt>
-                <dd>{oemCodes.join(", ")}</dd>
-              </div>
-            )}
             {product.barcode && (
               <div>
                 <dt>Barkod</dt>
@@ -257,8 +247,8 @@ export default async function ProductPage({
         </div>
       ) : (
         <p className="pdp-desc">
-          Uyumluluk bilgisi henüz girilmedi. Aracınıza uyup uymadığını OEM numarasıyla kontrol edebilir
-          {whatsappHref ? <> veya <a href={whatsappHref} target="_blank" rel="noreferrer">WhatsApp üzerinden sorabilirsiniz</a></> : null}.
+          Uyumluluk bilgisi henüz girilmedi. Aracınıza uyup uymadığını
+          {whatsappHref ? <> <a href={whatsappHref} target="_blank" rel="noreferrer">WhatsApp üzerinden</a> veya</> : null} şasi numaranızla bize sorabilirsiniz.
         </p>
       )}
       <h2 className="pdp-section">Ürün bilgileri</h2>
@@ -269,9 +259,6 @@ export default async function ProductPage({
               <tr><th scope="row">Marka</th><td>{data.manufacturerName}</td></tr>
             )}
             <tr><th scope="row">Ürün kodu</th><td>{product.sku}</td></tr>
-            {allOems.length > 0 && (
-              <tr><th scope="row">OEM numarası</th><td>{allOems.join(", ")}</td></tr>
-            )}
             {product.barcode && <tr><th scope="row">Barkod</th><td>{product.barcode}</td></tr>}
             {data.categories.length > 0 && (
               <tr>

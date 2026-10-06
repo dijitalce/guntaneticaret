@@ -23,7 +23,6 @@ export function ProductCard({
     manufacturerName?: string | null;
     manufacturerLogo?: string | null;
     imageUrl?: string | null;
-    oem?: string | null;
     stockStatus?: string;
     fitments?: { href: string; label: string }[];
     fitmentExtra?: number;
@@ -51,7 +50,6 @@ export function ProductCard({
       <div className="product-card-body">
         <ManufacturerLogo name={product.manufacturerName} src={product.manufacturerLogo} className="product-card-mfr" height={20} />
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
-        {product.oem && <p className="product-card-oem">OEM {product.oem}</p>}
         {fitments.length > 0 && (
           <p className="product-card-fit">
             <span>Uyumlu</span>
