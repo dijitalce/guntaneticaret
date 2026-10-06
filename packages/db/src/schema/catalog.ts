@@ -66,6 +66,7 @@ export const vehicleGenerations = mysqlTable("vehicle_generations", {
   bodyCode: varchar("body_code", { length: 64 }),
   yearFrom: int("year_from"),
   yearTo: int("year_to"),
+  imageUrl: text("image_url"),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
 }, (t) => [

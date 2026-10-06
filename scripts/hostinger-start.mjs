@@ -1965,6 +1965,11 @@ function resolveProductImageDir() {
   return null;
 }
 
+{
+  const dir = resolveProductImageDir();
+  if (dir && !process.env.PRODUCT_IMAGE_DIR) process.env.PRODUCT_IMAGE_DIR = dir;
+}
+
 const PRODUCT_IMAGE_PATH = /^\/urun-gorsel\/([0-9a-f]{2})\/([a-z0-9][a-z0-9-]*\.webp)$/;
 function serveProductImage(req, res, pathOnly) {
   const m = PRODUCT_IMAGE_PATH.exec(pathOnly);
@@ -1995,6 +2000,38 @@ function serveProductImage(req, res, pathOnly) {
   fs.createReadStream(join(dir, m[1], m[2])).pipe(res);
 }
 
+const VEHICLE_IMAGE_PATH = /^\/arac-gorsel\/([a-z0-9][a-z0-9-]*\.(webp|jpg|png))$/;
+const VEHICLE_IMAGE_TYPES = { webp: "image/webp", jpg: "image/jpeg", png: "image/png" };
+function serveVehicleImage(req, res, pathOnly) {
+  const m = VEHICLE_IMAGE_PATH.exec(pathOnly);
+  const productDir = m ? resolveProductImageDir() : null;
+  const file = productDir ? join(dirname(productDir), "vehicles", m[1]) : null;
+  let st = null;
+  if (file) {
+    try {
+      st = fs.statSync(file);
+    } catch {
+      st = null;
+    }
+  }
+  if (!st?.isFile()) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=60" });
+    res.end("Not found");
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": VEHICLE_IMAGE_TYPES[m[2]],
+    "content-length": st.size,
+    "cache-control": "public, max-age=31536000, immutable",
+    "last-modified": st.mtime.toUTCString(),
+  });
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
+  fs.createReadStream(file).pipe(res);
+}
+
 async function routeRequest(req, res) {
   const parsedUrl = parse(req.url ?? "/", true);
   const pathOnly = parsedUrl.pathname ?? "/";
@@ -2006,6 +2043,10 @@ async function routeRequest(req, res) {
 
   if (pathOnly.startsWith("/urun-gorsel/")) {
     serveProductImage(req, res, pathOnly);
+    return;
+  }
+  if (pathOnly.startsWith("/arac-gorsel/")) {
+    serveVehicleImage(req, res, pathOnly);
     return;
   }
 

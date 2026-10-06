@@ -7,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { BrandMark } from "./brand-mark";
 import { IconClose, IconMenu, IconParts } from "./icons";
 
-export type NavModel = { name: string; slug: string; imageUrl: string | null };
+export type NavModel = { key: string; name: string; slug: string; imageUrl: string | null; years: string | null };
 export type NavBrand = { id: string; name: string; slug: string; logoUrl: string | null; models: NavModel[] };
 export type NavCategory = { id: string; name: string; slug: string };
 
@@ -277,7 +277,7 @@ export function MegaNav({
                   <BrandMark name={activeBrand.name} logoUrl={activeBrand.logoUrl} size={40} />
                   <div>
                     <h3>{activeBrand.name} modelleri</h3>
-                    {activeBrand.models.length ? <small>{activeBrand.models.length} model</small> : null}
+                    {activeBrand.models.length ? <small>{new Set(activeBrand.models.map((m) => m.slug)).size} model</small> : null}
                   </div>
                   {activeInOverflow ? (
                     <button type="button" className="mega-back" onClick={() => setActive(MORE)}>← Diğer markalar</button>
@@ -287,7 +287,7 @@ export function MegaNav({
                 {activeBrand.models.length ? (
                   <div className="mega-model-grid">
                     {activeBrand.models.map((m) => (
-                      <Link key={m.slug} href={`/${activeBrand.slug}/${m.slug}`} className="mega-model" onClick={close}>
+                      <Link key={m.key} href={`/${activeBrand.slug}/${m.slug}`} className="mega-model" onClick={close}>
                         <span className="mega-model-media">
                           {m.imageUrl ? (
                             <Image src={m.imageUrl} alt="" fill sizes="160px" />
@@ -295,7 +295,10 @@ export function MegaNav({
                             <CarSilhouette />
                           )}
                         </span>
-                        <span className="mega-model-name">{m.name}</span>
+                        <span className="mega-model-name" title={m.years ? `${m.name} ${m.years}` : m.name}>
+                          {m.name}
+                          {m.years ? <small>{m.years}</small> : null}
+                        </span>
                       </Link>
                     ))}
                   </div>

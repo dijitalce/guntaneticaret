@@ -358,6 +358,14 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mega-model-name small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
 .mega-model:hover .mega-model-media, .mega-model:focus-visible .mega-model-media {
   border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
   box-shadow: 0 8px 20px rgb(16 24 40 / 10%);

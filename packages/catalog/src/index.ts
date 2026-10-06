@@ -161,9 +161,29 @@ export async function listModelsForBrand(tenantId: string, brandId: string) {
     .orderBy(asc(vehicleModels.sortOrder), asc(vehicleModels.name));
 }
 
+export async function listVisibleGenerations(tenantId: string) {
+  return db
+    .select({
+      modelId: vehicleGenerations.modelId,
+      name: vehicleGenerations.name,
+      yearFrom: vehicleGenerations.yearFrom,
+      yearTo: vehicleGenerations.yearTo,
+      imageUrl: vehicleGenerations.imageUrl,
+    })
+    .from(vehicleGenerations)
+    .innerJoin(vehicleModels, eq(vehicleModels.id, vehicleGenerations.modelId))
+    .innerJoin(tenantVisibleBrands, and(
+      eq(tenantVisibleBrands.brandId, vehicleModels.brandId),
+      eq(tenantVisibleBrands.tenantId, tenantId),
+    ))
+    .where(and(eq(vehicleGenerations.isActive, true), eq(vehicleModels.isActive, true)))
+    .orderBy(asc(vehicleGenerations.yearFrom), asc(vehicleGenerations.name));
+}
+
 export async function listVisibleModels(tenantId: string) {
   return db
     .select({
+      id: vehicleModels.id,
       brandId: vehicleModels.brandId,
       name: vehicleModels.name,
       slug: vehicleModels.slug,

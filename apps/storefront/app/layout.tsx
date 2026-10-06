@@ -12,7 +12,7 @@ import { CookieConsent, CookieSettingsLink } from "../src/cookie-consent";
 import { VisitorTracker } from "../src/visitor-tracker";
 import { MarketingPopup } from "../src/marketing-popup";
 import { getActivePopup } from "@guntan/db";
-import { cachedPopularCategories, cachedVisibleBrands, cachedVisibleModels } from "../src/cached-catalog";
+import { cachedPopularCategories, cachedVisibleBrands, cachedVisibleGenerations, cachedVisibleModels } from "../src/cached-catalog";
 import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
@@ -77,20 +77,43 @@ function cssVars(css: string): CSSProperties {
 
 const OTHER_MODEL = /^di[gğ]er/i;
 
+function yearRange(from: number | null, to: number | null) {
+  if (from && to) return from === to ? String(from) : `${from}–${to}`;
+  if (from) return `${from}–`;
+  return to ? `–${to}` : null;
+}
+
 function buildNavBrands(
   brands: { id: string; name: string; slug: string; logoUrl: string | null }[],
-  models: { brandId: string; name: string; slug: string; imageUrl: string | null }[],
+  models: { id: string; brandId: string; name: string; slug: string; imageUrl: string | null }[],
+  generations: { modelId: string; name: string; yearFrom: number | null; yearTo: number | null; imageUrl: string | null }[],
 ): NavBrand[] {
-  const byBrand = new Map<string, NavModel[]>();
+  const gensByModel = new Map<string, typeof generations>();
+  for (const g of generations) {
+    const list = gensByModel.get(g.modelId) ?? [];
+    list.push(g);
+    gensByModel.set(g.modelId, list);
+  }
+  const byBrand = new Map<string, { named: NavModel[]; other: NavModel[] }>();
   for (const m of models) {
-    const list = byBrand.get(m.brandId) ?? [];
-    list.push({ name: OTHER_MODEL.test(m.name) ? "Diğer modeller" : m.name, slug: m.slug, imageUrl: m.imageUrl });
-    byBrand.set(m.brandId, list);
+    const bucket = byBrand.get(m.brandId) ?? { named: [], other: [] };
+    if (OTHER_MODEL.test(m.name)) {
+      bucket.other.push({ key: m.id, name: "Diğer modeller", slug: m.slug, imageUrl: m.imageUrl, years: null });
+    } else {
+      const gens = gensByModel.get(m.id);
+      if (gens?.length) {
+        for (const [i, g] of gens.entries()) {
+          bucket.named.push({ key: `${m.id}:${i}`, name: `${m.name} ${g.name}`, slug: m.slug, imageUrl: g.imageUrl ?? m.imageUrl, years: yearRange(g.yearFrom, g.yearTo) });
+        }
+      } else {
+        bucket.named.push({ key: m.id, name: m.name, slug: m.slug, imageUrl: m.imageUrl, years: null });
+      }
+    }
+    byBrand.set(m.brandId, bucket);
   }
   return brands.map((b) => {
-    const list = byBrand.get(b.id) ?? [];
-    const named = list.filter((m) => m.name !== "Diğer modeller");
-    return { ...b, models: [...named, ...list.filter((m) => m.name === "Diğer modeller")] };
+    const bucket = byBrand.get(b.id);
+    return { ...b, models: bucket ? [...bucket.named, ...bucket.other] : [] };
   });
 }
 
@@ -106,16 +129,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
   }
-  const [brands, models, categories, popup, sales] = await Promise.all([
+  const [brands, models, generations, categories, popup, sales] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedVisibleModels(tenant.tenant.id),
+    cachedVisibleGenerations(tenant.tenant.id).catch(() => []),
     cachedPopularCategories(8),
     getActivePopup(tenant.tenant.id),
     getSalesStatus(),
   ]);
   const social = (tenant.social ?? {}) as Record<string, string>;
   const navCats = categories.filter((c) => !c.parentId);
-  const navBrands = buildNavBrands(brands, models);
+  const navBrands = buildNavBrands(brands, models, generations);
   const allParts = allCatalogHref(tenant);
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
 

@@ -97,7 +97,7 @@ export function ModelForm({
   brands,
   brandId,
 }: {
-  model?: Common & { id: string; imageUrl: string | null; brandId: string };
+  model?: Common & { id: string; brandId: string };
   brands: { id: string; name: string; slug: string }[];
   brandId?: string;
 }) {
@@ -134,14 +134,6 @@ export function ModelForm({
             placeholder="Örn. Passat"
           />
         </div>
-        <ImageUrlField
-          name="imageUrl"
-          label="Görsel"
-          defaultValue={model?.imageUrl ?? ""}
-          storefrontUrl={assetBase()}
-          fallback={(model?.name ?? "?").slice(0, 2).toUpperCase()}
-          hint="Model kartında gösterilir. Boş bırakılabilir."
-        />
         <StatusAndOrder isActive={model?.isActive ?? true} sortOrder={model?.sortOrder ?? 0} />
         <SeoField value={model?.seoContent ?? null} what="Model" />
         <div className="form-actions">

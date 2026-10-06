@@ -46,7 +46,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (!name) return redirectTo(request, `/catalog/models/${id}`, { hata: "Model adı zorunlu." });
   const values = {
     name,
-    imageUrl: text(form, "imageUrl") || null,
+    ...(form.has("imageUrl") ? { imageUrl: text(form, "imageUrl") || null } : {}),
     sortOrder: Number.parseInt(text(form, "sortOrder") || "0", 10) || 0,
     isActive: form.get("isActive") === "1",
     seoContent: text(form, "seoContent") || null,
