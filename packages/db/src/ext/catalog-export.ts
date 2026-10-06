@@ -34,6 +34,7 @@ const partsCache = new Map<string, { at: number; plan: Promise<ExportPlan> }>();
 function visibleWhere(tenantId: string, seesAll: boolean): SQL {
   return sql`p.status = 'active'
     and (o.is_hidden is null or o.is_hidden = 0)
+    and coalesce(o.price, p.price) > 0
     ${seesAll ? sql`` : sql`and exists (select 1 from tenant_catalog_index t where t.tenant_id = ${tenantId} and t.product_id = p.id)`}`;
 }
 

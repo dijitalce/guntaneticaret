@@ -102,6 +102,29 @@ describe("dedupe cheapest", () => {
     expect(decision.deactivateIds).toEqual(["b1"]);
   });
 
+  it("never lets a zero-priced product hide a priced one", () => {
+    const decision = pickCheapestWinners([
+      { id: "g1", price: 0, supplierCode: "DEMO", normalizedOem: "ABC123", manufacturerSlug: "bosch", inStock: true },
+      { id: "b1", price: 150, supplierCode: "BASBUG", normalizedOem: "ABC123", manufacturerSlug: "bosch", inStock: false },
+    ]);
+    expect(decision.activateIds).toEqual(["b1"]);
+    expect(decision.deactivateIds).toEqual(["g1"]);
+  });
+
+  it("does not activate a zero-priced winner", () => {
+    const decision = pickCheapestWinners([
+      { id: "g1", price: 0, supplierCode: "DEMO", normalizedOem: "ABC123", manufacturerSlug: "bosch" },
+      { id: "b1", price: 0, supplierCode: "BASBUG", normalizedOem: "ABC123", manufacturerSlug: "bosch" },
+    ]);
+    expect(decision.activateIds).toEqual([]);
+    expect(decision.deactivateIds).toEqual(["b1"]);
+  });
+
+  it("skips rows without a price", () => {
+    expect(mapBasbugRow({ no: "Z1", ac: "P", dc: "TL", lf: 0 })).toBeNull();
+    expect(mapBasbugRow({ no: "Z2", ac: "P", dc: "TL", lf: 0, nf: 0 })).toBeNull();
+  });
+
   it("keeps different brands with same OE both visible (no multi-group action)", () => {
     const decision = pickCheapestWinners([
       { id: "a", price: 100, supplierCode: "DEMO", normalizedOem: "ABC123", manufacturerSlug: "bosch" },

@@ -94,7 +94,7 @@ export function basbugCost(row: BasbugRaw): number | null {
   const nf = Number(row.nf);
   if (row.nf != null && Number.isFinite(nf) && nf > 0) return nf;
   const lf = Number(row.lf);
-  if (!Number.isFinite(lf) || lf < 0) return null;
+  if (!Number.isFinite(lf) || lf <= 0) return null;
   return lf;
 }
 

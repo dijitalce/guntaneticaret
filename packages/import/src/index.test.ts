@@ -22,6 +22,11 @@ describe("xml mapping", () => {
     expect(row?.price).toBe("1300.00");
     expect(row?.compareAtPrice).toBe("1950.00");
   });
+  it("skips rows with zero price (Eryaz sends Price=0 for unpriced items)", () => {
+    const mapping = { externalId: "Id", sku: "Code", name: "Name", price: "Price" };
+    expect(mapRaw({ Id: "1", Code: "S", Name: "N", Price: "0" }, mapping)).toBeNull();
+    expect(mapRaw({ Id: "1", Code: "S", Name: "N", Price: "0.00" }, mapping)).toBeNull();
+  });
   it("maps VAR availability to in-stock qty", () => {
     const row = mapRaw({ Id: "1", Code: "S", Name: "N", Price: "10", Availability: "VAR" }, {
       externalId: "Id", sku: "Code", name: "Name", price: "Price", stock: "Availability",

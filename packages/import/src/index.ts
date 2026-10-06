@@ -113,7 +113,8 @@ export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping): 
   const price = mapping.price ? getPath(raw, mapping.price) : undefined;
   if (!externalId || !sku || !name || !price) return null;
   const costNum = Number(price);
-  if (!Number.isFinite(costNum) || costNum < 0) return null;
+  // Fiyatsız (0) satırlar satışa açılmaz; ürün akışta yokmuş gibi pasife alınır.
+  if (!Number.isFinite(costNum) || costNum <= 0) return null;
   const sell = applyMarginToPrice(costNum);
   let compareAt: string | undefined;
   if (mapping.compareAtPrice) {

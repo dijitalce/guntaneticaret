@@ -20,8 +20,15 @@ export type DedupeDecision = {
 
 const PREFERRED_SUPPLIER = "DEMO";
 
-/** Prefer in-stock, then lower price; on tie keep DEMO (Güntan) over BASBUG. */
+function hasPrice(c: DedupeCandidate) {
+  return Number.isFinite(c.price) && c.price > 0;
+}
+
+/** Prefer priced, then in-stock, then lower price; on tie keep DEMO (Güntan) over BASBUG. */
 export function compareCandidates(a: DedupeCandidate, b: DedupeCandidate): number {
+  const aPriced = hasPrice(a);
+  const bPriced = hasPrice(b);
+  if (aPriced !== bPriced) return aPriced ? -1 : 1;
   const aStock = a.inStock !== false;
   const bStock = b.inStock !== false;
   if (aStock !== bStock) return aStock ? -1 : 1;
@@ -50,7 +57,7 @@ export function pickCheapestWinners(candidates: DedupeCandidate[]): DedupeDecisi
     multiGroups += 1;
     const sorted = [...list].sort(compareCandidates);
     const winner = sorted[0]!;
-    activate.add(winner.id);
+    if (hasPrice(winner)) activate.add(winner.id);
     for (const loser of sorted.slice(1)) {
       if (loser.id !== winner.id) deactivate.add(loser.id);
     }

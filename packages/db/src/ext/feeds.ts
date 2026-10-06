@@ -26,6 +26,7 @@ export async function feedProductsPage(opts: { tenantId: string; seesAll: boolea
     left join tenant_product_overrides o on o.product_id = p.id and o.tenant_id = ${opts.tenantId}
     where p.status = 'active' and p.id > ${opts.afterId}
       and (o.is_hidden is null or o.is_hidden = 0)
+      and coalesce(o.price, p.price) > 0
       ${opts.inStockOnly ? sql`and p.stock_qty - p.reserved_qty > 0` : sql``}
       ${opts.seesAll ? sql`` : sql`and exists (select 1 from tenant_catalog_index t where t.tenant_id = ${opts.tenantId} and t.product_id = p.id)`}
     order by p.id asc limit ${opts.limit}`);

@@ -1,5 +1,5 @@
 import { MeiliSearch } from "meilisearch";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import {
   db,
   listAllVisibilityTenantIds,
@@ -54,7 +54,7 @@ export async function ensureIndex() {
 
 export async function reindexAll() {
   await ensureIndex();
-  const all = await db.select().from(products).where(eq(products.status, "active"));
+  const all = await db.select().from(products).where(and(eq(products.status, "active"), gt(products.price, "0")));
   if (all.length === 0) return;
   const ids = all.map((p) => p.id);
   const oems = await db.select().from(productOems).where(inArray(productOems.productId, ids));
@@ -132,7 +132,7 @@ export async function reindexAll() {
 export async function searchProducts(tenantId: string, q: string, limit = 8) {
   if (!meiliConfigured()) return [];
   const res = await getMeili().index(INDEX).search(q, {
-    filter: `tenant_ids = "${tenantId}"`,
+    filter: `tenant_ids = "${tenantId}" AND price > 0`,
     limit,
   });
   return res.hits as Array<{

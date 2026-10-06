@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   categories,
   compileVisibility,
@@ -19,6 +19,11 @@ import {
 import { LISTING_PAGE_SIZE, LISTING_SORT, type ListingSort } from "@guntan/types";
 
 export { compileVisibility };
+
+/** Satışta: aktif ve fiyatı girilmiş (0 TL ürün vitrine çıkmaz). */
+function sellableSql() {
+  return and(eq(products.status, "active"), gt(products.price, "0"))!;
+}
 
 function tenantVisibleSql(tenantId: string, seesAll: boolean) {
   if (seesAll) return sql`true`;
@@ -344,7 +349,7 @@ async function listProductsUncached(query: ListingQuery) {
   const visible = tenantVisibleSql(query.tenantId, seesAll);
   const order = listingOrder(sort);
 
-  const conditions = [eq(products.status, "active"), visible];
+  const conditions = [sellableSql(), visible];
   if (query.manufacturerId) conditions.push(eq(products.manufacturerId, query.manufacturerId));
   if (query.inStock) conditions.push(eq(products.stockStatus, "in_stock"));
   if (query.minPrice != null) conditions.push(gte(products.price, String(query.minPrice)));
@@ -502,7 +507,7 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
   const scope = [
     visible,
     eq(productFitments.vehicleBrandId, brandId),
-    eq(products.status, "active"),
+    sellableSql(),
     ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
   ];
 
@@ -546,7 +551,7 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
         and(
           visible,
           eq(productFitments.vehicleBrandId, brandId),
-          eq(products.status, "active"),
+          sellableSql(),
           ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
         ),
       )
@@ -621,7 +626,7 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
     .from(productCategories)
     .innerJoin(products, eq(products.id, productCategories.productId))
     .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-    .where(and(inTheseCategories, eq(products.status, "active"), visible))
+    .where(and(inTheseCategories, sellableSql(), visible))
     .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug, manufacturers.logoUrl, manufacturers.updatedAt)
     .orderBy(desc(productCount))
     .limit(40);
@@ -657,7 +662,7 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
         .innerJoin(products, eq(products.id, productCategories.productId))
         .innerJoin(productFitments, eq(productFitments.productId, productCategories.productId))
         .innerJoin(vehicleBrands, eq(productFitments.vehicleBrandId, vehicleBrands.id))
-        .where(and(inTheseCategories, eq(products.status, "active"), visible))
+        .where(and(inTheseCategories, sellableSql(), visible))
         .groupBy(vehicleBrands.id, vehicleBrands.name, vehicleBrands.slug)
         .orderBy(desc(productCount))
         .limit(40)
@@ -684,7 +689,7 @@ export async function getProductBySlug(tenantId: string, slug: string) {
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(and(
       eq(products.slug, slug),
-      eq(products.status, "active"),
+      sellableSql(),
       tenantVisibleSql(tenantId, seesAll),
     ))
     .limit(1);
@@ -739,7 +744,7 @@ export async function relatedProducts(tenantId: string, productId: string, model
       and(
         tenantVisibleSql(tenantId, seesAll),
         eq(productFitments.vehicleModelId, modelId),
-        eq(products.status, "active"),
+        sellableSql(),
         sql`${products.id} <> ${productId}`,
       ),
     )
@@ -777,7 +782,7 @@ export async function featuredProducts(tenantId: string, limit = 8) {
     .from(products)
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(and(
-      eq(products.status, "active"),
+      sellableSql(),
       tenantVisibleSql(tenantId, seesAll),
     ))
     .orderBy(desc(products.stockQty), desc(products.updatedAt))
@@ -918,7 +923,7 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(
       and(
-        eq(products.status, "active"),
+        sellableSql(),
         tenantVisibleSql(tenantId, seesAll),
         or(and(...tokenConds), eq(products.sku, query), matchOem),
       ),

@@ -124,9 +124,16 @@ export async function attachCartToCustomer(tenantId: string, customerId: string,
   return customerCart;
 }
 
+/** 0 TL / geçersiz fiyatlı ürün sepete eklenemez ve sipariş edilemez. */
+export function isSellablePrice(price: string | number | null | undefined): boolean {
+  const n = Number(price);
+  return Number.isFinite(n) && n > 0;
+}
+
 export async function addToCart(cartId: string, tenantId: string, productId: string, qty = 1) {
   const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
   if (!product || product.status !== "active") throw new Error("Ürün bulunamadı.");
+  if (!isSellablePrice(product.price)) throw new Error("Ürün satışta değil.");
   const seesAll = await tenantSeesAllCatalog(tenantId);
   if (!seesAll) {
     const [visible] = await db
@@ -165,13 +172,14 @@ export async function updateCartItemQty(cartId: string, itemId: string, qty: num
       id: cartItems.id,
       productId: cartItems.productId,
       status: products.status,
+      price: products.price,
     })
     .from(cartItems)
     .innerJoin(products, eq(cartItems.productId, products.id))
     .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cartId)))
     .limit(1);
   if (!item) throw new Error("Sepet kalemi bulunamadı.");
-  if (item.status !== "active") throw new Error("Ürün satışta değil.");
+  if (item.status !== "active" || !isSellablePrice(item.price)) throw new Error("Ürün satışta değil.");
 
   await db.update(cartItems).set({ qty: nextQty }).where(eq(cartItems.id, item.id));
 }
@@ -264,6 +272,7 @@ export async function getCartView(cartId: string) {
       sku: products.sku,
       price: products.price,
       compareAtPrice: products.compareAtPrice,
+      status: products.status,
       stockQty: products.stockQty,
       reservedQty: products.reservedQty,
     })
@@ -334,6 +343,8 @@ export async function checkout(input: {
   await expireStaleCardOrders().catch(() => undefined);
   const view = await getCartView(input.cartId);
   if (view.items.length === 0) throw new Error("Sepet boş.");
+  const unsellable = view.items.find((i) => i.status !== "active" || !isSellablePrice(i.price));
+  if (unsellable) throw new Error(`"${unsellable.name}" şu an satışta değil; lütfen sepetinizden çıkarın.`);
   if (input.customerId && (await getCustomerMeta(input.customerId).catch(() => null))?.is_blocked) {
     throw new Error("Hesabınız sipariş vermeye kapalı. Lütfen bizimle iletişime geçin.");
   }
@@ -781,7 +792,7 @@ export async function updateProductAdmin(
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.price !== undefined) {
     const n = Number(input.price);
-    if (!Number.isFinite(n) || n < 0) throw new Error("Geçersiz fiyat.");
+    if (!Number.isFinite(n) || n <= 0) throw new Error("Fiyat 0'dan büyük olmalı.");
     patch.price = n.toFixed(2);
   }
   if (input.stockQty !== undefined) {
