@@ -18,7 +18,7 @@ type Fallback = { key: string; title: string; text: string; href: string; icon: 
 function fallbacks(whatsapp: string | null): Fallback[] {
   return [
     { key: "pay", title: "Kolay ödeme", text: "Havale / EFT ile güvenli alışveriş", href: "/sayfa/mesafeli-satis", icon: <IconShield />, tone: "is-red" },
-    { key: "fit", title: "Aracına uygun parça", text: "Marka ve modelini seç, uyumluları gör", href: "#finder", icon: <IconBox />, tone: "is-dark" },
+    { key: "fit", title: "Geniş parça kataloğu", text: "Parça adı, marka veya model ile ara", href: "/arama", icon: <IconBox />, tone: "is-dark" },
     { key: "ship", title: "Hızlı tedarik", text: "Siparişin özenle paketlenip kargoya verilir", href: "/arama", icon: <IconTruck />, tone: "is-amber" },
     whatsapp
       ? { key: "help", title: "Parça danışmanı", text: "WhatsApp'tan yaz, doğru parçayı bulalım", href: `https://wa.me/${whatsapp}`, icon: <IconChat />, tone: "is-green", external: true }

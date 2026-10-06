@@ -3,12 +3,10 @@ import type { Metadata } from "next";
 import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { getTenant } from "../src/tenant";
 import { ProductCard } from "../src/product-card";
-import { VehicleFinder } from "../src/vehicle-finder";
 import { HomeSlider } from "../src/home-slider";
 import { HomeSideBanners } from "../src/home-side-banners";
 import { BrandMark } from "../src/brand-mark";
 import { sentenceCaseTr } from "../src/format";
-import { IconBox, IconShield, IconTag, IconTruck } from "../src/icons";
 import { LaunchNotice } from "../src/launch-notice";
 import {
   JsonLd,
@@ -98,7 +96,7 @@ export default async function HomePage() {
           slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
             {
               alt: "Aracınıza uygun parçalar — motor, fren, süspansiyon. Hemen incele.",
-              href: "#finder",
+              href: "/arama",
               image: "/slider/araciniza-uygun.jpg",
             },
             {
@@ -109,17 +107,6 @@ export default async function HomePage() {
           ]}
         />
       </div>
-      <div id="finder" className="home-finder">
-        <VehicleFinder brands={brands} compact />
-      </div>
-
-      <div className="trust-bar">
-        <div className="trust-item"><span><IconTag /></span>KDV dahil fiyat</div>
-        <div className="trust-item"><span><IconTruck /></span>Hızlı kargo</div>
-        <div className="trust-item"><span><IconBox /></span>Stokta ürün</div>
-        <div className="trust-item"><span><IconShield /></span>Havale ile güvenli ödeme</div>
-      </div>
-
       {middleBanners.length > 0 && (
         <section className={`home-banners is-${middleBanners.length}`} aria-label="Kampanyalar">
           {middleBanners.map((b) => (
