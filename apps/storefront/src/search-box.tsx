@@ -29,33 +29,33 @@ export function SearchBox({ quickLinks = [] }: { quickLinks?: QuickLink[] }) {
   const listId = useId();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [resultTerm, setResultTerm] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const box = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const term = q.trim();
+  const loading = term !== resultTerm;
 
   useEffect(() => {
     setActive(-1);
     if (term.length < 2) {
       setHits([]);
-      setLoading(false);
+      setResultTerm(term);
       return;
     }
-    setLoading(true);
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal: ctrl.signal })
         .then((r) => r.json())
         .then((data) => {
           setHits(data.hits ?? []);
-          setLoading(false);
+          setResultTerm(term);
         })
         .catch((e) => {
           if (e?.name === "AbortError") return;
           setHits([]);
-          setLoading(false);
+          setResultTerm(term);
         });
     }, 180);
     return () => {
