@@ -978,7 +978,12 @@ function enableSharedHtmlCache(req, res) {
   if (method !== "GET" && method !== "HEAD") return;
   if (isPrivatePath(req.url ?? "/")) return;
 
-  const cacheValue = "public, s-maxage=60, stale-while-revalidate=300";
+  const path = String(req.url ?? "/").split("?")[0];
+  const machineReadable =
+    path === "/sitemap.xml" || path.startsWith("/sitemaps/") || path.startsWith("/feeds/") || path === "/robots.txt";
+  const cacheValue = machineReadable
+    ? "public, s-maxage=3600, stale-while-revalidate=86400"
+    : "public, s-maxage=60, stale-while-revalidate=300";
   const origSetHeader = res.setHeader.bind(res);
   const origWriteHead = res.writeHead.bind(res);
 

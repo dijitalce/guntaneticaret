@@ -24,7 +24,8 @@ export type SiteStructure = {
 };
 
 /** Google sınırı 50.000 adres / 50 MB; ürün adresleri uzun olduğu için pay bırakılır. */
-export const SITEMAP_PRODUCTS_PER_FILE = 40_000;
+// 40 bin satırlık dosya üretimi süreci bellek tavanına (hostinger-start 400MB) taşıyordu.
+export const SITEMAP_PRODUCTS_PER_FILE = 10_000;
 
 /** Vitrinde ana sayfa dışındaki sabit sayfalar (site haritası ve HTML harita). */
 export const SITEMAP_STATIC_PAGES = [
