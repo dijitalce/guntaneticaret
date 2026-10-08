@@ -45,6 +45,8 @@ export async function POST(request: Request) {
     feedAllProducts: form.get("feedAllProducts") === "1" ? "1" : "",
     googleVerification: verification,
     bingVerification: bing,
+    googleDnsVerified: form.get("googleDnsVerified") === "1" ? "1" : "",
+    bingDnsVerified: form.get("bingDnsVerified") === "1" ? "1" : "",
   });
   await db.update(tenantSettings).set({ gaId: gaId || null, gtmId: gtmId || null, socialJson: social }).where(eq(tenantSettings.tenantId, tenantId));
 

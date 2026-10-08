@@ -166,7 +166,7 @@ export function seoAudit(s: SeoAuditInput) {
     {
       key: "verify",
       label: "Google Search Console doğrulaması",
-      ok: !!social[SEO_SOCIAL_KEYS.googleVerification],
+      ok: !!social[SEO_SOCIAL_KEYS.googleVerification] || social[SEO_SOCIAL_KEYS.googleDnsVerified] === "1",
       hint: "İndeksleme ve arama performansını takip etmek için gerekli.",
       weight: 2,
       tab: "seo",

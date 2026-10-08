@@ -116,7 +116,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     tiktok: social.tiktokFeed === "1",
     pinterest: social.pinterestFeed === "1",
   };
-  const search = { google: Boolean(social.googleVerification), bing: Boolean(social.bingVerification) };
+  const search = {
+    google: Boolean(social.googleVerification) || social.googleDnsVerified === "1",
+    bing: Boolean(social.bingVerification) || social.bingDnsVerified === "1",
+  };
   const custom = Boolean(settings?.customScripts || settings?.headerHtml);
   const on = (o: Record<string, boolean>) => Object.values(o).filter(Boolean).length;
 
@@ -252,6 +255,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <Group title="Arama motorları" description="Site sahipliği doğrulama, site haritası ve yapay zekâ tarayıcıları" active={on(search)} total={2}>
           <Item title="Google Search Console" subtitle="Sahiplik doğrulama ve arama performansı" logo="G" connected={search.google} onLabel="Doğrulandı" offLabel="Doğrulanmadı">
+            <Toggle name="googleDnsVerified" defaultChecked={social.googleDnsVerified === "1"} label="Alan adı (DNS) ile doğrulandı — kod gerekmez" />
             <div className="field">
               <label htmlFor="googleVerification">Google doğrulama kodu</label>
               <input className="input mono" id="googleVerification" name="googleVerification" defaultValue={social.googleVerification ?? ""} placeholder='<meta name="google-site-verification" content="..."> veya yalnızca kod' />
@@ -264,6 +268,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           </Item>
 
           <Item title="Bing Webmaster Tools" subtitle="Bing, Copilot ve ChatGPT aramasında görünürlük" logo="B" connected={search.bing} onLabel="Doğrulandı" offLabel="Doğrulanmadı">
+            <Toggle name="bingDnsVerified" defaultChecked={social.bingDnsVerified === "1"} label="Search Console’dan içe aktarıldı / DNS ile doğrulandı — kod gerekmez" />
             <div className="field">
               <label htmlFor="bingVerification">Bing doğrulama kodu</label>
               <input className="input mono" id="bingVerification" name="bingVerification" defaultValue={social.bingVerification ?? ""} placeholder='<meta name="msvalidate.01" content="..."> veya yalnızca kod' />

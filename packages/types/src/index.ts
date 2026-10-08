@@ -231,6 +231,9 @@ export const SOCIAL_LINKS = [
 export const SEO_SOCIAL_KEYS = {
   googleVerification: "googleVerification",
   bingVerification: "bingVerification",
+  /** "1": sahiplik DNS kaydıyla (veya Bing'de Search Console içe aktarımıyla) doğrulandı; meta kodu gerekmez. */
+  googleDnsVerified: "googleDnsVerified",
+  bingDnsVerified: "bingDnsVerified",
   yandexVerification: "yandexVerification",
   noindex: "noindex",
   twitterHandle: "twitterHandle",

@@ -90,8 +90,8 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
   ];
 
   const engines = [
-    { label: "Google Search Console doğrulaması", ok: Boolean(social.googleVerification) },
-    { label: "Bing Webmaster doğrulaması", ok: Boolean(social.bingVerification) },
+    { label: "Google Search Console doğrulaması", ok: Boolean(social.googleVerification) || social.googleDnsVerified === "1" },
+    { label: "Bing Webmaster doğrulaması", ok: Boolean(social.bingVerification) || social.bingDnsVerified === "1" },
     { label: "Google Merchant beslemesi", ok: social.merchantFeed === "1" },
     { label: "ChatGPT ürün beslemesi", ok: social.chatgptFeed === "1" },
     { label: "Microsoft (Bing) beslemesi", ok: social.bingFeed === "1" },
