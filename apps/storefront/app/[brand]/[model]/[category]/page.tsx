@@ -21,16 +21,20 @@ import {
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
+  pagination,
 } from "../../../../src/seo";
 
 export const revalidate = 120;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ brand: string; model: string; category: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }): Promise<Metadata> {
   const { brand, model, category } = await params;
+  const sp = await searchParams;
   const tenant = await getTenant();
   const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) return {};
@@ -38,11 +42,12 @@ export async function generateMetadata({
   if (!m) return {};
   const cat = await cachedCategoryBySlug(category);
   if (!cat) return {};
-  const title = pageTitle(tenant, `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça`);
+  const pg = pagination(sp, `/${b.slug}/${m.slug}/${cat.slug}`);
+  const title = pageTitle(tenant, `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça${pg.suffix}`);
   const description =
     cat.seoContent?.slice(0, 160) ??
     `${b.name} ${m.name} için ${sentenceCaseTr(cat.name).toLocaleLowerCase("tr-TR")} yedek parçaları. KDV dahil fiyat.`;
-  const path = `/${b.slug}/${m.slug}/${cat.slug}`;
+  const path = pg.path;
   return {
     title: { absolute: title },
     description,

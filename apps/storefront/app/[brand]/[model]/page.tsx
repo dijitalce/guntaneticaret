@@ -18,12 +18,21 @@ import {
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
+  pagination,
 } from "../../../src/seo";
 
 export const revalidate = 120;
 
-export async function generateMetadata({ params }: { params: Promise<{ brand: string; model: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ brand: string; model: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}): Promise<Metadata> {
   const { brand, model } = await params;
+  const sp = await searchParams;
+  const pg = pagination(sp, `/${brand}/${model}`);
   const tenant = await getTenant();
   const b = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!b) return {};
@@ -32,11 +41,11 @@ export async function generateMetadata({ params }: { params: Promise<{ brand: st
   const title = pageTitle(
     tenant,
     /^di[gğ]er/i.test(modelLabel)
-      ? `${b.name} Diğer Modeller Yedek Parça`
-      : `${b.name} ${modelLabel} Yedek Parça – ${modelLabel} Parça Fiyatları`,
+      ? `${b.name} Diğer Modeller Yedek Parça${pg.suffix}`
+      : `${b.name} ${modelLabel} Yedek Parça – ${modelLabel} Parça Fiyatları${pg.suffix}`,
   );
   const description = `${b.name} ${modelLabel} yedek parça: ${modelLabel} uyumlu fren, motor, filtre, süspansiyon ve kaporta parçaları. Orijinal ve muadil seçenekler, KDV dahil fiyat — ${tenant.siteName}.`;
-  const path = `/${brand}/${model}`;
+  const path = pg.path;
   return {
     title: { absolute: title },
     description,

@@ -28,6 +28,16 @@ export function tenantVerification(tenant: TenantPublicConfig) {
   };
 }
 
+/** Listeleme sayfaları: 2+ sayfa kendi adresini canonical gösterir, yoksa Google derin sayfalardaki ürünleri izlemez. */
+export function pagination(sp: Record<string, string | undefined>, path: string) {
+  const page = Math.max(1, Math.floor(Number(sp.page ?? 1)) || 1);
+  return {
+    page,
+    path: page > 1 ? `${path}?page=${page}` : path,
+    suffix: page > 1 ? ` – Sayfa ${page}` : "",
+  };
+}
+
 export function absoluteUrl(host: string, path: string) {
   const base = host.startsWith("http") ? host : `https://${host}`;
   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;

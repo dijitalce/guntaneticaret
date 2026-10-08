@@ -25,20 +25,25 @@ import {
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
+  pagination,
 } from "../../../src/seo";
 
 export const revalidate = 300;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const sp = await searchParams;
   const tenant = await getTenant();
   const cat = await cachedCategoryBySlug(slug);
   if (!cat) return {};
-  const title = pageTitle(tenant, `${sentenceCaseTr(cat.name)} Yedek Parça`);
+  const pg = pagination(sp, `/kategori/${cat.slug}`);
+  const title = pageTitle(tenant, `${sentenceCaseTr(cat.name)} Yedek Parça${pg.suffix}`);
   const description =
     cat.seoContent?.slice(0, 160) ??
     `${sentenceCaseTr(cat.name)} kategorisinde ${tenant.siteName} stoklarındaki yedek parçaları incele. KDV dahil fiyat, hızlı tedarik.`;
@@ -46,12 +51,12 @@ export async function generateMetadata({
     title: { absolute: title },
     description,
     alternates: {
-      canonical: absoluteUrl(tenant.tenant.canonicalHost, `/kategori/${cat.slug}`),
+      canonical: absoluteUrl(tenant.tenant.canonicalHost, pg.path),
     },
     openGraph: {
       title,
       description,
-      url: absoluteUrl(tenant.tenant.canonicalHost, `/kategori/${cat.slug}`),
+      url: absoluteUrl(tenant.tenant.canonicalHost, pg.path),
       type: "website",
     },
   };

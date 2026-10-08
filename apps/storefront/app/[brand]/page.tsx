@@ -11,29 +11,38 @@ import {
   breadcrumbJsonLd,
   collectionPageJsonLd,
   itemListJsonLd,
+  pagination,
 } from "../../src/seo";
 
 export const revalidate = 120;
 
-export async function generateMetadata({ params }: { params: Promise<{ brand: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ brand: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}): Promise<Metadata> {
   const { brand } = await params;
+  const sp = await searchParams;
   const tenant = await getTenant();
   const row = await cachedBrandBySlug(tenant.tenant.id, brand);
   if (!row) return {};
   const models = await cachedModelsForBrand(tenant.tenant.id, row.id);
   const modelNames = models.map((m) => m.name).filter((n) => !/^di[gğ]er/i.test(n)).slice(0, 5);
-  const title = pageTitle(tenant, `${row.name} Yedek Parça – ${row.name} Oto Yedek Parça Fiyatları`);
+  const pg = pagination(sp, `/${row.slug}`);
+  const title = pageTitle(tenant, `${row.name} Yedek Parça – ${row.name} Oto Yedek Parça Fiyatları${pg.suffix}`);
   const description =
     row.seoContent?.slice(0, 160) ??
     `${row.name} yedek parça: ${modelNames.length ? `${modelNames.join(", ")} ve diğer ${row.name} modelleri` : `${row.name} modelleri`} için orijinal ve muadil oto yedek parça. Fren, motor, filtre, süspansiyon; KDV dahil fiyat — ${tenant.siteName}.`;
   return {
     title: { absolute: title },
     description,
-    alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, `/${row.slug}`) },
+    alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, pg.path) },
     openGraph: {
       title,
       description,
-      url: absoluteUrl(tenant.tenant.canonicalHost, `/${row.slug}`),
+      url: absoluteUrl(tenant.tenant.canonicalHost, pg.path),
       type: "website",
     },
   };

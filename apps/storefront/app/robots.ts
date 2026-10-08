@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { resolveTenantByHost } from "@guntan/tenant";
 import { tenantNoIndex } from "../src/seo";
 
-const PRIVATE_PATHS = ["/sepet", "/odeme", "/hesabim", "/favoriler", "/api/"];
+// Sepet/ödeme/hesap ve /yonetim engellenmez: Google noindex başlığını görebilsin diye taranabilir kalmalı.
+const PRIVATE_PATHS = ["/api/"];
 
 /** Yapay zekâ arama/asistan tarayıcıları: ürünlerin ChatGPT, Perplexity, Claude, Gemini, Copilot yanıtlarında yer alması için açık. */
 const AI_CRAWLERS = [

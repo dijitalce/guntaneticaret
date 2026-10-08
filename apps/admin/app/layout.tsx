@@ -17,6 +17,7 @@ export const metadata = {
     default: "Güntan Admin",
     template: "%s · Güntan Admin",
   },
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 const font = Inter({

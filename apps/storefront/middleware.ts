@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isReservedSlug } from "@guntan/config";
 
+const NOINDEX_SECTIONS = new Set(["sepet", "odeme", "hesabim", "favoriler", "abonelik", "bakim"]);
+
 function resolvePublicHost(request: NextRequest): string {
   const raw =
     request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
@@ -31,6 +33,9 @@ export function middleware(request: NextRequest) {
   response.headers.set("x-request-host", host);
 
   const first = request.nextUrl.pathname.split("/").filter(Boolean)[0];
+  if (first && NOINDEX_SECTIONS.has(first)) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
   if (first && !isReservedSlug(first) && first.length > 80) {
     return NextResponse.rewrite(new URL("/404", request.url));
   }

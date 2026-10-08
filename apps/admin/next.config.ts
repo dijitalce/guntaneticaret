@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_ADMIN_BASE_PATH: adminBasePath,
     ADMIN_BASE_PATH: adminBasePath,
   },
+  // Panel hiçbir arama motorunda çıkmamalı; yönlendirme ve API yanıtları dahil.
+  async headers() {
+    return [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
+  },
   transpilePackages: [
     "@guntan/auth",
     "@guntan/config",
