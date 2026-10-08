@@ -27,6 +27,12 @@ export GOMAXPROCS="${GOMAXPROCS:-2}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2
 
 START=$(date +%s)
 cd "$ROOT/packages/import"
+
+# Saatte bir (saatin ilk çeyreğindeki çalışma): değişen adresleri IndexNow ile Bing/Yandex'e bildir.
+if (( 10#$(date +%M) < 15 )); then
+  timeout 300 "$NODE" --v8-pool-size=1 --import tsx src/indexnow-cli.ts >> "$ROOT/logs/indexnow-$(date +%Y%m).log" 2>&1
+fi
+
 "$NODE" --v8-pool-size=2 --import tsx src/otoparcasan-images-cli.ts "$@" >> "$LOG" 2>&1
 
 # otoparcasan sırası boşaldığında çalışma birkaç saniyede biter; kalan süre parcatedarik'e verilir.

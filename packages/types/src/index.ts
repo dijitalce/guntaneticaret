@@ -284,5 +284,7 @@ export type XmlFieldMapping = Partial<Record<XmlFieldKey, string>>;
 export const LISTING_PAGE_SIZE = 24;
 export const XML_BATCH_SIZE = 500;
 export const TENANT_HOST_CACHE_TTL_SECONDS = 300;
+/** IndexNow sahiplik anahtarı; her sitede /indexnow-key.txt adresinden yayınlanır. */
+export const INDEXNOW_KEY = "006d2fa8ce30d901faa7ab569601e3de";
 export const TENANT_CONFIG_CACHE_TTL_SECONDS = 300;
 export const NAV_CACHE_TTL_SECONDS = 600;

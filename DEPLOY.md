@@ -132,6 +132,10 @@ bash /home/KULLANICI/.../hbuilds/current/nodejs/scripts/otoparcasan-images.sh
 - Görseller `guntan-images/files/` altına yazılır (guntan-sync.env ile aynı klasör), `product_images`'a eklenir. `/urun-gorsel/*` adresini `hostinger-start.mjs` bu klasörden sunar. `public_html`'e yazılmaz: Hostinger deploy onu sıfırlıyor.
 - Durum ve log: `guntan-images/`. Eşlemeyi elle yenilemek için `--rebuild-map`; dosyası kaybolan görselleri silip yeniden sıraya almak için `--repair`.
 
+### IndexNow (Bing, Yandex)
+
+Ayrı cron gerekmez: `otoparcasan-images.sh` saatin ilk çeyreğindeki çalışmasında `src/indexnow-cli.ts`'yi çalıştırır. Her sitenin `sitemap.xml`'i okunur; ilk çalışmada tüm adresler, sonra son başarılı çalışmadan beri `lastmod`'u değişenler bildirilir. Anahtar `INDEXNOW_KEY` (`@guntan/types`), her sitede `/indexnow-key.txt`. Durum: `guntan-sync.env` klasöründe `indexnow-state.json` (silinirse bir sonraki çalışma her şeyi yeniden gönderir). Log: `logs/indexnow-YYYYMM.log`. Elle: `pnpm --filter @guntan/import indexnow [--host alan.com] [--dry-run]`.
+
 ### Diğer ürün görselleri (parcatedarik.com)
 
 Ayrı cron gerekmez: `otoparcasan-images.sh` işini bitirince kalan süreyle `scripts/parcatedarik-images.sh`'yi çalıştırır (toplam ≤ 14 dk).

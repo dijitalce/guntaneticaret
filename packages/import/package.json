@@ -18,7 +18,8 @@
     "shipment-sync": "tsx src/shipment-sync-cli.ts",
     "altay-image-report": "tsx src/altay-image-report.ts",
     "otoparcasan-images": "tsx src/otoparcasan-images-cli.ts",
-    "parcatedarik-images": "tsx src/parcatedarik-images-cli.ts"
+    "parcatedarik-images": "tsx src/parcatedarik-images-cli.ts",
+    "indexnow": "tsx src/indexnow-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",
