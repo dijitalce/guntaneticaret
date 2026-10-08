@@ -77,7 +77,11 @@ export function CookiePolicy({ siteName }: { siteName: string }) {
       <CookieTable rows={NECESSARY} />
 
       <h3>Analitik çerezler</h3>
-      <p>Ziyaret sayısını ve sayfaların nasıl kullanıldığını ölçerek siteyi geliştirmemize yardımcı olur. Yalnızca açık rızanızla kullanılır.</p>
+      <p>
+        Ziyaret sayısını ve sayfaların nasıl kullanıldığını ölçerek siteyi geliştirmemize yardımcı olur. Bu çerezler yalnızca açık rızanızla
+        yerleştirilir. Rıza vermediğinizde Google Analytics, Google İzin Modu kapsamında çerez yerleştirmeden ve sizi tanımlayan bir kimlik
+        kullanmadan yalnızca sayfa görüntüleme gibi toplu sinyaller gönderir.
+      </p>
       <CookieTable rows={ANALYTICS} />
 
       <h3>Pazarlama çerezleri</h3>

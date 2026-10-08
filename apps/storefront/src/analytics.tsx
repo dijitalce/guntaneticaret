@@ -29,7 +29,8 @@ export function Analytics({
   const consent = useConsent();
   const allowAnalytics = consent?.analytics === true;
   const allowMarketing = consent?.marketing === true;
-  const ga = allowAnalytics && gaId && GA_RE.test(gaId) ? gaId : null;
+  // Gelişmiş izin modu: GA her zaman yüklenir; onay yokken analytics_storage=denied ile çerezsiz çalışır.
+  const ga = gaId && GA_RE.test(gaId) ? gaId : null;
   const gtm = (allowAnalytics || allowMarketing) && gtmId && GTM_RE.test(gtmId) ? gtmId : null;
   const meta = allowMarketing && metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
   const tiktok = allowMarketing && tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
@@ -41,11 +42,15 @@ export function Analytics({
     ad_user_data: allowMarketing ? "granted" : "denied",
     ad_personalization: allowMarketing ? "granted" : "denied",
   });
+  useEffect(() => {
+    const w = window as unknown as { gtag?: (...args: unknown[]) => void };
+    w.gtag?.("consent", "update", JSON.parse(consentState));
+  }, [consentState]);
   if (!ga && !gtm && !meta && !tiktok && !ads) return null;
   return (
     <>
       <Script id="consent-mode" strategy="afterInteractive">
-        {`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments);};gtag('consent','default',${consentState});gtag('consent','update',${consentState});`}
+        {`window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments);};gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('consent','update',${consentState});`}
       </Script>
       {meta ? (
         <Script id="meta-pixel" strategy="afterInteractive">
