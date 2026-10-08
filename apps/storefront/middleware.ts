@@ -29,6 +29,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/yonetim/login", store), 302);
   }
 
+  if (host.startsWith("www.")) {
+    const url = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, `https://${host.slice(4)}`);
+    return NextResponse.redirect(url, 301);
+  }
+
   const response = NextResponse.next();
   response.headers.set("x-request-host", host);
 
