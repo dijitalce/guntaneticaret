@@ -29,8 +29,9 @@ export async function POST(request: Request) {
   const googleAdsId = clean("googleAdsId").toUpperCase();
   if (googleAdsId && !/^AW-\d{6,}$/.test(googleAdsId)) return redirectTo(request, back, { hata: "Google Ads kimliği AW-XXXXXXXXX biçiminde olmalı." });
 
-  const verification = text(form, "googleVerification").replace(/.*content="([^"]+)".*/, "$1").trim().slice(0, 200);
-  const bing = text(form, "bingVerification").replace(/.*content="([^"]+)".*/, "$1").trim().slice(0, 200);
+  const metaCode = (f: FormData, key: string) => text(f, key).replace(/.*content="([^"]+)".*/, "$1").trim().slice(0, 200);
+  const verification = metaCode(form, "googleVerification");
+  const bing = metaCode(form, "bingVerification");
   const social = mergeSocial(settings.socialJson, {
     metaPixelId,
     tiktokPixelId: clean("tiktokPixelId").toUpperCase(),
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
     feedAllProducts: form.get("feedAllProducts") === "1" ? "1" : "",
     googleVerification: verification,
     bingVerification: bing,
+    metaDomainVerification: metaCode(form, "metaDomainVerification"),
+    pinterestVerification: metaCode(form, "pinterestVerification"),
     googleDnsVerified: form.get("googleDnsVerified") === "1" ? "1" : "",
     bingDnsVerified: form.get("bingDnsVerified") === "1" ? "1" : "",
   });

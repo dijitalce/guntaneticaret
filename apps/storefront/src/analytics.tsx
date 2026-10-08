@@ -33,9 +33,11 @@ export function Analytics({
   const ga = gaId && GA_RE.test(gaId) ? gaId : null;
   // GTM de izin modunu okur; içindeki Google etiketleri onay yokken çerezsiz çalışır.
   const gtm = gtmId && GTM_RE.test(gtmId) ? gtmId : null;
-  const meta = allowMarketing && metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
-  const tiktok = allowMarketing && tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
-  const ads = allowMarketing && googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
+  // Pikseller de her zaman yüklenir (doğrulama araçları algılasın); pazarlama onayı yokken kendi izin komutlarıyla veri göndermez.
+  const meta = metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
+  const tiktok = tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
+  const ads = googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
+  const decided = consent != null;
   const gtagId = ga ?? ads;
   const consentState = JSON.stringify({
     analytics_storage: allowAnalytics ? "granted" : "denied",
@@ -48,6 +50,14 @@ export function Analytics({
     w.gtag?.("consent", "update", JSON.parse(consentState));
     (window as unknown as { dataLayer?: unknown[] }).dataLayer?.push({ event: "consent_update" });
   }, [consentState]);
+  useEffect(() => {
+    const w = window as unknown as {
+      fbq?: (...args: unknown[]) => void;
+      ttq?: { grantConsent?: () => void; revokeConsent?: () => void };
+    };
+    w.fbq?.("consent", allowMarketing ? "grant" : "revoke");
+    if (decided) (allowMarketing ? w.ttq?.grantConsent : w.ttq?.revokeConsent)?.call(w.ttq);
+  }, [allowMarketing, decided]);
   if (!ga && !gtm && !meta && !tiktok && !ads) return null;
   return (
     <>
@@ -56,12 +66,12 @@ export function Analytics({
       </Script>
       {meta ? (
         <Script id="meta-pixel" strategy="afterInteractive">
-          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init',${JSON.stringify(meta)});fbq('track','PageView');`}
+          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('consent',${JSON.stringify(allowMarketing ? "grant" : "revoke")});fbq('init',${JSON.stringify(meta)});fbq('track','PageView');`}
         </Script>
       ) : null}
       {tiktok ? (
         <Script id="tiktok-pixel" strategy="afterInteractive">
-          {`!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=r+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load(${JSON.stringify(tiktok)});ttq.page();}(window,document,'ttq');`}
+          {`!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=r+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.${!decided ? "holdConsent" : allowMarketing ? "grantConsent" : "revokeConsent"}();ttq.load(${JSON.stringify(tiktok)});ttq.page();}(window,document,'ttq');`}
         </Script>
       ) : null}
       {gtm ? (
@@ -92,11 +102,9 @@ export function Analytics({
   );
 }
 
-/** Panelden girilen özel <script> / <noscript> / <meta> parçalarını sayfaya ekler; içerikleri bilinmediği için pazarlama izni ister. */
+/** Panelden girilen özel <script> / <noscript> / <meta> parçalarını sayfaya ekler (canlı destek vb.); izleme pikselleri panelde kendi alanlarından, izin moduyla yüklenir. */
 export function CustomScripts({ html }: { html: string }) {
-  const allowed = useConsent()?.marketing === true;
   useEffect(() => {
-    if (!allowed) return;
     const tpl = document.createElement("template");
     tpl.innerHTML = html;
     const added: Node[] = [];
@@ -116,6 +124,6 @@ export function CustomScripts({ html }: { html: string }) {
     return () => {
       for (const n of added) n.parentNode?.removeChild(n);
     };
-  }, [html, allowed]);
+  }, [html]);
   return null;
 }

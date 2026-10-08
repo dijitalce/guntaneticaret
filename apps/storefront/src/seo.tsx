@@ -20,11 +20,15 @@ export function tenantVerification(tenant: TenantPublicConfig) {
   const google = s[SEO_SOCIAL_KEYS.googleVerification];
   const bing = s[SEO_SOCIAL_KEYS.bingVerification];
   const yandex = s[SEO_SOCIAL_KEYS.yandexVerification];
-  if (!google && !bing && !yandex) return undefined;
+  const other: Record<string, string> = {};
+  if (bing) other["msvalidate.01"] = bing;
+  if (s[SEO_SOCIAL_KEYS.metaDomainVerification]) other["facebook-domain-verification"] = s[SEO_SOCIAL_KEYS.metaDomainVerification];
+  if (s[SEO_SOCIAL_KEYS.pinterestVerification]) other["p:domain_verify"] = s[SEO_SOCIAL_KEYS.pinterestVerification];
+  if (!google && !yandex && !Object.keys(other).length) return undefined;
   return {
     google: google || undefined,
     yandex: yandex || undefined,
-    other: bing ? { "msvalidate.01": bing } : undefined,
+    other: Object.keys(other).length ? other : undefined,
   };
 }
 

@@ -638,14 +638,17 @@ export default async function TenantEditPage({
         <form action={action} method="post" className="form-page is-wide form-stack">
           <input type="hidden" name="_section" value="gelismis" />
           <Alert tone="warn">
-            Bu alanlardaki HTML/JavaScript doğrudan sitede çalışır. Yalnızca güvendiğiniz kaynaklardan (Meta Pixel, canlı destek vb.) kod ekleyin; hatalı kod siteyi bozabilir ve hızını düşürebilir.
+            Bu alanlardaki HTML/JavaScript doğrudan sitede çalışır. Yalnızca güvendiğiniz kaynaklardan (canlı destek, Clarity vb.) kod ekleyin; hatalı kod siteyi bozabilir ve hızını düşürebilir.
           </Alert>
           <Panel title="Özel kodlar" padded>
             <div className="form-stack">
               <div className="field">
                 <label htmlFor="customScripts">Ek script’ler</label>
                 <textarea className="mono" id="customScripts" name="customScripts" rows={6} defaultValue={settings?.customScripts ?? ""} placeholder={"<script>…</script>"} />
-                <small className="field-hint">Sayfa yüklendikten sonra eklenir. GA4 ve GTM için SEO sekmesindeki alanları kullanın.</small>
+                <small className="field-hint">
+                  Sayfa yüklendikten sonra, çerez onayı beklemeden her ziyarette çalışır. GA4, GTM, Google Ads, Meta ve TikTok pikselleri için
+                  Eklentiler sayfasındaki alanları kullanın; onlar ziyaretçinin çerez tercihine göre kendiliğinden ayarlanır.
+                </small>
               </div>
               <div className="field">
                 <label htmlFor="headerHtml">Üst duyuru alanı (HTML)</label>

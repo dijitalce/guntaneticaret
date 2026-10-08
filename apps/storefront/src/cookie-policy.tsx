@@ -88,7 +88,8 @@ export function CookiePolicy({ siteName }: { siteName: string }) {
       <p>
         İlgi alanlarınıza uygun reklamların gösterilmesi ve kampanyaların ölçülmesi için iş ortaklarımız tarafından yerleştirilir. Ödeme
         sayfasında girdiğiniz iletişim bilgisinin, siparişi tamamlamadığınız durumda hatırlatma göndermek için kaydedilmesi de bu izne
-        bağlıdır. Yalnızca açık rızanızla kullanılır.
+        bağlıdır. Yalnızca açık rızanızla kullanılır. Rıza vermediğinizde reklam ortaklarının kodları sayfada bulunur ancak izin modunda
+        çalışır: pazarlama çerezi yerleştirmez, sizi tanımlayan veri göndermez.
       </p>
       <CookieTable rows={MARKETING} />
 

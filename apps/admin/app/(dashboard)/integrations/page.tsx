@@ -190,6 +190,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               <input className="input mono" id="metaTestCode" name="metaTestCode" defaultValue={secrets.metaTestCode} placeholder="TEST12345" />
               <small className="field-hint">Test bitince boşaltın; aksi halde olaylar yalnızca test ekranında görünür.</small>
             </div>
+            <div className="field">
+              <label htmlFor="metaDomainVerification">Alan adı doğrulama kodu (isteğe bağlı)</label>
+              <input className="input mono" id="metaDomainVerification" name="metaDomainVerification" defaultValue={social.metaDomainVerification ?? ""} placeholder='<meta name="facebook-domain-verification" content="..."> veya yalnızca kod' />
+              <small className="field-hint">Business Ayarları → Marka Güvenliği → Alan Adları → Meta etiketi yöntemi. DNS ile doğruladıysanız boş bırakın.</small>
+            </div>
             <p className="muted text-sm" style={{ margin: 0 }}>
               Gönderilen olaylar: PageView, ViewContent, AddToCart, InitiateCheckout, Purchase (tarayıcı + sunucu, event_id ile tekilleştirilir; e-posta/telefon SHA-256 ile şifrelenir).
             </p>
@@ -250,6 +255,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             <Toggle name="pinterestFeed" defaultChecked={feeds.pinterest} label="Pinterest beslemesini yayınla" />
             <CopyUrl url={`${site}/feeds/pinterest.xml`} />
             <small className="field-hint">Pinterest Business → Kataloglar → Veri kaynağı oluştur → bu adresi girin (para birimi TRY).</small>
+            <div className="field">
+              <label htmlFor="pinterestVerification">Pinterest site doğrulama kodu (isteğe bağlı)</label>
+              <input className="input mono" id="pinterestVerification" name="pinterestVerification" defaultValue={social.pinterestVerification ?? ""} placeholder='<meta name="p:domain_verify" content="..."> veya yalnızca kod' />
+              <small className="field-hint">Katalog için sitenin Pinterest’te doğrulanmış olması gerekir: Ayarlar → Doğrulanmış hesaplar → HTML etiketi.</small>
+            </div>
           </Item>
         </Group>
 

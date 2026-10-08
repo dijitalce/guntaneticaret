@@ -235,6 +235,8 @@ export const SEO_SOCIAL_KEYS = {
   googleDnsVerified: "googleDnsVerified",
   bingDnsVerified: "bingDnsVerified",
   yandexVerification: "yandexVerification",
+  metaDomainVerification: "metaDomainVerification",
+  pinterestVerification: "pinterestVerification",
   noindex: "noindex",
   twitterHandle: "twitterHandle",
 } as const;
