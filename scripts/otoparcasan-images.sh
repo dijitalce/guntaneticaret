@@ -25,5 +25,13 @@ fi
 
 export GOMAXPROCS="${GOMAXPROCS:-2}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2}"
 
+START=$(date +%s)
 cd "$ROOT/packages/import"
 "$NODE" --v8-pool-size=2 --import tsx src/otoparcasan-images-cli.ts "$@" >> "$LOG" 2>&1
+
+# otoparcasan sırası boşaldığında çalışma birkaç saniyede biter; kalan süre parcatedarik'e verilir.
+# Hostinger cron süreçlerini ~16 dk'da öldürdüğü için toplam 14 dk'yı geçmemeli.
+LEFT=$(( 14 - ($(date +%s) - START) / 60 - 1 ))
+if (( LEFT >= 3 )); then
+  NODE_BIN="$NODE" PARCATEDARIK_MAX_MINUTES="$LEFT" bash "$ROOT/scripts/parcatedarik-images.sh"
+fi
