@@ -22,8 +22,10 @@ export function tenantVerification(tenant: TenantPublicConfig) {
   const yandex = s[SEO_SOCIAL_KEYS.yandexVerification];
   const other: Record<string, string> = {};
   if (bing) other["msvalidate.01"] = bing;
-  if (s[SEO_SOCIAL_KEYS.metaDomainVerification]) other["facebook-domain-verification"] = s[SEO_SOCIAL_KEYS.metaDomainVerification];
-  if (s[SEO_SOCIAL_KEYS.pinterestVerification]) other["p:domain_verify"] = s[SEO_SOCIAL_KEYS.pinterestVerification];
+  const metaDomain = s[SEO_SOCIAL_KEYS.metaDomainVerification];
+  const pinterest = s[SEO_SOCIAL_KEYS.pinterestVerification];
+  if (metaDomain) other["facebook-domain-verification"] = metaDomain;
+  if (pinterest) other["p:domain_verify"] = pinterest;
   if (!google && !yandex && !Object.keys(other).length) return undefined;
   return {
     google: google || undefined,
