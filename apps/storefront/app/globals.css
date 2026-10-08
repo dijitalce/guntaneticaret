@@ -2842,8 +2842,14 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   padding: 0.75rem max(0.75rem, env(safe-area-inset-right)) calc(0.75rem + env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
   gap: 0.5rem;
 }
-.seo-block { padding: 1.8rem 0 1rem; color: var(--muted-foreground); max-width: 70ch; }
+.seo-block { padding: 1.8rem 0 1rem; color: var(--muted-foreground); max-width: 80ch; }
 .seo-block h2 { color: var(--foreground); }
+.seo-links { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; font-size: 0.85rem; }
+.seo-links a { color: var(--muted-foreground); text-decoration: underline; text-underline-offset: 2px; }
+.seo-links a:hover { color: var(--primary); }
+.home-intro { margin: 1.4rem 0 0.4rem; }
+.home-intro h1 { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.6rem); letter-spacing: -0.01em; }
+.home-intro p { margin: 0.3rem 0 0; color: var(--muted-foreground); font-size: 0.92rem; }
 
 /* —— Tablet —— */
 @media (max-width: 1100px) {

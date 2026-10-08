@@ -46,7 +46,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const tenant = await getTenant();
   const product = await cachedProductBySlug(tenant.tenant.id, slug);
   if (!product) return {};
-  const title = pageTitle(tenant, productDisplayTitle(product.product.name, product.manufacturerName));
+  const display = productDisplayTitle(product.product.name, product.manufacturerName);
+  const fit = product.fitments.find((f) => !/^di[gğ]er/i.test(f.modelName));
+  const vehicle = fit ? `${fit.brandName} ${fit.modelName}` : null;
+  const title = pageTitle(
+    tenant,
+    vehicle && !display.toLocaleLowerCase("tr-TR").includes(fit!.modelName.toLocaleLowerCase("tr-TR"))
+      ? `${display} – ${vehicle}`
+      : display,
+  );
   const description = productMetaDescription(seoInput(tenant, product));
   const url = `https://${tenant.tenant.canonicalHost}/urun/${product.product.slug}`;
   const image = product.images[0]?.url;

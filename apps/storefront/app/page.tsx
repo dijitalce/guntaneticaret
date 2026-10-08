@@ -8,6 +8,7 @@ import { HomeSideBanners } from "../src/home-side-banners";
 import { BrandMark } from "../src/brand-mark";
 import { sentenceCaseTr } from "../src/format";
 import { LaunchNotice } from "../src/launch-notice";
+import { homeSeo } from "../src/home-seo";
 import {
   JsonLd,
   absoluteUrl,
@@ -18,12 +19,17 @@ import {
 
 export const revalidate = 60;
 
+async function homeCopy(tenant: Awaited<ReturnType<typeof getTenant>>) {
+  const [brands, cats] = await Promise.all([cachedVisibleBrands(tenant.tenant.id), cachedPopularCategories(8)]);
+  const rootCats = cats.filter((c) => !c.parentId);
+  return homeSeo(tenant.siteName, brands, rootCats.map((c) => sentenceCaseTr(c.name).toLocaleLowerCase("tr-TR")));
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenant();
-  const title = tenant.defaultMetaTitle ?? `${tenant.siteName} | Oto Yedek Parça`;
-  const description =
-    tenant.defaultMetaDescription ??
-    `${tenant.siteName} — araç marka ve modeline uygun yedek parça. KDV dahil fiyat, stokta ürün, hızlı tedarik.`;
+  const copy = await homeCopy(tenant);
+  const title = tenant.defaultMetaTitle ?? copy.title;
+  const description = tenant.defaultMetaDescription ?? copy.description;
   return {
     metadataBase: metadataBaseForHost(tenant.tenant.canonicalHost),
     title: { absolute: title },
@@ -52,10 +58,7 @@ export default async function HomePage() {
   const sideBanners = bannerRows.filter((b) => b.placement === "home_side").slice(0, 4);
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
-  const seoBody =
-    tenant.seoContent ??
-    tenant.defaultMetaDescription ??
-    `${tenant.siteName} oto yedek parça kataloğunda marka ve modele göre filtreleyerek fren, motor, süspansiyon ve bakım parçalarına ulaşabilirsiniz.`;
+  const copy = await homeCopy(tenant);
 
   return (
     <div className="container home">
@@ -106,6 +109,10 @@ export default async function HomePage() {
             },
           ]}
         />
+      </div>
+      <div className="home-intro">
+        <h1>{copy.h1}</h1>
+        <p>{copy.lead}</p>
       </div>
       {middleBanners.length > 0 && (
         <section className={`home-banners is-${middleBanners.length}`} aria-label="Kampanyalar">
@@ -178,8 +185,15 @@ export default async function HomePage() {
       </div>
 
       <section className="seo-block">
-        <h2>{tenant.siteName}</h2>
-        <p>{seoBody}</p>
+        <h2>{copy.heading}</h2>
+        {tenant.seoContent ? <p>{tenant.seoContent}</p> : copy.paragraphs.map((p) => <p key={p}>{p}</p>)}
+        {brands.length > 0 ? (
+          <p className="seo-links">
+            {brands.slice(0, 16).map((b) => (
+              <Link key={b.id} href={`/${b.slug}`}>{b.name} yedek parça</Link>
+            ))}
+          </p>
+        ) : null}
       </section>
       <LaunchNotice whatsapp={tenant.whatsapp} phone={tenant.phone} />
     </div>

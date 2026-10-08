@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   db,
   products,
@@ -35,11 +35,23 @@ async function sitemapContext() {
   return { tenantId: tenant.tenant.id, base: `https://${tenant.tenant.canonicalHost}`, structure };
 }
 
-function urlset(entries: { loc: string; lastmod?: string | null }[]) {
+function urlset(entries: { loc: string; lastmod?: string | null; image?: string | null }[]) {
   const body = entries
-    .map((e) => `<url><loc>${esc(e.loc)}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ""}</url>`)
+    .map(
+      (e) =>
+        `<url><loc>${esc(e.loc)}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ""}${
+          e.image ? `<image:image><image:loc>${esc(e.image)}</image:loc></image:image>` : ""
+        }</url>`,
+    )
     .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${body}\n</urlset>\n`;
+}
+
+const firstImage = sql<string | null>`(select pi.url from product_images pi where pi.product_id = ${products.id} order by pi.sort_order limit 1)`;
+
+function absoluteImage(base: string, url: string | null) {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? url : `${base}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 export async function sitemapIndexResponse() {
@@ -82,14 +94,14 @@ export async function sitemapFileResponse(file: string) {
   const offset = (part - 1) * SITEMAP_PRODUCTS_PER_FILE;
   const rows = structure.seesAll
     ? await db
-        .select({ slug: products.slug, updatedAt: products.updatedAt })
+        .select({ slug: products.slug, updatedAt: products.updatedAt, image: firstImage })
         .from(products)
         .where(eq(products.status, "active"))
         .orderBy(asc(products.id))
         .limit(SITEMAP_PRODUCTS_PER_FILE)
         .offset(offset)
     : await db
-        .select({ slug: products.slug, updatedAt: products.updatedAt })
+        .select({ slug: products.slug, updatedAt: products.updatedAt, image: firstImage })
         .from(products)
         .innerJoin(tenantCatalogIndex, eq(tenantCatalogIndex.productId, products.id))
         .where(and(eq(tenantCatalogIndex.tenantId, ctx.tenantId), eq(products.status, "active")))
@@ -98,7 +110,7 @@ export async function sitemapFileResponse(file: string) {
         .offset(offset);
   if (!rows.length) return new Response("Bulunamadı", { status: 404 });
   return new Response(
-    urlset(rows.map((p) => ({ loc: `${base}/urun/${p.slug}`, lastmod: isoDate(p.updatedAt) }))),
+    urlset(rows.map((p) => ({ loc: `${base}/urun/${p.slug}`, lastmod: isoDate(p.updatedAt), image: absoluteImage(base, p.image) }))),
     { headers: XML_HEADERS },
   );
 }

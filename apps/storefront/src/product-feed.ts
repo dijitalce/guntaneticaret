@@ -80,12 +80,14 @@ function itemJsonl(p: FeedProduct, base: string, siteName: string, availability:
 
 function itemXml(p: FeedProduct, base: string, siteName: string, availability: Availability) {
   const { price, compare, onSale, image, gtin, brand } = productFields(p, base, siteName);
+  // Google/Meta/TikTok görselsiz ürünü reddeder; beslemede hata sayısını şişirmesin.
+  if (!image || !(price > 0)) return "";
   const parts = [
     `<g:id>${xml(p.id)}</g:id>`,
     `<title>${xml(p.name.slice(0, 150))}</title>`,
     `<description>${xml(plain(p.description, p.name))}</description>`,
     `<link>${xml(`${base}/urun/${p.slug}`)}</link>`,
-    image ? `<g:image_link>${xml(image)}</g:image_link>` : "",
+    `<g:image_link>${xml(image)}</g:image_link>`,
     `<g:availability>${availability}</g:availability>`,
     `<g:price>${(onSale ? compare : price).toFixed(2)} TRY</g:price>`,
     onSale ? `<g:sale_price>${price.toFixed(2)} TRY</g:sale_price>` : "",

@@ -29,8 +29,13 @@ export async function generateMetadata({ params }: { params: Promise<{ brand: st
   if (!b) return {};
   const m = await cachedModelBySlug(b.id, model);
   const modelLabel = m?.name ?? model.toUpperCase();
-  const title = pageTitle(tenant, `${b.name} ${modelLabel} Yedek Parça`);
-  const description = `${b.name} ${modelLabel} uyumlu yedek parçalar. Fren, motor, filtre ve bakım ürünleri — ${tenant.siteName}.`;
+  const title = pageTitle(
+    tenant,
+    /^di[gğ]er/i.test(modelLabel)
+      ? `${b.name} Diğer Modeller Yedek Parça`
+      : `${b.name} ${modelLabel} Yedek Parça – ${modelLabel} Parça Fiyatları`,
+  );
+  const description = `${b.name} ${modelLabel} yedek parça: ${modelLabel} uyumlu fren, motor, filtre, süspansiyon ve kaporta parçaları. Orijinal ve muadil seçenekler, KDV dahil fiyat — ${tenant.siteName}.`;
   const path = `/${brand}/${model}`;
   return {
     title: { absolute: title },
