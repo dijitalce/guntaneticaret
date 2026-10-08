@@ -31,7 +31,8 @@ export function Analytics({
   const allowMarketing = consent?.marketing === true;
   // Gelişmiş izin modu: GA her zaman yüklenir; onay yokken analytics_storage=denied ile çerezsiz çalışır.
   const ga = gaId && GA_RE.test(gaId) ? gaId : null;
-  const gtm = (allowAnalytics || allowMarketing) && gtmId && GTM_RE.test(gtmId) ? gtmId : null;
+  // GTM de izin modunu okur; içindeki Google etiketleri onay yokken çerezsiz çalışır.
+  const gtm = gtmId && GTM_RE.test(gtmId) ? gtmId : null;
   const meta = allowMarketing && metaPixelId && META_RE.test(metaPixelId) ? metaPixelId : null;
   const tiktok = allowMarketing && tiktokPixelId && TIKTOK_RE.test(tiktokPixelId) ? tiktokPixelId : null;
   const ads = allowMarketing && googleAdsId && ADS_RE.test(googleAdsId) ? googleAdsId : null;
@@ -45,6 +46,7 @@ export function Analytics({
   useEffect(() => {
     const w = window as unknown as { gtag?: (...args: unknown[]) => void };
     w.gtag?.("consent", "update", JSON.parse(consentState));
+    (window as unknown as { dataLayer?: unknown[] }).dataLayer?.push({ event: "consent_update" });
   }, [consentState]);
   if (!ga && !gtm && !meta && !tiktok && !ads) return null;
   return (
