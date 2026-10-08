@@ -47,7 +47,7 @@ function urlset(entries: { loc: string; lastmod?: string | null; image?: string 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${body}\n</urlset>\n`;
 }
 
-const firstImage = sql<string | null>`(select pi.url from product_images pi where pi.product_id = ${products.id} order by pi.sort_order limit 1)`;
+const firstImage = sql<string | null>`(select pi.url from product_images pi where pi.product_id = products.id order by pi.sort_order limit 1)`;
 
 function absoluteImage(base: string, url: string | null) {
   if (!url) return null;
