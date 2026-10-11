@@ -3173,10 +3173,6 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 .pdp-media img { height: auto; }
 .pdp-info { display: flex; flex-direction: column; }
 .pdp-info h1 { font-size: clamp(1.25rem, 2.2vw, 1.75rem); margin-bottom: 0.55rem; }
-.pdp-codes { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; margin: 0 0 0.85rem; font-size: 0.85rem; }
-.pdp-codes div { display: flex; gap: 0.35rem; min-width: 0; }
-.pdp-codes dt { color: var(--muted-foreground); }
-.pdp-codes dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
 .pdp-fit {
   display: inline-flex;
   align-items: center;
@@ -3241,6 +3237,53 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 .pdp-trust li { display: flex; align-items: center; gap: 0.5rem; }
 .pdp-trust svg { width: 18px; height: 18px; color: var(--primary); flex: none; }
 .pdp-section { scroll-margin-top: 170px; }
+
+.account-review-link { font-size: 0.82rem; font-weight: 700; color: var(--primary); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.stars { position: relative; display: inline-block; line-height: 1; letter-spacing: 0.08em; white-space: nowrap; }
+.stars-base { color: #d6dae1; }
+.stars-fill { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #f5a524; }
+.stars-sm { font-size: 0.95rem; }
+.stars-md { font-size: 1.15rem; }
+.stars-lg { font-size: 1.45rem; }
+.pdp-rating { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--muted-foreground); text-decoration: none; }
+.pdp-rating:hover span:last-child { text-decoration: underline; }
+
+.reviews-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1.5rem; align-items: start; }
+.reviews-summary { display: grid; gap: 1rem; }
+.reviews-score { display: flex; align-items: center; gap: 0.85rem; }
+.reviews-score > strong { font-size: 2.6rem; line-height: 1; letter-spacing: -0.04em; }
+.reviews-score > div { display: grid; gap: 0.25rem; font-size: 0.85rem; }
+.reviews-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; font-size: 0.82rem; }
+.reviews-bars li { display: grid; grid-template-columns: 2.4rem 1fr 2rem; align-items: center; gap: 0.5rem; }
+.reviews-bar { height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.reviews-bar span { display: block; height: 100%; background: #f5a524; border-radius: inherit; }
+.reviews-empty { display: grid; gap: 0.35rem; justify-items: start; padding: 1rem; background: var(--muted); border-radius: 14px; }
+.reviews-empty p { margin: 0; font-size: 0.88rem; }
+.reviews-cta { margin: 0; font-size: 0.88rem; }
+.reviews-cta a { color: var(--primary); font-weight: 700; }
+.reviews-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.review { padding: 1rem 1.1rem; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+.review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.review p { margin: 0.5rem 0; white-space: pre-line; overflow-wrap: anywhere; }
+.review-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; font-size: 0.8rem; }
+.review-verified { color: #166534; font-weight: 650; }
+.review-verified::before { content: "✓ "; }
+.review-form .muted { margin: 0; }
+.review-form-note { font-size: 0.8rem; }
+.review-rating-input { border: 0; margin: 0; padding: 0; }
+.review-rating-input legend { padding: 0; margin-bottom: 0.3rem; font-size: 0.86rem; font-weight: 600; }
+.review-rating-stars { display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 0.1rem; }
+.review-rating-stars input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.review-rating-stars label { font-size: 1.9rem; line-height: 1; color: #d6dae1; cursor: pointer; transition: color 0.12s; }
+.review-rating-stars span:has(input:checked) label,
+.review-rating-stars span:has(input:checked) ~ span label,
+.review-rating-stars span:hover label,
+.review-rating-stars span:hover ~ span label { color: #f5a524; }
+.review-rating-stars input:focus-visible + label { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+@media (max-width: 900px) {
+  .reviews-layout { grid-template-columns: 1fr; }
+}
 
 .sticky-atc {
   position: fixed;

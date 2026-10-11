@@ -135,7 +135,7 @@ export async function searchProducts(tenantId: string, q: string, limit = 8) {
     filter: `tenant_ids = "${tenantId}" AND price > 0`,
     limit,
   });
-  return res.hits as Array<{
+  const hits = res.hits as Array<{
     id: string;
     title: string;
     slug: string;
@@ -145,4 +145,5 @@ export async function searchProducts(tenantId: string, q: string, limit = 8) {
     in_stock?: boolean;
     thumbnail?: string;
   }>;
+  return hits.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
 }

@@ -207,6 +207,23 @@ const TABLES = [
     used_count int not null default 0,
     updated_at timestamp not null default current_timestamp on update current_timestamp
   )`,
+  sql`create table if not exists product_reviews (
+    id char(36) not null primary key,
+    tenant_id char(36) not null,
+    product_id char(36) not null,
+    customer_id char(36) not null,
+    order_id char(36) null,
+    rating tinyint not null,
+    title varchar(150) null,
+    body text not null,
+    author_name varchar(100) not null,
+    status varchar(16) not null default 'pending',
+    created_at timestamp not null default current_timestamp,
+    updated_at timestamp not null default current_timestamp on update current_timestamp,
+    unique key product_reviews_customer_uidx (product_id, customer_id),
+    index product_reviews_product_idx (product_id, status, created_at),
+    index product_reviews_status_idx (status, created_at)
+  )`,
   sql`create table if not exists automation_runs (
     id bigint not null auto_increment primary key,
     automation varchar(32) not null,

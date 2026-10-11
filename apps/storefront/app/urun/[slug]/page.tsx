@@ -24,6 +24,25 @@ import { StickyAtc } from "../../../src/sticky-atc";
 import { IconBox, IconShield, IconTag, IconTruck } from "../../../src/icons";
 import { sentenceCaseTr } from "../../../src/format";
 import { getSalesStatus } from "../../../src/sales";
+import { listProductReviews, productReviewSummary, reviewEligibility, type ReviewSummary } from "@guntan/db";
+import { getCurrentCustomer } from "../../../src/customer";
+import { ProductReviews, Stars, type ReviewViewer } from "../../../src/product-reviews";
+
+const EMPTY_SUMMARY: ReviewSummary = { count: 0, average: 0, distribution: [0, 0, 0, 0, 0] };
+
+async function loadReviews(productId: string) {
+  const [summary, reviews, user] = await Promise.all([
+    productReviewSummary(productId).catch(() => EMPTY_SUMMARY),
+    listProductReviews(productId).catch(() => []),
+    getCurrentCustomer().catch(() => null),
+  ]);
+  let viewer: ReviewViewer = { kind: "guest" };
+  if (user) {
+    const e = await reviewEligibility(user.id, productId).catch(() => null);
+    viewer = e?.orderId ? { kind: "eligible", existing: e.existing } : { kind: "ineligible" };
+  }
+  return { summary, reviews, viewer };
+}
 
 export const revalidate = 300;
 
@@ -71,7 +90,7 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ sepet?: string }>;
+  searchParams: Promise<{ sepet?: string; degerlendirme?: string }>;
 }) {
   const { slug } = await params;
   const sp = await searchParams;
@@ -82,14 +101,17 @@ export default async function ProductPage({
   const img = productImageUrl(data.images[0]?.url, tenant.placeholderImageUrl);
   const hasRealImage = Boolean(data.images[0]?.url);
   const disc = discountPercent(product.price, product.compareAtPrice);
-  const related = await cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId);
+  const [related, reviewData] = await Promise.all([
+    cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId),
+    loadReviews(product.id),
+  ]);
   const fit = data.fitments[0];
   const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
   const sales = await getSalesStatus();
-  const seo = { ...seoInput(tenant, data), available: sales.open };
+  const seo = { ...seoInput(tenant, data), available: sales.open, reviews: { summary: reviewData.summary, items: reviewData.reviews } };
   const factsSummary = productFactsSummary(seo);
   const host = tenant.tenant.canonicalHost;
   const vehicleCount = fitmentSummary(data.fitments).count;
@@ -147,18 +169,12 @@ export default async function ProductPage({
               <div className="badge">{data.manufacturerName}</div>
             ))}
           <h1>{product.name}</h1>
-          <dl className="pdp-codes">
-            <div>
-              <dt>Ürün kodu</dt>
-              <dd>{product.sku}</dd>
-            </div>
-            {product.barcode && (
-              <div>
-                <dt>Barkod</dt>
-                <dd>{product.barcode}</dd>
-              </div>
-            )}
-          </dl>
+          <a className="pdp-rating" href="#degerlendirmeler">
+            <Stars value={reviewData.summary.average} size="sm" />
+            {reviewData.summary.count > 0
+              ? <span>{reviewData.summary.average.toLocaleString("tr-TR", { minimumFractionDigits: 1 })} · {reviewData.summary.count} değerlendirme</span>
+              : <span>Henüz değerlendirme yok</span>}
+          </a>
           {fit && (
             <a className="pdp-fit" href="#uyumluluk">
               <span className="pdp-fit-dot" aria-hidden />
@@ -262,8 +278,6 @@ export default async function ProductPage({
             {data.manufacturerName && (
               <tr><th scope="row">Marka</th><td>{data.manufacturerName}</td></tr>
             )}
-            <tr><th scope="row">Ürün kodu</th><td>{product.sku}</td></tr>
-            {product.barcode && <tr><th scope="row">Barkod</th><td>{product.barcode}</td></tr>}
             {data.categories.length > 0 && (
               <tr>
                 <th scope="row">Kategori</th>
@@ -291,6 +305,13 @@ export default async function ProductPage({
           {factsSummary && <p className="pdp-desc">{factsSummary}</p>}
         </>
       )}
+      <ProductReviews
+        productId={product.id}
+        summary={reviewData.summary}
+        reviews={reviewData.reviews}
+        viewer={reviewData.viewer}
+        result={sp.degerlendirme}
+      />
       {related.length > 0 && (
         <>
           <h2 className="pdp-section">Aynı araca uygun diğer parçalar</h2>

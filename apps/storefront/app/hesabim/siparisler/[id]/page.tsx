@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { db, orderItems, orders, payments, shipments, tenantBankAccounts } from "@guntan/db";
+import { db, orderItems, orders, payments, products, shipments, tenantBankAccounts } from "@guntan/db";
 import { getTenant } from "../../../../src/tenant";
 import { getCurrentCustomer } from "../../../../src/customer";
 import { formatDateTr, formatMoney, orderStatusLabel, orderStatusTone } from "../../../../src/order-labels";
@@ -24,7 +24,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   if (!order) notFound();
 
   const [items, pay, ships, banks] = await Promise.all([
-    db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+    db
+      .select({ id: orderItems.id, name: orderItems.name, qty: orderItems.qty, unitPrice: orderItems.unitPrice, slug: products.slug })
+      .from(orderItems)
+      .leftJoin(products, eq(products.id, orderItems.productId))
+      .where(eq(orderItems.orderId, order.id)),
     db.select().from(payments).where(eq(payments.orderId, order.id)),
     db.select().from(shipments).where(eq(shipments.orderId, order.id)),
     db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, tenant.tenant.id)),
@@ -34,6 +38,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const awaiting = pay.some((p) => p.status === "awaiting" && p.method === "bank_transfer");
   const installmentFee = Number(addr.installmentFee ?? "0");
   const ship = ships[0];
+  const canReview = order.status === "shipped" || order.status === "completed";
 
   return (
     <section className="account-section">
@@ -62,6 +67,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 <div>
                   <strong>{item.name}</strong>
                   <span className="muted">{item.qty} adet</span>
+                  {canReview && item.slug && (
+                    <Link className="account-review-link" href={`/urun/${item.slug}#degerlendirmeler`}>★ Değerlendir</Link>
+                  )}
                 </div>
                 <b>{formatMoney(Number(item.unitPrice) * item.qty)}</b>
               </li>

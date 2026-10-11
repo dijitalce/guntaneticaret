@@ -38,6 +38,7 @@ import {
   IconWindow,
   IconZap,
   IconSend,
+  IconStar,
 } from "./icons";
 
 type NavItem = {
@@ -74,6 +75,7 @@ const GROUPS: NavGroup[] = [
       { href: "/catalog/models", label: "Modeller", icon: IconLayers },
       { href: "/catalog/manufacturers", label: "Üreticiler", icon: IconImage },
       { href: "/catalog/groups", label: "Marka grupları", icon: IconTag },
+      { href: "/catalog/reviews", label: "Değerlendirmeler", icon: IconStar },
     ],
   },
   {

@@ -225,8 +225,8 @@ export const TEMPLATES: TemplateDef[] = [
     email: true,
     sms: false,
     subject: "Siparişinizden memnun kaldınız mı?",
-    body: `<h2>Görüşünüz bizim için değerli</h2><p>Merhaba {{customer_name}}, {{order_no}} numaralı siparişinizden memnun kaldınız mı? Bu e-postayı yanıtlayarak görüşlerinizi bize iletebilirsiniz.</p>{{items_table}}`,
-    smsBody: "{{site_name}}: Siparisinizden memnun kaldiniz mi? Gorusleriniz bizim icin degerli.",
+    body: `<h2>Görüşünüz bizim için değerli</h2><p>Merhaba {{customer_name}}, {{order_no}} numaralı siparişinizden memnun kaldınız mı? Aldığınız ürünleri puanlayıp kısa bir yorum yazarak diğer müşterilere yol gösterebilirsiniz.</p>{{items_table}}<p><a class="btn" href="{{review_url}}">Ürünleri değerlendir</a></p>`,
+    smsBody: "{{site_name}}: Siparisinizdeki urunleri degerlendirir misiniz? {{review_url}}",
   },
   {
     key: "admin_new_order",
@@ -261,6 +261,7 @@ export const TEMPLATE_VARIABLES: { key: string; label: string }[] = [
   { key: "order_total", label: "Sipariş tutarı" },
   { key: "order_date", label: "Sipariş tarihi" },
   { key: "order_url", label: "Sipariş bağlantısı" },
+  { key: "review_url", label: "Değerlendirme bağlantısı" },
   { key: "items_table", label: "Ürün tablosu" },
   { key: "payment_method", label: "Ödeme yöntemi" },
   { key: "bank_accounts", label: "Banka hesapları" },

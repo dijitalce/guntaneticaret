@@ -967,7 +967,7 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
     )
     .orderBy(
       sql`(${nameHits}) desc`,
-      sql`case when ${products.name} like ${`${stemToken(tokens[0]!)}%`} then 0 else 1 end`,
+      asc(products.price),
       desc(products.stockQty),
       asc(products.name),
     )

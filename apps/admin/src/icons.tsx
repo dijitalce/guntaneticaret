@@ -297,6 +297,11 @@ export const IconMessage = (p: P) => (
     <path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z" />
   </Svg>
 );
+export const IconStar = (p: P) => (
+  <Svg {...p}>
+    <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" />
+  </Svg>
+);
 export const IconPrinter = (p: P) => (
   <Svg {...p}>
     <path d="M6 9V3h12v6" />

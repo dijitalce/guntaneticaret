@@ -30,6 +30,11 @@ export type ProductSeoInput = {
   fitments: Fitment[];
   /** Site satışa kapalıyken false; teklif stok dışı işaretlenir. */
   available?: boolean;
+  /** Yalnızca onaylı müşteri değerlendirmeleri; boşsa yapısal veriye puan yazılmaz. */
+  reviews?: {
+    summary: { count: number; average: number };
+    items: { rating: number; title: string | null; body: string; author_name: string; created_at: Date }[];
+  };
 };
 
 function years(f: Fitment) {
@@ -71,7 +76,7 @@ export function productMetaDescription(input: ProductSeoInput) {
   const title = productDisplayTitle(product.name, input.manufacturerName);
   const fit = fitmentSummary(input.fitments, 2);
   const parts = [
-    `${title}. Ürün kodu ${product.sku}.`,
+    `${title}.`,
     fit.text ? `Uyumlu araçlar: ${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""}.` : "",
     `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL.`,
     input.siteName,
@@ -86,12 +91,33 @@ export function productFactsSummary(input: ProductSeoInput) {
   const title = productDisplayTitle(input.product.name, input.manufacturerName);
   const fit = fitmentSummary(input.fitments, 5);
   const sentences = [
-    `${title}, ${input.product.sku} ürün koduyla ${input.siteName} kataloğunda yer alır.`,
+    `${title}, ${input.siteName} kataloğunda yer alır.`,
     fit.text
       ? `${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""} ile uyumlu olarak kayıtlıdır; tam liste uyumluluk tablosundadır.`
       : "",
   ];
   return sentences.filter(Boolean).join(" ");
+}
+
+function reviewsJsonLd(reviews: ProductSeoInput["reviews"]) {
+  if (!reviews || reviews.summary.count === 0) return {};
+  return {
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: reviews.summary.average.toFixed(1),
+      reviewCount: reviews.summary.count,
+      bestRating: "5",
+      worstRating: "1",
+    },
+    review: reviews.items.slice(0, 5).map((r) => ({
+      "@type": "Review",
+      reviewRating: { "@type": "Rating", ratingValue: String(r.rating), bestRating: "5", worstRating: "1" },
+      author: { "@type": "Person", name: r.author_name },
+      datePublished: new Date(r.created_at).toISOString().slice(0, 10),
+      ...(r.title ? { name: r.title } : {}),
+      reviewBody: r.body,
+    })),
+  };
 }
 
 export function productJsonLd(input: ProductSeoInput) {
@@ -124,13 +150,12 @@ export function productJsonLd(input: ProductSeoInput) {
     name: productDisplayTitle(product.name, input.manufacturerName),
     description,
     url,
-    sku: product.sku,
-    mpn: product.sku,
     ...(gtin ? { gtin } : {}),
     ...(images.length ? { image: images } : {}),
     ...(input.manufacturerName ? { brand: { "@type": "Brand", name: input.manufacturerName } } : {}),
     category: input.categories[0] ? `Oto Yedek Parça > ${sentenceCaseTr(input.categories[0].name)}` : "Oto Yedek Parça",
     ...(cars.size ? { isAccessoryOrSparePartFor: [...cars.values()] } : {}),
+    ...reviewsJsonLd(input.reviews),
     offers: {
       "@type": "Offer",
       url,

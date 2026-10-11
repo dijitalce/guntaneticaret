@@ -141,6 +141,7 @@ export async function buildOrderVars(orderId: string) {
     order_total: formatMoney(order.grandTotal),
     order_date: new Date(order.createdAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul" }),
     order_url: `${tenant.url}/hesabim/siparisler`,
+    review_url: `${tenant.url}/hesabim/siparisler/${order.id}`,
     admin_order_url: `${adminBase}/orders/${order.id}`,
     items_table: itemsTableHtml(
       items.map((i) => ({ name: i.name, qty: i.qty, price: formatMoney(Number(i.unitPrice) * i.qty), imageUrl: i.imageUrl })),
