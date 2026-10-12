@@ -221,6 +221,53 @@ function redirectNextWritable(appDir, label) {
   }
 }
 
+// unstable_cache her ürün/sayfa için ayrı dosya yazar ve Next eski kayıtları hiç silmez;
+// tarayıcı botları yüzünden günde ~120 bin dosya birikip hosting dosya (inode) kotasını dolduruyordu.
+// Kayıtların en uzun ömrü 10 dk; saatten eski dosya zaten bayattır, silinirse ilk istekte yeniden üretilir.
+const fetchCacheDir = join(os.tmpdir(), "guntan-next", "storefront", "cache", "fetch-cache");
+const fetchCachePruneStamp = join(os.tmpdir(), "guntan-fetch-cache-prune.json");
+const fetchCacheMaxAgeMs = Number(process.env.HOSTINGER_FETCH_CACHE_MAX_AGE_MS ?? String(60 * 60_000));
+const fetchCachePruneEveryMs = 60 * 60_000;
+let fetchCachePruning = false;
+
+async function pruneFetchCache() {
+  if (fetchCachePruning) return;
+  try {
+    const last = JSON.parse(fs.readFileSync(fetchCachePruneStamp, "utf8")).at;
+    if (Date.now() - Number(last) < fetchCachePruneEveryMs) return;
+  } catch {
+    /* ilk çalışma */
+  }
+  fetchCachePruning = true;
+  // Süreçler sık yenilendiği için damga işe başlarken yazılır; aynı saatte ikinci tarama başlamaz.
+  fs.writeFileSync(fetchCachePruneStamp, JSON.stringify({ at: Date.now(), pid: process.pid }));
+  const cutoff = Date.now() - fetchCacheMaxAgeMs;
+  let scanned = 0;
+  let removed = 0;
+  try {
+    const dir = await fs.promises.opendir(fetchCacheDir);
+    for await (const entry of dir) {
+      if (shuttingDown) break;
+      if (!entry.isFile()) continue;
+      const file = join(fetchCacheDir, entry.name);
+      try {
+        if ((await fs.promises.stat(file)).mtimeMs < cutoff) {
+          await fs.promises.unlink(file);
+          removed++;
+        }
+      } catch {
+        /* başka süreç silmiş olabilir */
+      }
+      if (++scanned % 1000 === 0) await new Promise((r) => setImmediate(r));
+    }
+    console.log(`[hostinger] fetch-cache temizliği: ${scanned} dosya tarandı, ${removed} eski dosya silindi`);
+  } catch (err) {
+    if (err?.code !== "ENOENT") console.warn("[hostinger] fetch-cache temizliği başarısız:", err instanceof Error ? err.message : err);
+  } finally {
+    fetchCachePruning = false;
+  }
+}
+
 const pidFile = join(os.tmpdir(), "guntan-hostinger.pid");
 const standbyFile = join(os.tmpdir(), "guntan-standby.json");
 // Public self-ping LiteSpeed üzerinden yeni Node start tetikleyebiliyor. Varsayılan KAPALI.
@@ -2719,6 +2766,9 @@ async function bootNext() {
   }, 120_000).unref();
 
   setInterval(checkMemoryCeiling, 8_000).unref();
+
+  setTimeout(() => void pruneFetchCache(), 15_000).unref();
+  setInterval(() => void pruneFetchCache(), 10 * 60_000).unref();
 }
 
 // 215MB tavanı denendi ama loglar gösterdi ki uygulama "vitrin hazır" olduktan
