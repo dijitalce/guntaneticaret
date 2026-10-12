@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isReservedSlug } from "@guntan/config";
 
-const NOINDEX_SECTIONS = new Set(["sepet", "odeme", "hesabim", "favoriler", "abonelik", "bakim"]);
+const NOINDEX_SECTIONS = new Set(["sepet", "odeme", "hesabim", "favoriler", "abonelik", "bakim", "tahsilat"]);
 
 function resolvePublicHost(request: NextRequest): string {
   const raw =

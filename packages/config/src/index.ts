@@ -4,6 +4,7 @@ export const RESERVED_PATH_SLUGS = [
   "abonelik",
   "sepet",
   "odeme",
+  "tahsilat",
   "hesabim",
   "arama",
   "kategori",

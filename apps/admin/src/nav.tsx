@@ -62,6 +62,7 @@ const GROUPS: NavGroup[] = [
     label: "Satış",
     items: [
       { href: "/orders", label: "Siparişler", icon: IconCart, countKey: "orders" },
+      { href: "/payment-links", label: "Tahsilatlar", icon: IconWallet },
       { href: "/abandoned-carts", label: "Terk edilmiş sepetler", icon: IconCartOff },
       { href: "/customers", label: "Müşteriler", icon: IconUsers },
     ],
