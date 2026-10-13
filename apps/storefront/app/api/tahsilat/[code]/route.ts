@@ -20,11 +20,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ code: stri
   if (!garanti) return back("kapali");
 
   const form = await request.formData();
-  if (field(form, "acceptPrivacy") !== "1") return back("onay");
+  if (field(form, "acceptPrivacy") !== "1" || field(form, "acceptDistanceSales") !== "1") return back("onay");
   const payerName = field(form, "fullName").slice(0, 191);
   const payerEmail = field(form, "email").slice(0, 191);
   const payerPhone = field(form, "phone").slice(0, 32);
-  if (payerName.length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) return back("bilgi");
+  if (payerName.length < 3 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail) || payerPhone.replace(/\D/g, "").length < 10) {
+    return back("bilgi");
+  }
 
   const requested = Math.max(1, Number.parseInt(field(form, "installments") || "1", 10) || 1);
   const option = installmentOptions(Number(link.amount), garanti).find((o) => o.count === requested);

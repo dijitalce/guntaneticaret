@@ -2063,6 +2063,57 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 @media (min-width: 901px) {
   .checkout-submit-inline { display: none; }
 }
+.checkout-summary-card .btn:disabled,
+.checkout-submit-inline:disabled { opacity: 0.7; cursor: progress; }
+
+.paylink-hero {
+  border-radius: 16px;
+  padding: 1.4rem 1.4rem 1.5rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 62%, #0b1220));
+  box-shadow: 0 12px 30px -18px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+.paylink-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.paylink-hero h1 { margin: 0.7rem 0 0.2rem; font-size: 1.35rem; line-height: 1.3; }
+.paylink-amount { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.01em; }
+.paylink-desc {
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  white-space: pre-line;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+.paylink-result {
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+}
+.paylink-result h1 { margin: 0.4rem 0 0; font-size: 1.45rem; }
+.paylink-result p { margin: 0.2rem 0; }
+.paylink-result .btn { margin-top: 0.6rem; }
+.paylink-result-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--destructive) 12%, #fff);
+  color: var(--destructive);
+}
+.paylink-result-icon.is-ok { background: #dcfce7; color: #15803d; }
 
 .site-footer {
   margin-top: 2.5rem;
