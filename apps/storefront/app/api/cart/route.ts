@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { COOKIE_CART, COOKIE_CUSTOMER_SESSION, publicRedirect } from "@guntan/config";
 import { getCustomerBySession } from "@guntan/auth";
+import { alternativeCountsByProductIds } from "@guntan/catalog";
 import {
   addToCart,
   getCartSummary,
@@ -12,7 +13,7 @@ import {
   updateCartItemQty,
 } from "@guntan/ecommerce";
 import { getTenantSalesStatus, resolveTenantByHost } from "@guntan/tenant";
-import { db, products } from "@guntan/db";
+import { cartItems, db, products } from "@guntan/db";
 
 function withCartCookie(res: NextResponse, sessionId: string) {
   res.cookies.set(COOKIE_CART, sessionId, {
@@ -78,8 +79,17 @@ async function currentCustomer() {
   return token ? getCustomerBySession(token) : null;
 }
 
-async function jsonCart(tenantId: string, sessionId: string, customerId?: string | null, extra?: Record<string, unknown>) {
+async function cartSummary(tenantId: string, sessionId?: string, customerId?: string | null) {
   const summary = await getCartSummary(tenantId, sessionId, customerId);
+  const counts = await alternativeCountsByProductIds(
+    tenantId,
+    summary.items.map((i) => i.productId),
+  ).catch(() => new Map<string, number>());
+  return { ...summary, items: summary.items.map((i) => ({ ...i, alternatives: counts.get(i.productId) ?? 0 })) };
+}
+
+async function jsonCart(tenantId: string, sessionId: string, customerId?: string | null, extra?: Record<string, unknown>) {
+  const summary = await cartSummary(tenantId, sessionId, customerId);
   return NextResponse.json({ ok: true, ...summary, ...extra }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -94,7 +104,7 @@ export async function GET() {
   }
   const sessionId = (await cookies()).get(COOKIE_CART)?.value;
   const user = await currentCustomer();
-  const summary = await getCartSummary(tenant.tenant.id, sessionId, user?.id);
+  const summary = await cartSummary(tenant.tenant.id, sessionId, user?.id);
   return NextResponse.json(summary, { headers: { "Cache-Control": "private, no-store" } });
 }
 
@@ -160,6 +170,28 @@ export async function POST(request: Request) {
       sessionId,
     );
   }
+  if (action === "replace") {
+    const itemId = String(form.get("itemId") ?? "");
+    const [line] = itemId
+      ? await db
+          .select({ qty: cartItems.qty })
+          .from(cartItems)
+          .where(and(eq(cartItems.id, itemId), eq(cartItems.cartId, cart.id)))
+          .limit(1)
+      : [];
+    const [replacement] = await db.select({ id: products.id }).from(products).where(eq(products.slug, slug)).limit(1);
+    try {
+      if (!line || !replacement) throw new Error("replace");
+      await addToCart(cart.id, tenant.tenant.id, replacement.id, line.qty);
+      await removeCartItem(cart.id, itemId);
+    } catch {
+      if (json) return withCartCookie(NextResponse.json({ ok: false, error: "replace" }, { status: 409 }), sessionId);
+      return withCartCookie(NextResponse.redirect(publicRedirect("/sepet?hata=degisim", request), 303), sessionId);
+    }
+    if (json) return withCartCookie(await jsonCart(tenant.tenant.id, sessionId, user?.id), sessionId);
+    return withCartCookie(NextResponse.redirect(publicRedirect("/sepet?degisim=1", request), 303), sessionId);
+  }
+
   const qty = Number(form.get("qty") ?? 1);
   const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
   if (!product) {

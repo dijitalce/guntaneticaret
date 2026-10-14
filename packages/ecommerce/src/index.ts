@@ -230,6 +230,7 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
     shippingAmount: await shippingFeeFor(0),
     items: [] as Array<{
       id: string;
+      productId: string;
       name: string;
       slug: string;
       sku: string;
@@ -251,6 +252,7 @@ export async function getCartSummary(tenantId: string, sessionId?: string | null
     shippingAmount,
     items: view.items.map((i) => ({
       id: i.id,
+      productId: i.productId,
       name: i.name,
       slug: i.slug,
       sku: i.sku,

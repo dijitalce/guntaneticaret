@@ -28,6 +28,8 @@ export type ProductSeoInput = {
   images: { url: string | null }[];
   categories: { name: string }[];
   fitments: Fitment[];
+  /** Ham OEM referans numaraları (araç üreticisinin parça numarası). */
+  oems?: string[];
   /** Site satışa kapalıyken false; teklif stok dışı işaretlenir. */
   available?: boolean;
   /** Yalnızca onaylı müşteri değerlendirmeleri; boşsa yapısal veriye puan yazılmaz. */
@@ -75,28 +77,62 @@ export function productMetaDescription(input: ProductSeoInput) {
   const { product } = input;
   const title = productDisplayTitle(product.name, input.manufacturerName);
   const fit = fitmentSummary(input.fitments, 2);
+  const oem = input.oems?.[0];
   const parts = [
     `${title}.`,
+    oem ? `OEM ${oem}.` : "",
     fit.text ? `Uyumlu araçlar: ${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""}.` : "",
-    `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL.`,
+    `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL, stokta, aynı gün kargo, 14 gün iade.`,
     input.siteName,
   ];
   return parts.filter(Boolean).join(" ").slice(0, 300);
 }
 
-/** Ürün açıklaması boşsa sayfada gösterilen, yalnızca kayıtlı verilerden kurulan özet. */
-export function productFactsSummary(input: ProductSeoInput) {
-  const text = plainText(input.product.description);
-  if (text.length >= 40) return null;
+/**
+ * Ürün sayfasındaki açıklama: yalnızca kayıtlı verilerden (marka, kategori, uyumlu araç, OEM) kurulur,
+ * teknik özellik uydurulmaz. Tedarikçi açıklaması varsa onun altına eklenir.
+ */
+export function productSeoParagraphs(input: ProductSeoInput & { cardPayments?: boolean }) {
   const title = productDisplayTitle(input.product.name, input.manufacturerName);
-  const fit = fitmentSummary(input.fitments, 5);
-  const sentences = [
-    `${title}, ${input.siteName} kataloğunda yer alır.`,
-    fit.text
-      ? `${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""} ile uyumlu olarak kayıtlıdır; tam liste uyumluluk tablosundadır.`
-      : "",
-  ];
-  return sentences.filter(Boolean).join(" ");
+  const category = input.categories[0] ? sentenceCaseTr(input.categories[0].name).toLocaleLowerCase("tr-TR") : null;
+  const fit = fitmentSummary(input.fitments, 6);
+  const oems = input.oems ?? [];
+  const paragraphs: string[] = [];
+
+  paragraphs.push(
+    [
+      `${title}, ${input.siteName} güvencesiyle satılan sıfır ${category ? `${category} ürünüdür` : "oto yedek parçadır"}.`,
+      input.manufacturerName ? `Ürün ${input.manufacturerName} markalıdır,` : "Ürün",
+      "kullanılmamış ve orijinal ambalajında, faturalı olarak gönderilir.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  if (fit.text) {
+    paragraphs.push(
+      `${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""} ile uyumludur. Marka, model, kasa, yıl ve motor bazında tam liste ` +
+        `uyumlu araçlar tablosundadır. Aracınıza uyduğundan emin olmak için şasi numaranızla bize ulaşabilirsiniz; ` +
+        `%100 uyumluluk garantisi kapsamında uymayan parçayı iade alırız.`,
+    );
+  }
+
+  if (oems.length) {
+    const list = oems.slice(0, 8).join(", ");
+    paragraphs.push(
+      `OEM (orijinal parça) referans numarası: ${list}${oems.length > 8 ? ` ve ${oems.length - 8} numara daha` : ""}. ` +
+        `Eski parçanızın üzerindeki numarayı veya servis kaydındaki parça numarasını bu kodlarla karşılaştırarak doğru ürünü seçebilirsiniz. ` +
+        `Aynı OEM numarasına sahip farklı marka seçenekleri alternatif markalar bölümünde listelenir.`,
+    );
+  }
+
+  paragraphs.push(
+    `${title} stoklarımızda mevcuttur ve aynı gün Aras Kargo ile gönderilir. Fiyata KDV dahildir; ` +
+      `${input.cardPayments ? "kredi kartına taksit seçenekleriyle veya havale / EFT ile" : "havale / EFT ile"} %100 güvenli ödeme yapabilirsiniz. ` +
+      `Teslimattan itibaren 14 gün içinde iade hakkınız bulunur.`,
+  );
+
+  return paragraphs;
 }
 
 function reviewsJsonLd(reviews: ProductSeoInput["reviews"]) {
@@ -128,7 +164,8 @@ export function productJsonLd(input: ProductSeoInput) {
     .filter((u): u is string => Boolean(u))
     .map((u) => (/^https?:\/\//i.test(u) ? u : absoluteUrl(host, u)));
   const gtin = product.barcode && validGtin(product.barcode) ? product.barcode : undefined;
-  const description = plainText(product.description) || productFactsSummary(input) || productMetaDescription(input);
+  const description = plainText(product.description) || productSeoParagraphs(input).slice(0, 2).join(" ");
+  const oems = (input.oems ?? []).slice(0, 20);
   const cars = new Map<string, Record<string, unknown>>();
   for (const f of input.fitments) {
     const name = vehicleLabel(f);
@@ -155,6 +192,9 @@ export function productJsonLd(input: ProductSeoInput) {
     ...(input.manufacturerName ? { brand: { "@type": "Brand", name: input.manufacturerName } } : {}),
     category: input.categories[0] ? `Oto Yedek Parça > ${sentenceCaseTr(input.categories[0].name)}` : "Oto Yedek Parça",
     ...(cars.size ? { isAccessoryOrSparePartFor: [...cars.values()] } : {}),
+    ...(oems.length
+      ? { additionalProperty: oems.map((value) => ({ "@type": "PropertyValue", name: "OEM numarası", value })) }
+      : {}),
     ...reviewsJsonLd(input.reviews),
     offers: {
       "@type": "Offer",

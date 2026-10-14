@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { beacon } from "../../src/track";
 import { VAT_RATE, vatBreakdown } from "../../src/vat";
+import { AssuranceGrid, PaymentMarks, assuranceItems } from "../../src/assurance";
+import { IconLock } from "../../src/icons";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -424,9 +426,13 @@ export function CheckoutForm({
                 <span>Kampanya ve bilgilendirme e-postası / SMS almak istiyorum. (isteğe bağlı)</span>
               </label>
             </div>
-            <button className="btn btn-primary checkout-submit-inline" type="submit">
-              {paymentMethod === "credit_card" ? "Kartla öde" : "Siparişi oluştur"} · {money(payTotal)}
+            <button className="btn btn-primary checkout-submit-inline cart-checkout-btn" type="submit">
+              <IconLock /> {paymentMethod === "credit_card" ? "Güvenli öde" : "Siparişi oluştur"} · {money(payTotal)}
             </button>
+            <p className="checkout-secure-note muted">
+              <IconLock /> Bilgileriniz 256-bit SSL ile şifrelenir.
+              {card ? " Kart bilgileriniz bizde saklanmaz; ödeme Garanti BBVA 3D Secure sayfasında tamamlanır." : ""}
+            </p>
           </section>
         </form>
       </div>
@@ -494,17 +500,20 @@ export function CheckoutForm({
           {couponCode ? <a className="coupon-remove" href="/odeme">Kuponu kaldır</a> : null}
         </form>
         <p className="cart-summary-note muted">KDV dahil fiyat. Stok siparişte rezerve edilir.</p>
-        <button className="btn btn-primary" type="submit" form="checkout-form">
-          {paymentMethod === "credit_card" ? "Kartla öde" : "Siparişi oluştur"}
+        <button className="btn btn-primary cart-checkout-btn" type="submit" form="checkout-form">
+          <IconLock /> {paymentMethod === "credit_card" ? "Güvenli öde" : "Siparişi oluştur"}
         </button>
         <Link className="cart-continue" href="/sepet">
           Sepete dön
         </Link>
-        <ul className="cart-trust">
-          <li>{card ? "3D Secure kart veya havale / EFT" : "Havale / EFT ile güvenli ödeme"}</li>
-          <li>KDV dahil fiyat</li>
-          <li>Sipariş no ile takip</li>
-        </ul>
+        <PaymentMarks card={Boolean(card)} />
+        <AssuranceGrid
+          variant="list"
+          items={assuranceItems({
+            card: Boolean(card),
+            maxInstallments: card?.options.reduce((m, o) => Math.max(m, o.count), 1),
+          })}
+        />
       </aside>
     </div>
   );

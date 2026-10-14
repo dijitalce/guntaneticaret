@@ -3,25 +3,35 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { productImageUrl } from "@guntan/catalog";
-import { discountPercent } from "@guntan/ecommerce";
+import { discountPercent, garantiConfigFromEnv, installmentOptions } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
 import { JsonLd, breadcrumbJsonLd, pageTitle } from "../../../src/seo";
 import {
   fitmentSummary,
   productDisplayTitle,
-  productFactsSummary,
   productJsonLd,
   productMetaDescription,
+  productSeoParagraphs,
   type ProductSeoInput,
 } from "../../../src/product-seo";
-import { cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
+import { cachedAlternatives, cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
 import { ProductCard } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
 import { CommerceEvent } from "../../../src/visitor-tracker";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
 import { QtyStepper } from "../../../src/qty-stepper";
 import { StickyAtc } from "../../../src/sticky-atc";
-import { IconBox, IconShield, IconTag, IconTruck } from "../../../src/icons";
+import { IconSwap } from "../../../src/icons";
+import {
+  AssuranceGrid,
+  InstallmentTable,
+  MissingPartCta,
+  OemList,
+  PaymentMarks,
+  ReturnTerms,
+  StockLine,
+  assuranceItems,
+} from "../../../src/assurance";
 import { sentenceCaseTr } from "../../../src/format";
 import { getSalesStatus } from "../../../src/sales";
 import { listProductReviews, productReviewSummary, reviewEligibility, type ReviewSummary } from "@guntan/db";
@@ -48,6 +58,17 @@ export const revalidate = 300;
 
 type ProductData = NonNullable<Awaited<ReturnType<typeof cachedProductBySlug>>>;
 
+function uniqueOems(data: ProductData) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const o of data.oems) {
+    if (seen.has(o.normalized)) continue;
+    seen.add(o.normalized);
+    out.push(o.raw);
+  }
+  return out;
+}
+
 function seoInput(tenant: Awaited<ReturnType<typeof getTenant>>, data: ProductData): ProductSeoInput {
   return {
     host: tenant.tenant.canonicalHost,
@@ -57,7 +78,12 @@ function seoInput(tenant: Awaited<ReturnType<typeof getTenant>>, data: ProductDa
     images: data.images,
     categories: data.categories,
     fitments: data.fitments,
+    oems: uniqueOems(data),
   };
+}
+
+function money(n: number) {
+  return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -101,20 +127,32 @@ export default async function ProductPage({
   const img = productImageUrl(data.images[0]?.url, tenant.placeholderImageUrl);
   const hasRealImage = Boolean(data.images[0]?.url);
   const disc = discountPercent(product.price, product.compareAtPrice);
-  const [related, reviewData] = await Promise.all([
-    cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId),
+  const [relatedAll, alternatives, reviewData] = await Promise.all([
+    cachedRelatedProducts(tenant.tenant.id, product.id, data.fitments[0]?.modelId, 12),
+    cachedAlternatives(tenant.tenant.id, product.id),
     loadReviews(product.id),
   ]);
+  const altIds = new Set(alternatives.map((a) => a.id));
+  const related = relatedAll.filter((p) => !altIds.has(p.id)).slice(0, 8);
   const fit = data.fitments[0];
   const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
   const sales = await getSalesStatus();
+  const garanti = garantiConfigFromEnv();
+  const installments = garanti ? installmentOptions(Number(product.price), garanti) : [];
+  const maxInstallments = installments.reduce((m, o) => Math.max(m, o.count), 1);
   const seo = { ...seoInput(tenant, data), available: sales.open, reviews: { summary: reviewData.summary, items: reviewData.reviews } };
-  const factsSummary = productFactsSummary(seo);
+  const oems = seo.oems ?? [];
+  const seoParagraphs = productSeoParagraphs({ ...seo, cardPayments: Boolean(garanti) });
   const host = tenant.tenant.canonicalHost;
   const vehicleCount = fitmentSummary(data.fitments).count;
+  const cheapestAlt = alternatives.reduce<number | null>(
+    (min, a) => (min == null || Number(a.price) < min ? Number(a.price) : min),
+    null,
+  );
+  const vehicleName = fit ? `${fit.brandName} ${fit.modelName}` : null;
 
   return (
     <div className="container page-surface">
@@ -175,6 +213,7 @@ export default async function ProductPage({
               ? <span>{reviewData.summary.average.toLocaleString("tr-TR", { minimumFractionDigits: 1 })} · {reviewData.summary.count} değerlendirme</span>
               : <span>Henüz değerlendirme yok</span>}
           </a>
+          <OemList oems={oems} max={4} label="OEM no" />
           {fit && (
             <a className="pdp-fit" href="#uyumluluk">
               <span className="pdp-fit-dot" aria-hidden />
@@ -183,6 +222,7 @@ export default async function ProductPage({
               {data.fitments.length > 1 ? ` ve ${data.fitments.length - 1} araç daha` : ""}
             </a>
           )}
+          <StockLine />
           <div className="pdp-price-row">
             <p className="price">
               {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}
@@ -190,6 +230,11 @@ export default async function ProductPage({
               <small>KDV dahil</small>
               {disc != null && <span className="badge">%{disc}</span>}
             </p>
+            {maxInstallments > 1 ? (
+              <a className="pdp-installment-hint" href="#taksit">
+                {maxInstallments} aya varan taksit
+              </a>
+            ) : null}
           </div>
           {sp.sepet === "ok" && (
             <p className="account-alert" role="status">
@@ -239,15 +284,43 @@ export default async function ProductPage({
               )}
             </div>
           )}
-          <ul className="pdp-trust">
-            <li><IconTag /> KDV dahil fiyat, ek ücret yok</li>
-            <li><IconTruck /> Kargo takip bilgisi SMS ve e-posta ile</li>
-            <li><IconBox /> Teslimattan itibaren 14 gün iade hakkı</li>
-            <li><IconShield /> Güvenli ödeme</li>
-          </ul>
+          {alternatives.length > 0 && (
+            <a className="alt-brands-btn" href="#alternatifler">
+              <IconSwap />
+              <span>
+                <strong>Alternatif markalar ({alternatives.length})</strong>
+                <small>
+                  Aynı OEM numaralı farklı marka seçenekleri
+                  {cheapestAlt != null ? ` · ${money(cheapestAlt)}'den başlayan fiyatlarla` : ""}
+                </small>
+              </span>
+            </a>
+          )}
+          <AssuranceGrid items={assuranceItems({ card: Boolean(garanti), maxInstallments })} />
+          <PaymentMarks card={Boolean(garanti)} />
         </div>
       </div>
-      <h2 className="pdp-section" id="uyumluluk">Bu ürün hangi araçlarla uyumlu?</h2>
+
+      {alternatives.length > 0 && (
+        <section className="pdp-block" id="alternatifler" aria-labelledby="alternatifler-baslik">
+          <div className="pdp-block-head">
+            <h2 className="pdp-section" id="alternatifler-baslik">Alternatif markalar</h2>
+            <p className="muted">
+              Bu ürünle aynı OEM numarasına sahip, aracınızda yerine kullanılabilecek farklı marka parçalar. Fiyata göre
+              sıralıdır.
+            </p>
+          </div>
+          <div className="product-grid">
+            {alternatives.map((p) => (
+              <ProductCard key={p.id} product={p} placeholder={tenant.placeholderImageUrl} note={`OEM ${p.sharedOem}`} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <h2 className="pdp-section" id="uyumluluk">
+        Uyumlu araçlar{vehicleCount > 0 ? <span className="pdp-section-count">{vehicleCount} model</span> : null}
+      </h2>
       {data.fitments.length > 0 ? (
         <div className="table-scroll">
           <table className="fitment-table">
@@ -291,20 +364,52 @@ export default async function ProductPage({
                 </td>
               </tr>
             )}
-            {vehicleCount > 0 && (
-              <tr><th scope="row">Uyumlu araç</th><td>{vehicleCount} model</td></tr>
+            {oems.length > 0 && (
+              <tr>
+                <th scope="row">OEM numaraları</th>
+                <td className="pdp-oem-cell">
+                  {oems.map((o) => (
+                    <code key={o}>{o}</code>
+                  ))}
+                </td>
+              </tr>
             )}
-            <tr><th scope="row">Durum</th><td>Sıfır</td></tr>
+            {vehicleCount > 0 && (
+              <tr><th scope="row">Uyumlu araç</th><td><a href="#uyumluluk">{vehicleCount} model</a></td></tr>
+            )}
+            <tr><th scope="row">Durum</th><td>Sıfır, orijinal ambalajında</td></tr>
+            <tr><th scope="row">Stok durumu</th><td className="is-ok">Stokta</td></tr>
+            <tr><th scope="row">Kargo</th><td>Aynı gün kargo · Aras Kargo</td></tr>
+            <tr><th scope="row">İade</th><td>Teslimattan itibaren 14 gün</td></tr>
           </tbody>
         </table>
       </div>
-      {(product.description || factsSummary) && (
-        <>
-          <h2 className="pdp-section">Açıklama</h2>
-          {product.description && <p className="pdp-desc">{product.description}</p>}
-          {factsSummary && <p className="pdp-desc">{factsSummary}</p>}
-        </>
-      )}
+
+      <h2 className="pdp-section">Ürün açıklaması</h2>
+      <div className="pdp-desc-body">
+        {product.description && <p className="pdp-desc">{product.description}</p>}
+        {seoParagraphs.map((p, i) => (
+          <p key={i} className="pdp-desc">{p}</p>
+        ))}
+      </div>
+
+      <div className="pdp-info-cols">
+        <section id="taksit" className="pdp-panel" aria-labelledby="taksit-baslik">
+          <h2 id="taksit-baslik">Taksit seçenekleri</h2>
+          {garanti ? (
+            <InstallmentTable options={installments} minAmount={garanti.installmentMinAmount || undefined} />
+          ) : (
+            <p className="installment-note muted">Havale / EFT ile güvenli ödeme yapabilirsiniz.</p>
+          )}
+        </section>
+        <section id="iade" className="pdp-panel" aria-labelledby="iade-baslik">
+          <h2 id="iade-baslik">İade şartları</h2>
+          <ReturnTerms />
+        </section>
+      </div>
+
+      <MissingPartCta whatsapp={tenant.whatsapp} phone={tenant.phone} context={vehicleName ?? undefined} />
+
       <ProductReviews
         productId={product.id}
         summary={reviewData.summary}
@@ -313,8 +418,17 @@ export default async function ProductPage({
         result={sp.degerlendirme}
       />
       {related.length > 0 && (
-        <>
-          <h2 className="pdp-section">Aynı araca uygun diğer parçalar</h2>
+        <section className="pdp-block" aria-labelledby="ayni-arac-baslik">
+          <div className="pdp-block-head">
+            <h2 className="pdp-section" id="ayni-arac-baslik">
+              Aynı araç için diğer ürünler{vehicleName ? ` – ${vehicleName}` : ""}
+            </h2>
+            {fit ? (
+              <Link className="pdp-block-link" href={`/${fit.brandSlug}/${fit.modelSlug}`}>
+                Tüm {vehicleName} parçaları
+              </Link>
+            ) : null}
+          </div>
           <div className="product-grid">
             {related.map((p) => (
               <ProductCard
@@ -324,7 +438,7 @@ export default async function ProductPage({
               />
             ))}
           </div>
-        </>
+        </section>
       )}
       {sales.open ? <StickyAtc targetId="pdp-buy" formId="pdp-cart-form" price={priceLabel} /> : null}
     </div>

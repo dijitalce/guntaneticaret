@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconCart, IconClose } from "./icons";
+import { IconCart, IconClose, IconLock, IconSwap } from "./icons";
+import { StockLine } from "./assurance";
 import { VAT_RATE, vatBreakdown } from "./vat";
 
 export type CartSummaryPayload = {
@@ -19,6 +20,7 @@ export type CartSummaryPayload = {
     qty: number;
     price: string;
     imageUrl: string | null;
+    alternatives?: number;
   }>;
 };
 
@@ -174,6 +176,17 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                             <Link href={`/urun/${item.slug}`} onClick={() => setOpen(false)}>
                               {item.name}
                             </Link>
+                            <StockLine compact />
+                            {item.alternatives ? (
+                              <Link
+                                className="alt-brands-btn is-tiny"
+                                href={`/urun/${item.slug}#alternatifler`}
+                                onClick={() => setOpen(false)}
+                              >
+                                <IconSwap />
+                                <strong>Alternatif markalar ({item.alternatives})</strong>
+                              </Link>
+                            ) : null}
                             <div className="cart-drawer-item-actions">
                               <div className="qty-stepper" role="group" aria-label="Adet">
                                 <button
@@ -232,12 +245,18 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                       <dd>{money(cart.subtotal + cart.shippingAmount)}</dd>
                     </div>
                   </dl>
-                  <Link className="btn btn-primary" href="/odeme" onClick={() => setOpen(false)}>
-                    Ödemeye geç
+                  <Link className="btn btn-primary cart-checkout-btn" href="/odeme" onClick={() => setOpen(false)}>
+                    <IconLock /> Güvenli ödemeye geç
                   </Link>
                   <Link className="cart-drawer-full" href="/sepet" onClick={() => setOpen(false)}>
                     Sepet sayfasına git
                   </Link>
+                  <ul className="cart-drawer-trust">
+                    <li>Aynı gün kargo</li>
+                    <li>14 gün iade</li>
+                    <li>%100 uyumluluk garantisi</li>
+                    <li>%100 güvenli ödeme</li>
+                  </ul>
                 </footer>
               )}
             </aside>

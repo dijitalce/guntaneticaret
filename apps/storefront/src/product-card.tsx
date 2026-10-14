@@ -5,6 +5,7 @@ import { discountPercent } from "@guntan/ecommerce";
 import { AddToCartForm } from "./add-to-cart-form";
 import { ManufacturerLogo } from "./manufacturer-logo";
 import { getSalesStatus } from "./sales";
+import { StockLine } from "./assurance";
 
 function formatPrice(value: string) {
   return `${Number(value).toLocaleString("tr-TR")} TL`;
@@ -14,6 +15,7 @@ export async function ProductCard({
   product,
   placeholder,
   priority = false,
+  note,
 }: {
   product: {
     name: string;
@@ -30,6 +32,7 @@ export async function ProductCard({
   };
   placeholder: string | null;
   priority?: boolean;
+  note?: string;
 }) {
   const img = productImageUrl(product.imageUrl, placeholder);
   const disc = product.price ? discountPercent(product.price, product.compareAtPrice ?? null) : null;
@@ -51,6 +54,7 @@ export async function ProductCard({
       <div className="product-card-body">
         <ManufacturerLogo name={product.manufacturerName} src={product.manufacturerLogo} className="product-card-mfr" height={20} />
         <Link className="product-card-name" href={`/urun/${product.slug}`}>{product.name}</Link>
+        {note ? <p className="product-card-note">{note}</p> : null}
         {fitments.length > 0 && (
           <p className="product-card-fit">
             <span>Uyumlu</span>
@@ -63,6 +67,7 @@ export async function ProductCard({
             {product.fitmentExtra ? <em>+{product.fitmentExtra}</em> : null}
           </p>
         )}
+        <StockLine compact />
         <div className="product-card-price">
           {product.price != null && product.price !== "" && (
             <span>

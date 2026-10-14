@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import {
+  alternativesByProductIds,
   featuredProducts,
   getBrandBySlug,
   getCategoryById,
@@ -184,7 +185,15 @@ export function cachedProductBySlug(tenantId: string, slug: string) {
 export function cachedRelatedProducts(tenantId: string, productId: string, modelId: string | undefined, limit = 8) {
   return unstable_cache(
     () => relatedProducts(tenantId, productId, modelId, limit),
-    ["related-products-fitv2", tenantId, productId, modelId ?? "", String(limit)],
+    ["related-products-fitv3", tenantId, productId, modelId ?? "", String(limit)],
+    { revalidate: PRODUCT_CACHE_TTL_SECONDS },
+  )();
+}
+
+export function cachedAlternatives(tenantId: string, productId: string, limit = 12) {
+  return unstable_cache(
+    async () => (await alternativesByProductIds(tenantId, [productId], limit)).get(productId) ?? [],
+    ["product-alternatives-v1", tenantId, productId, String(limit)],
     { revalidate: PRODUCT_CACHE_TTL_SECONDS },
   )();
 }

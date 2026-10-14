@@ -1,0 +1,211 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
+import {
+  IconBolt,
+  IconCard,
+  IconCheckBadge,
+  IconLock,
+  IconPhone,
+  IconReturn,
+  IconTruck,
+  IconWhatsapp,
+} from "./icons";
+
+export const MISSING_PART_CATALOG = "1.000.000";
+
+type Assurance = { key: string; icon: ReactNode; title: string; text: string };
+
+export function assuranceItems(opts: { card?: boolean; maxInstallments?: number } = {}): Assurance[] {
+  const items: Assurance[] = [
+    { key: "same-day", icon: <IconBolt />, title: "Aynı gün kargo", text: "Stoktaki tüm ürünler aynı gün kargoya verilir" },
+    { key: "aras", icon: <IconTruck />, title: "Aras Kargo ile uygun fiyatlı kargo", text: "Takip numarası SMS ve e-posta ile iletilir" },
+    { key: "return", icon: <IconReturn />, title: "14 gün iade hakkı", text: "Teslimattan itibaren 14 gün içinde iade" },
+    { key: "fit", icon: <IconCheckBadge />, title: "%100 uyumluluk garantisi", text: "Şasi numaranızla uyumu teyit ediyoruz; uymazsa iade" },
+    {
+      key: "secure",
+      icon: <IconLock />,
+      title: "%100 güvenli ödeme",
+      text: opts.card ? "256-bit SSL ve 3D Secure; kart bilgileriniz saklanmaz" : "256-bit SSL ile korunan alışveriş",
+    },
+  ];
+  if (opts.card && opts.maxInstallments && opts.maxInstallments > 1) {
+    items.push({
+      key: "installments",
+      icon: <IconCard />,
+      title: `${opts.maxInstallments} aya varan taksit`,
+      text: "Kredi kartına taksit seçenekleri ödeme adımında",
+    });
+  }
+  return items;
+}
+
+export function AssuranceGrid({
+  items,
+  variant = "grid",
+}: {
+  items: Assurance[];
+  variant?: "grid" | "strip" | "list";
+}) {
+  return (
+    <ul className={`assurance assurance-${variant}`}>
+      {items.map((a) => (
+        <li key={a.key}>
+          <span className="assurance-icon">{a.icon}</span>
+          <span>
+            <strong>{a.title}</strong>
+            {variant !== "list" ? <small>{a.text}</small> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function StockLine({ compact = false }: { compact?: boolean }) {
+  return (
+    <p className={`stock-line${compact ? " is-compact" : ""}`}>
+      <span className="stock-in">
+        <span className="stock-dot" aria-hidden />
+        Stokta
+      </span>
+      <span className="stock-ship">
+        <IconBolt />
+        Aynı gün kargo
+      </span>
+    </p>
+  );
+}
+
+export function OemList({ oems, max = 6, label = "OEM" }: { oems: string[]; max?: number; label?: string }) {
+  if (oems.length === 0) return null;
+  const shown = oems.slice(0, max);
+  const extra = oems.length - shown.length;
+  return (
+    <p className="oem-list">
+      <span className="oem-label">{label}</span>
+      {shown.map((o) => (
+        <code key={o}>{o}</code>
+      ))}
+      {extra > 0 ? <em>+{extra}</em> : null}
+    </p>
+  );
+}
+
+export function ReturnTerms() {
+  return (
+    <div className="return-terms">
+      <ul>
+        <li>Teslimattan itibaren <strong>14 gün</strong> içinde iade hakkınız vardır.</li>
+        <li>Ürün kullanılmamış, orijinal ambalajında ve eksiksiz olmalıdır.</li>
+        <li>Aracınıza uymayan parçayı iade alır, doğru parçayla değiştiririz.</li>
+        <li>İade onaylandığında ödemeniz aynı yöntemle iade edilir.</li>
+      </ul>
+      <Link href="/sayfa/iade">İade ve değişim koşullarının tamamı</Link>
+    </div>
+  );
+}
+
+function money(n: number) {
+  return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
+}
+
+export type InstallmentRow = { count: number; total: number; monthly: number };
+
+export function InstallmentTable({ options, minAmount }: { options: InstallmentRow[]; minAmount?: number }) {
+  if (options.length <= 1) {
+    return (
+      <p className="installment-note muted">
+        Kredi / banka kartına tek çekim veya havale / EFT ile ödeyebilirsiniz.
+        {minAmount ? ` ${money(minAmount)} ve üzeri alışverişlerde taksit seçenekleri ödeme adımında açılır.` : ""}
+      </p>
+    );
+  }
+  return (
+    <div className="table-scroll">
+      <table className="installment-table">
+        <thead>
+          <tr>
+            <th>Taksit</th>
+            <th>Aylık ödeme</th>
+            <th>Toplam</th>
+          </tr>
+        </thead>
+        <tbody>
+          {options.map((o) => (
+            <tr key={o.count}>
+              <td>{o.count === 1 ? "Tek çekim" : `${o.count} taksit`}</td>
+              <td>{money(o.monthly)}</td>
+              <td>{money(o.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function telHref(phone: string) {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
+export function MissingPartCta({
+  whatsapp,
+  phone,
+  context,
+  compact = false,
+}: {
+  whatsapp: string | null;
+  phone: string | null;
+  context?: string;
+  compact?: boolean;
+}) {
+  if (!whatsapp && !phone) return null;
+  const text = context ? `Merhaba, ${context} için parça arıyorum.` : "Merhaba, sitede bulamadığım bir parça arıyorum.";
+  return (
+    <section className={`missing-part${compact ? " is-compact" : ""}`} aria-label="Stokta olmayan ürünler için iletişim">
+      <div>
+        <strong>Aradığınız parçayı bulamadınız mı?</strong>
+        <p>
+          Stoğumuzda olmayan <b>+{MISSING_PART_CATALOG} ürün</b> için bize ulaşın; OEM veya şasi numaranızla doğru parçayı
+          bulup fiyat verelim.
+        </p>
+      </div>
+      <div className="missing-part-actions">
+        {whatsapp ? (
+          <a
+            className="btn btn-whatsapp"
+            href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(text)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <IconWhatsapp /> WhatsApp
+          </a>
+        ) : null}
+        {phone ? (
+          <a className="btn btn-secondary" href={telHref(phone)}>
+            <IconPhone /> {phone}
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+export function PaymentMarks({ card }: { card: boolean }) {
+  return (
+    <div className="pay-marks" aria-label="Ödeme yöntemleri">
+      {card ? (
+        <>
+          <span>VISA</span>
+          <span>Mastercard</span>
+          <span>Troy</span>
+          <span>3D Secure</span>
+        </>
+      ) : null}
+      <span>Havale / EFT</span>
+      <span>
+        <IconLock /> SSL
+      </span>
+    </div>
+  );
+}

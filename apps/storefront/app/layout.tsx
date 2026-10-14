@@ -21,6 +21,7 @@ import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
+import { garantiConfigFromEnv } from "@guntan/ecommerce";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -142,6 +143,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const navBrands = buildNavBrands(brands, models, generations);
   const allParts = allCatalogHref(tenant);
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
+  const cardPayments = Boolean(garantiConfigFromEnv());
 
   return (
     <html lang="tr" className={font.className}>
@@ -156,7 +158,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 WhatsApp destek {tenant.phone ? <b>{tenant.phone}</b> : null}
               </a>
             ) : <span>{tenant.phone}</span>}
-            <p className="topbar-note">Havale / EFT ile güvenli ödeme · Fiyatlara KDV dahildir</p>
+            <p className="topbar-note">Aynı gün kargo · 14 gün iade · %100 güvenli ödeme</p>
             <div className="topbar-links">
               <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
               <Link href="/iletisim">İletişim</Link>
@@ -243,7 +245,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
               <div>
                 <h3>Alışveriş</h3>
-                <p>Havale / EFT ile güvenli ödeme. Stoklar sipariş anında rezerve edilir.</p>
+                <p>
+                  {cardPayments ? "Kredi kartı (3D Secure, taksit) veya havale / EFT" : "Havale / EFT"} ile %100 güvenli ödeme.
+                  Stoktaki ürünler aynı gün Aras Kargo ile gönderilir; 14 gün iade hakkı.
+                </p>
               </div>
             </div>
             <p className="footer-copy">© {new Date().getFullYear()} {tenant.siteName}</p>

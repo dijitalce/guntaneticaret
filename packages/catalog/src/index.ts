@@ -1,4 +1,5 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import {
   categories,
   compileVisibility,
@@ -774,9 +775,12 @@ export async function relatedProducts(tenantId: string, productId: string, model
       price: products.price,
       compareAtPrice: products.compareAtPrice,
       stockStatus: products.stockStatus,
+      manufacturerName: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
     })
     .from(productFitments)
     .innerJoin(products, eq(products.id, productFitments.productId))
+    .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
     .where(
       and(
         tenantVisibleSql(tenantId, seesAll),
@@ -800,6 +804,173 @@ export async function relatedProducts(tenantId: string, productId: string, model
       fitmentExtra: fit?.extra ?? 0,
     };
   });
+}
+
+/** OEM numarası bu uzunluğun altındaysa (ör. "1234") farklı parçalarla çakışır; eşleştirmede kullanılmaz. */
+const MIN_OEM_MATCH_LENGTH = 5;
+
+export async function oemsByProductIds(ids: string[]) {
+  const byProduct = new Map<string, string[]>();
+  if (ids.length === 0) return byProduct;
+  const rows = await db
+    .select({ productId: productOems.productId, raw: productOems.raw, normalized: productOems.normalized })
+    .from(productOems)
+    .where(inArray(productOems.productId, ids));
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const key = `${r.productId}:${r.normalized}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const list = byProduct.get(r.productId);
+    if (list) list.push(r.raw);
+    else byProduct.set(r.productId, [r.raw]);
+  }
+  return byProduct;
+}
+
+export type AlternativeProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  price: string;
+  compareAtPrice: string | null;
+  stockStatus: string;
+  manufacturerName: string | null;
+  manufacturerLogo: string | null;
+  imageUrl: string | null;
+  fitments: CardFitmentLink[];
+  fitmentExtra: number;
+  sharedOem: string;
+};
+
+/**
+ * Aynı OEM numarasını paylaşan, satıştaki diğer ürünler (alternatif marka / muadil), ucuzdan pahalıya.
+ * `ids` içindeki ürünler birbirinin alternatifi olarak dönmez (sepette zaten olanlar tekrar önerilmez).
+ */
+export async function alternativesByProductIds(tenantId: string, ids: string[], perProduct = 8) {
+  const byProduct = new Map<string, AlternativeProduct[]>();
+  if (ids.length === 0) return byProduct;
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const src = alias(productOems, "po_src");
+  const rows = await db
+    .select({
+      sourceId: src.productId,
+      sharedOem: src.raw,
+      id: products.id,
+      name: products.name,
+      slug: products.slug,
+      price: products.price,
+      compareAtPrice: products.compareAtPrice,
+      stockStatus: products.stockStatus,
+      manufacturerName: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
+    })
+    .from(src)
+    .innerJoin(productOems, eq(productOems.normalized, src.normalized))
+    .innerJoin(products, eq(products.id, productOems.productId))
+    .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+    .where(
+      and(
+        inArray(src.productId, ids),
+        sql`char_length(${src.normalized}) >= ${MIN_OEM_MATCH_LENGTH}`,
+        notInArray(products.id, ids),
+        sellableSql(),
+        tenantVisibleSql(tenantId, seesAll),
+      ),
+    )
+    .orderBy(asc(products.price))
+    .limit(Math.min(400, ids.length * perProduct * 4));
+
+  const seen = new Set<string>();
+  const perSource = new Map<string, number>();
+  const picked: typeof rows = [];
+  for (const r of rows) {
+    const key = `${r.sourceId}:${r.id}`;
+    const n = perSource.get(r.sourceId) ?? 0;
+    if (seen.has(key) || n >= perProduct) continue;
+    seen.add(key);
+    perSource.set(r.sourceId, n + 1);
+    picked.push(r);
+  }
+  const altIds = [...new Set(picked.map((r) => r.id))];
+  const [imageBy, fitBy] = await Promise.all([
+    primaryImagesByProductIds(altIds),
+    cardFitmentsByProductIds(altIds),
+  ]);
+  for (const r of picked) {
+    const fit = fitBy.get(r.id);
+    const { sourceId, ...rest } = r;
+    const alt: AlternativeProduct = {
+      ...rest,
+      imageUrl: imageBy.get(r.id) ?? null,
+      fitments: fit?.items ?? [],
+      fitmentExtra: fit?.extra ?? 0,
+    };
+    const list = byProduct.get(sourceId);
+    if (list) list.push(alt);
+    else byProduct.set(sourceId, [alt]);
+  }
+  return byProduct;
+}
+
+export async function alternativeCountsByProductIds(tenantId: string, ids: string[]) {
+  const counts = new Map<string, number>();
+  if (ids.length === 0) return counts;
+  const seesAll = await tenantSeesAllCatalog(tenantId);
+  const src = alias(productOems, "po_src");
+  const rows = await db
+    .select({
+      sourceId: src.productId,
+      count: sql<number>`cast(count(distinct ${products.id}) as unsigned)`,
+    })
+    .from(src)
+    .innerJoin(productOems, eq(productOems.normalized, src.normalized))
+    .innerJoin(products, eq(products.id, productOems.productId))
+    .where(
+      and(
+        inArray(src.productId, ids),
+        sql`char_length(${src.normalized}) >= ${MIN_OEM_MATCH_LENGTH}`,
+        notInArray(products.id, ids),
+        sellableSql(),
+        tenantVisibleSql(tenantId, seesAll),
+      ),
+    )
+    .groupBy(src.productId);
+  for (const r of rows) counts.set(r.sourceId, Number(r.count));
+  return counts;
+}
+
+/** Sepet satırları için: üretici, uyumlu araç özeti ve ilk uyumlu model. */
+export async function cartProductExtras(ids: string[]) {
+  const byProduct = new Map<
+    string,
+    { manufacturerName: string | null; manufacturerLogo: string | null; fitments: CardFitmentLink[]; fitmentExtra: number }
+  >();
+  if (ids.length === 0) return { byProduct, firstModelId: undefined as string | undefined };
+  const [mfrRows, fitBy, models] = await Promise.all([
+    db
+      .select({ id: products.id, manufacturerName: manufacturers.name, manufacturerLogo: manufacturerLogoSql })
+      .from(products)
+      .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+      .where(inArray(products.id, ids)),
+    cardFitmentsByProductIds(ids),
+    db
+      .select({ productId: productFitments.productId, modelId: productFitments.vehicleModelId })
+      .from(productFitments)
+      .where(inArray(productFitments.productId, ids))
+      .limit(200),
+  ]);
+  for (const r of mfrRows) {
+    const fit = fitBy.get(r.id);
+    byProduct.set(r.id, {
+      manufacturerName: r.manufacturerName,
+      manufacturerLogo: r.manufacturerLogo,
+      fitments: fit?.items ?? [],
+      fitmentExtra: fit?.extra ?? 0,
+    });
+  }
+  const firstModelId = ids.map((id) => models.find((m) => m.productId === id)?.modelId).find(Boolean);
+  return { byProduct, firstModelId };
 }
 
 export async function featuredProducts(tenantId: string, limit = 8) {
