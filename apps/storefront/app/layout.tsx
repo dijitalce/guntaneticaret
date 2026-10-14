@@ -22,6 +22,7 @@ import { getSalesStatus } from "../src/sales";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
+import { PaymentMarks } from "../src/assurance";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -251,7 +252,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </p>
               </div>
             </div>
-            <p className="footer-copy">© {new Date().getFullYear()} {tenant.siteName}</p>
+            <div className="footer-bottom">
+              <p className="footer-copy">© {new Date().getFullYear()} {tenant.siteName}</p>
+              <PaymentMarks card={cardPayments} />
+            </div>
           </div>
         </footer>
         {tenant.footerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.footerHtml }} /> : null}

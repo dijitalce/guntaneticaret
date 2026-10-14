@@ -9,6 +9,10 @@ export function foldTr(value: string) {
     .replaceAll("ç", "c");
 }
 
+export function formatTl(value: string | number) {
+  return `${Number(value).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
+}
+
 const ASCII_TR_FIX: Record<string, string> = {
   "fren aksami": "Fren aksamı",
   "alt takim": "Alt takım",

@@ -135,7 +135,7 @@ export default async function ProductPage({
   const altIds = new Set(alternatives.map((a) => a.id));
   const related = relatedAll.filter((p) => !altIds.has(p.id)).slice(0, 8);
   const fit = data.fitments[0];
-  const priceLabel = `${Number(product.price).toLocaleString("tr-TR")} TL`;
+  const priceLabel = money(Number(product.price));
   const whatsappHref = tenant.whatsapp
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
@@ -207,12 +207,12 @@ export default async function ProductPage({
               <div className="badge">{data.manufacturerName}</div>
             ))}
           <h1>{product.name}</h1>
-          <a className="pdp-rating" href="#degerlendirmeler">
-            <Stars value={reviewData.summary.average} size="sm" />
-            {reviewData.summary.count > 0
-              ? <span>{reviewData.summary.average.toLocaleString("tr-TR", { minimumFractionDigits: 1 })} · {reviewData.summary.count} değerlendirme</span>
-              : <span>Henüz değerlendirme yok</span>}
-          </a>
+          {reviewData.summary.count > 0 ? (
+            <a className="pdp-rating" href="#degerlendirmeler">
+              <Stars value={reviewData.summary.average} size="sm" />
+              <span>{reviewData.summary.average.toLocaleString("tr-TR", { minimumFractionDigits: 1 })} · {reviewData.summary.count} değerlendirme</span>
+            </a>
+          ) : null}
           <OemList oems={oems} max={4} label="OEM no" />
           {fit && (
             <a className="pdp-fit" href="#uyumluluk">
@@ -225,7 +225,7 @@ export default async function ProductPage({
           <StockLine />
           <div className="pdp-price-row">
             <p className="price">
-              {product.compareAtPrice && <s>{Number(product.compareAtPrice).toLocaleString("tr-TR")} TL</s>}
+              {product.compareAtPrice && <s>{money(Number(product.compareAtPrice))}</s>}
               {priceLabel}
               <small>KDV dahil</small>
               {disc != null && <span className="badge">%{disc}</span>}

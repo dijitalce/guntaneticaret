@@ -680,7 +680,7 @@ body {
 .home-brands { margin-top: 1.6rem; }
 .home-brand-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
   gap: 0.5rem;
 }
 .home-brand {
@@ -717,7 +717,7 @@ body {
     grid-template-columns: none;
     grid-template-rows: repeat(2, auto);
     grid-auto-flow: column;
-    grid-auto-columns: 128px;
+    grid-auto-columns: 148px;
     overflow-x: auto;
     scrollbar-width: none;
     padding-bottom: 0.2rem;
@@ -3129,67 +3129,6 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .header-tools .icon-btn:not(.cart-chip) { display: none; }
 }
 
-.launch-notice-root {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: grid;
-  place-items: center;
-  padding: 1.25rem;
-  isolation: isolate;
-}
-.launch-notice-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  background: rgba(12, 18, 24, 0.55);
-  cursor: pointer;
-}
-.launch-notice {
-  position: relative;
-  width: min(28rem, 100%);
-  background: #fff;
-  color: var(--foreground);
-  border-radius: 18px;
-  padding: 1.5rem 1.4rem 1.25rem;
-  box-shadow: 0 24px 60px rgb(16 24 40 / 22%);
-  text-align: center;
-}
-.launch-notice-kicker {
-  margin: 0 0 0.45rem;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary);
-}
-.launch-notice h2 {
-  margin: 0 0 0.65rem;
-  font-size: 1.25rem;
-  line-height: 1.3;
-}
-.launch-notice p {
-  margin: 0;
-  color: var(--muted-foreground);
-  line-height: 1.5;
-}
-.launch-notice-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.55rem;
-  margin-top: 1.15rem;
-}
-.launch-notice-actions .btn { min-width: 8.5rem; }
-.launch-notice-phone {
-  margin-top: 0.85rem !important;
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--foreground) !important;
-}
-
 /* Kupon, stok bildirimi ve pazarlama popup'ı */
 .coupon-form { display: grid; gap: 0.35rem; margin: 0.9rem 0 0.4rem; }
 .coupon-form label { font-size: 0.85rem; font-weight: 600; }
@@ -3779,3 +3718,18 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .cart-row-total { justify-items: start; }
   .alt-brands-btn.is-small { width: 100%; }
 }
+
+.home .assurance-strip { margin: 1rem 0 0.4rem; }
+.home .missing-part { margin-top: 1.75rem; }
+.footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-top: 1.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.footer-bottom .footer-copy { margin: 0; padding: 0; border: 0; }
+.footer-bottom .pay-marks { margin: 0; }

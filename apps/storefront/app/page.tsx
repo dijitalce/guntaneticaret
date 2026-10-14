@@ -6,9 +6,10 @@ import { ProductCard } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
 import { HomeSideBanners } from "../src/home-side-banners";
 import { BrandMark } from "../src/brand-mark";
+import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
-import { LaunchNotice } from "../src/launch-notice";
 import { homeSeo } from "../src/home-seo";
+import { AssuranceGrid, MissingPartCta, assuranceItems } from "../src/assurance";
 import {
   JsonLd,
   absoluteUrl,
@@ -59,6 +60,8 @@ export default async function HomePage() {
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const copy = await homeCopy(tenant);
+  const garanti = garantiConfigFromEnv();
+  const maxInstallments = garanti ? Math.max(1, ...garanti.installments.keys()) : 1;
 
   return (
     <div className="container home">
@@ -110,6 +113,7 @@ export default async function HomePage() {
           ]}
         />
       </div>
+      <AssuranceGrid variant="strip" items={assuranceItems({ card: Boolean(garanti), maxInstallments })} />
       <div className="home-intro">
         <h1>{copy.h1}</h1>
         <p>{copy.lead}</p>
@@ -184,6 +188,8 @@ export default async function HomePage() {
         ))}
       </div>
 
+      <MissingPartCta whatsapp={tenant.whatsapp} phone={tenant.phone} />
+
       <section className="seo-block">
         <h2>{copy.heading}</h2>
         {tenant.seoContent ? <p>{tenant.seoContent}</p> : copy.paragraphs.map((p) => <p key={p}>{p}</p>)}
@@ -195,7 +201,6 @@ export default async function HomePage() {
           </p>
         ) : null}
       </section>
-      <LaunchNotice whatsapp={tenant.whatsapp} phone={tenant.phone} />
     </div>
   );
 }

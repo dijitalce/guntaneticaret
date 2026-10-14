@@ -1,5 +1,5 @@
 import { productImageUrl } from "@guntan/catalog";
-import { foldTr, sentenceCaseTr } from "./format";
+import { foldTr, formatTl, sentenceCaseTr } from "./format";
 import { validGtin } from "./product-feed";
 import { absoluteUrl } from "./seo";
 
@@ -82,7 +82,7 @@ export function productMetaDescription(input: ProductSeoInput) {
     `${title}.`,
     oem ? `OEM ${oem}.` : "",
     fit.text ? `Uyumlu araçlar: ${fit.text}${fit.extra ? ` ve ${fit.extra} model daha` : ""}.` : "",
-    `KDV dahil ${Number(product.price).toLocaleString("tr-TR")} TL, stokta, aynı gün kargo, 14 gün iade.`,
+    `KDV dahil ${formatTl(product.price)}, stokta, aynı gün kargo, 14 gün iade.`,
     input.siteName,
   ];
   return parts.filter(Boolean).join(" ").slice(0, 300);

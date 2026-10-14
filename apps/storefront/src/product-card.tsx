@@ -6,10 +6,7 @@ import { AddToCartForm } from "./add-to-cart-form";
 import { ManufacturerLogo } from "./manufacturer-logo";
 import { getSalesStatus } from "./sales";
 import { StockLine } from "./assurance";
-
-function formatPrice(value: string) {
-  return `${Number(value).toLocaleString("tr-TR")} TL`;
-}
+import { formatTl as formatPrice } from "./format";
 
 export async function ProductCard({
   product,
