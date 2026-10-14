@@ -13,7 +13,7 @@ import {
   cachedModelBySlug,
   cachedVisibleBrands,
 } from "../../../src/cached-catalog";
-import { ProductCard } from "../../../src/product-card";
+import { ProductCard, cardOems } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
 import { CategoryVehicleFinder } from "../../../src/category-vehicle-finder";
 import { CategoryFilters } from "../../../src/category-filters";
@@ -100,6 +100,7 @@ export default async function CategoryPage({
     }),
   ]);
 
+  const oemBy = await cardOems(result.items.map((p) => p.id));
   const host = tenant.tenant.canonicalHost;
   const catSlug = cat.slug;
   const title = `${sentenceCaseTr(cat.name)} Yedek Parça`;
@@ -213,6 +214,7 @@ export default async function CategoryPage({
                 key={p.id}
                 product={p}
                 placeholder={tenant.placeholderImageUrl}
+                oem={oemBy.get(p.id)}
               />
             ))}
           </div>

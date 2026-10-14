@@ -15,7 +15,7 @@ import {
   type ProductSeoInput,
 } from "../../../src/product-seo";
 import { cachedAlternatives, cachedProductBySlug, cachedRelatedProducts } from "../../../src/cached-catalog";
-import { ProductCard } from "../../../src/product-card";
+import { ProductCard, cardOems } from "../../../src/product-card";
 import { AddToCartForm } from "../../../src/add-to-cart-form";
 import { CommerceEvent } from "../../../src/visitor-tracker";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
@@ -134,6 +134,7 @@ export default async function ProductPage({
   ]);
   const altIds = new Set(alternatives.map((a) => a.id));
   const related = relatedAll.filter((p) => !altIds.has(p.id)).slice(0, 8);
+  const relatedOems = await cardOems(related.map((p) => p.id));
   const fit = data.fitments[0];
   const priceLabel = money(Number(product.price));
   const whatsappHref = tenant.whatsapp
@@ -435,6 +436,7 @@ export default async function ProductPage({
                 key={p.id}
                 product={p}
                 placeholder={tenant.placeholderImageUrl}
+                oem={relatedOems.get(p.id)}
               />
             ))}
           </div>

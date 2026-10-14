@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { type ListingSort, LISTING_SORT } from "@guntan/types";
-import { ProductCard, ProductMiniCard } from "./product-card";
+import { ProductCard, ProductMiniCard, cardOems } from "./product-card";
 import { VehicleNav, type VehicleNavItem } from "./vehicle-nav";
 import { sentenceCaseTr } from "./format";
 import { SortSelect } from "./sort-select";
@@ -34,7 +34,7 @@ function pageHref(basePath: string, page: number, sort: ListingSort) {
   return q ? `${basePath}?${q}` : basePath;
 }
 
-export function CatalogListing({
+export async function CatalogListing({
   crumbs,
   title,
   navTitle,
@@ -74,6 +74,7 @@ export function CatalogListing({
   );
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const paginationBase = listBasePath ?? categoryBase;
+  const oemBy = await cardOems(items.map((p) => p.id));
 
   return (
     <div className="container catalog-page">
@@ -131,7 +132,7 @@ export function CatalogListing({
           )}
           <div className="product-grid">
             {items.map((p) => (
-              <ProductCard key={p.id} product={p} placeholder={placeholder} />
+              <ProductCard key={p.id} product={p} placeholder={placeholder} oem={oemBy.get(p.id)} />
             ))}
           </div>
           {total === 0 && (

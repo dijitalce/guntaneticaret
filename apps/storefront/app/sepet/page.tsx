@@ -17,7 +17,7 @@ import { getCurrentCustomer } from "../../src/customer";
 import { getSalesStatus } from "../../src/sales";
 import { VAT_RATE, vatBreakdown } from "../../src/vat";
 import { cachedRelatedProducts } from "../../src/cached-catalog";
-import { ProductCard } from "../../src/product-card";
+import { ProductCard, cardOems } from "../../src/product-card";
 import { ManufacturerLogo } from "../../src/manufacturer-logo";
 import { IconLock, IconSwap } from "../../src/icons";
 import {
@@ -106,6 +106,7 @@ export default async function CartPage({
         .filter((p) => !shown.has(p.id))
         .slice(0, 4)
     : [];
+  const relatedOems = await cardOems(related.map((p) => p.id));
 
   const itemCount = view.qty;
   const placeholder = tenant.placeholderImageUrl ?? "/placeholder-product.jpg";
@@ -385,7 +386,7 @@ export default async function CartPage({
           </div>
           <div className="product-grid">
             {related.map((p) => (
-              <ProductCard key={p.id} product={p} placeholder={tenant.placeholderImageUrl} />
+              <ProductCard key={p.id} product={p} placeholder={tenant.placeholderImageUrl} oem={relatedOems.get(p.id)} />
             ))}
           </div>
         </section>

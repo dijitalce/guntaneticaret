@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedVisibleBrands } from "../src/cached-catalog";
 import { getTenant } from "../src/tenant";
-import { ProductCard } from "../src/product-card";
+import { ProductCard, cardOems } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
 import { HomeRail } from "../src/home-rail";
 import { PartIcon, partKind } from "../src/part-icons";
@@ -60,7 +60,7 @@ export default async function HomePage() {
   const middleBanners = bannerRows.filter((b) => b.placement === "home_middle").slice(0, 3);
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
-  const copy = await homeCopy(tenant);
+  const [copy, oemBy] = await Promise.all([homeCopy(tenant), cardOems(featured.map((p) => p.id))]);
   const garanti = garantiConfigFromEnv();
   const maxInstallments = garanti ? Math.max(1, ...garanti.installments.keys()) : 1;
 
@@ -180,6 +180,7 @@ export default async function HomePage() {
             key={p.id}
             product={p}
             placeholder={tenant.placeholderImageUrl}
+            oem={oemBy.get(p.id)}
           />
         ))}
       </div>

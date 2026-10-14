@@ -2,7 +2,7 @@ import Link from "next/link";
 import { searchProducts } from "@guntan/search";
 import { cardFitmentsByProductIds, manufacturerLogosByName, searchCatalog } from "@guntan/catalog";
 import { getTenant } from "../../src/tenant";
-import { ProductCard } from "../../src/product-card";
+import { ProductCard, cardOems } from "../../src/product-card";
 import { cachedFeaturedProducts } from "../../src/cached-catalog";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -36,9 +36,13 @@ export default async function SearchPage({
         thumbnail: h.thumbnail,
       }));
   const fallback = hits.length === 0 ? await cachedFeaturedProducts(tenant.tenant.id, 8) : [];
-  const [fitBy, logoBy] = hits.length > 0
-    ? await Promise.all([cardFitmentsByProductIds(hits.map((h) => h.id)), manufacturerLogosByName(hits.map((h) => h.manufacturer))])
-    : [new Map(), new Map<string, string>()];
+  const [fitBy, logoBy, oemBy] = hits.length > 0
+    ? await Promise.all([
+        cardFitmentsByProductIds(hits.map((h) => h.id)),
+        manufacturerLogosByName(hits.map((h) => h.manufacturer)),
+        cardOems(hits.map((h) => h.id)),
+      ])
+    : [new Map(), new Map<string, string>(), new Map<string, string>()];
 
   return (
     <div className="container page-surface">
@@ -75,6 +79,7 @@ export default async function SearchPage({
                   fitmentExtra: fit?.extra,
                 }}
                 placeholder={tenant.placeholderImageUrl}
+                oem={oemBy.get(h.id)}
               />
             );
           })}
