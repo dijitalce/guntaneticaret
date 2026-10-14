@@ -204,6 +204,7 @@ export function MegaNav({
                 onClick={onTriggerClick(b.slug, true)}
                 onKeyDown={onTriggerKey(b.slug)}
               >
+                {b.logoUrl ? <BrandMark name={b.name} logoUrl={b.logoUrl} size={22} /> : null}
                 {b.name}
               </Link>
             </li>

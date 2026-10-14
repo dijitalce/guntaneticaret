@@ -36,9 +36,9 @@ export function HomeSlider({ slides }: { slides: Slide[] }) {
         <Image
           src={slide.image}
           alt={slide.alt}
-          width={1200}
-          height={480}
-          sizes="(max-width: 960px) 100vw, 70vw"
+          width={1400}
+          height={599}
+          sizes="(max-width: 1400px) 100vw, 1400px"
           // priority → Next otomatik preload ekler; unoptimized + srcset uyumsuzluğu
           // veya hızlı slide değişiminde "preloaded but not used" uyarısı verir.
           loading={i === 0 ? "eager" : "lazy"}

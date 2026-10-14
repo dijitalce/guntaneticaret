@@ -4,7 +4,6 @@ import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedV
 import { getTenant } from "../src/tenant";
 import { ProductCard } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
-import { HomeSideBanners } from "../src/home-side-banners";
 import { BrandMark } from "../src/brand-mark";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
@@ -56,7 +55,6 @@ export default async function HomePage() {
   ]);
   const sliderBanners = bannerRows.filter((b) => b.placement === "home_slider");
   const middleBanners = bannerRows.filter((b) => b.placement === "home_middle").slice(0, 3);
-  const sideBanners = bannerRows.filter((b) => b.placement === "home_side").slice(0, 4);
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const copy = await homeCopy(tenant);
@@ -96,8 +94,7 @@ export default async function HomePage() {
           itemListJsonLd(host, "Çok satanlar", featured),
         ]}
       />
-      <div className="home-hero2">
-        <HomeSideBanners banners={sideBanners} whatsapp={tenant.whatsapp ?? null} />
+      <div className="home-banner-hero">
         <HomeSlider
           slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
             {
