@@ -6,6 +6,7 @@ import { ProductCard } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
 import { HomeRail } from "../src/home-rail";
 import { PartIcon, partKind } from "../src/part-icons";
+import { HomeAbout, autoPartsStoreJsonLd } from "../src/about";
 import { BrandMark } from "../src/brand-mark";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
@@ -78,21 +79,7 @@ export default async function HomePage() {
               "query-input": "required name=search_term_string",
             },
           },
-          {
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            name: tenant.siteName,
-            url: absoluteUrl(host, "/"),
-            logo: tenant.logoUrl
-              ? /^https?:\/\//i.test(tenant.logoUrl) ? tenant.logoUrl : absoluteUrl(host, tenant.logoUrl)
-              : undefined,
-            sameAs: socialProfileUrls(tenant),
-            telephone: tenant.phone ?? undefined,
-            email: tenant.email ?? undefined,
-            address: tenant.address
-              ? { "@type": "PostalAddress", streetAddress: tenant.address, addressCountry: "TR" }
-              : undefined,
-          },
+          autoPartsStoreJsonLd(tenant, host, socialProfileUrls(tenant)),
           itemListJsonLd(host, "Çok satanlar", featured),
         ]}
       />
@@ -196,6 +183,8 @@ export default async function HomePage() {
           />
         ))}
       </div>
+
+      <HomeAbout tenant={tenant} />
 
       <MissingPartCta whatsapp={tenant.whatsapp} phone={tenant.phone} />
 

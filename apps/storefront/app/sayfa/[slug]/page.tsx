@@ -8,6 +8,14 @@ import { getTenant } from "../../../src/tenant";
 import { IADE_TITLE, ReturnPolicy } from "../../../src/return-policy";
 import { DistanceSalesContract, MESAFELI_TITLE } from "../../../src/distance-sales";
 import { CEREZ_TITLE, CookiePolicy } from "../../../src/cookie-policy";
+import { ABOUT, AboutPage, autoPartsStoreJsonLd } from "../../../src/about";
+import { JsonLd, absoluteUrl, breadcrumbJsonLd, socialProfileUrls } from "../../../src/seo";
+
+const ABOUT_SLUG = "hakkimizda";
+const ABOUT_TITLE = `Hakkımızda | ${ABOUT.company} – İkitelli Oto Yedek Parça`;
+const ABOUT_DESCRIPTION = `${ABOUT.company}: ${ABOUT.years} yılı aşkın tecrübeyle İkitelli OSB, Başakşehir'de orijinal oto yedek parça. 150.000+ ürün, faturalı satış, vade farksız taksit.`;
+/** Paneldeki gövde bundan kısaysa yer tutucu sayılır ve gösterilmez. */
+const ABOUT_CMS_MIN_CHARS = 200;
 
 async function loadPage(slug: string) {
   const tenant = await getTenant();
@@ -25,6 +33,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (slug === "iade") return { title: IADE_TITLE };
   if (slug === "mesafeli-satis") return { title: MESAFELI_TITLE };
   if (slug === "cerez-politikasi") return { title: CEREZ_TITLE };
+  if (slug === ABOUT_SLUG) {
+    const [tenant, page] = await Promise.all([getTenant(), loadPage(slug)]);
+    const title = page?.metaTitle || { absolute: ABOUT_TITLE };
+    const description = page?.metaDescription || ABOUT_DESCRIPTION;
+    const url = absoluteUrl(tenant.tenant.canonicalHost, `/sayfa/${ABOUT_SLUG}`);
+    return {
+      title,
+      description,
+      alternates: { canonical: url },
+      openGraph: { title, description, url, type: "website", images: [absoluteUrl(tenant.tenant.canonicalHost, ABOUT.photo.src)] },
+    };
+  }
   const page = await loadPage(slug);
   if (!page) return { title: "Sayfa bulunamadı" };
   return {
@@ -46,6 +66,33 @@ export default async function CmsPage({ params }: { params: Promise<{ slug: stri
   if (slug === "iade") return <ReturnPolicy />;
   if (slug === "mesafeli-satis") return <DistanceSalesContract />;
   if (slug === "cerez-politikasi") return <CookiePolicy siteName={(await getTenant()).siteName} />;
+  if (slug === ABOUT_SLUG) {
+    const [tenant, page] = await Promise.all([getTenant(), loadPage(slug)]);
+    const host = tenant.tenant.canonicalHost;
+    const cmsBody = page && page.body.trim().length >= ABOUT_CMS_MIN_CHARS ? page.body : null;
+    return (
+      <>
+        <JsonLd
+          data={[
+            {
+              "@context": "https://schema.org",
+              "@type": "AboutPage",
+              name: ABOUT_TITLE,
+              description: ABOUT_DESCRIPTION,
+              url: absoluteUrl(host, `/sayfa/${ABOUT_SLUG}`),
+              mainEntity: { "@id": `${absoluteUrl(host, "/")}#store` },
+            },
+            autoPartsStoreJsonLd(tenant, host, socialProfileUrls(tenant)),
+            breadcrumbJsonLd(host, [{ name: "Ana sayfa", path: "/" }, { name: "Hakkımızda" }]),
+          ]}
+        />
+        <AboutPage
+          tenant={tenant}
+          extra={cmsBody ? <div className="about-page-sections cms-prose"><CmsBody body={cmsBody} /></div> : null}
+        />
+      </>
+    );
+  }
   const page = await loadPage(slug);
   if (!page) notFound();
   return (
