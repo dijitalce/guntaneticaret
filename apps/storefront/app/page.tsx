@@ -4,6 +4,8 @@ import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedV
 import { getTenant } from "../src/tenant";
 import { ProductCard } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
+import { HomeRail } from "../src/home-rail";
+import { PartIcon, partKind } from "../src/part-icons";
 import { BrandMark } from "../src/brand-mark";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
@@ -50,7 +52,7 @@ export default async function HomePage() {
   const [brands, featured, cats, bannerRows] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedFeaturedProducts(tenant.tenant.id, 8),
-    cachedPopularCategories(8),
+    cachedPopularCategories(24),
     cachedBanners(tenant.tenant.id),
   ]);
   const sliderBanners = bannerRows.filter((b) => b.placement === "home_slider");
@@ -125,42 +127,52 @@ export default async function HomePage() {
         </section>
       )}
 
-      {rootCats.length > 0 && (
-        <section className="home-categories" aria-labelledby="home-cats-title">
-          <div className="section-head">
-            <div>
-              <h2 id="home-cats-title">Ürün kategorileri</h2>
-              <p>Fren, motor ve bakım parçalarına kategori sayfalarından ulaş</p>
-            </div>
-          </div>
-          <div className="category-grid">
-            {rootCats.map((c) => (
-              <Link key={c.id} className="category-tile" href={`/kategori/${c.slug}`}>
-                <strong>{sentenceCaseTr(c.name)}</strong>
-                <span>İncele</span>
+      {brands.length > 0 && (
+        <HomeRail
+          id="home-brands-title"
+          className="is-brands"
+          eyebrow="Markaya göre alışveriş"
+          title="Aracınızın markasını seçin"
+          lead="Modelinizi seçin, aracınıza uyumlu parçaları görün"
+        >
+          {brands.map((b) => (
+            <li key={b.id}>
+              <Link href={`/${b.slug}`} className="brand-card">
+                <span className="brand-card-logo">
+                  <BrandMark name={b.name} logoUrl={b.logoUrl} size={64} />
+                </span>
+                <strong lang="en">{b.name}</strong>
+                <span className="brand-card-cta">Parçaları gör</span>
               </Link>
-            ))}
-          </div>
-        </section>
+            </li>
+          ))}
+        </HomeRail>
       )}
 
-      {brands.length > 0 && (
-        <section className="home-brands" aria-labelledby="home-brands-title">
-          <div className="section-head">
-            <div>
-              <h2 id="home-brands-title">Markalar</h2>
-              <p>Aracının markasını seç, uyumlu parçaları gör</p>
-            </div>
-          </div>
-          <div className="home-brand-grid">
-            {brands.map((b) => (
-              <Link key={b.id} href={`/${b.slug}`} className="home-brand">
-                <BrandMark name={b.name} logoUrl={b.logoUrl} size={40} />
-                <span>{b.name}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
+      {rootCats.length > 0 && (
+        <HomeRail
+          id="home-cats-title"
+          className="is-categories"
+          eyebrow="Parça kategorileri"
+          title="İhtiyacınız olan parçayı bulun"
+          lead="Fren, motor, alt takım ve bakım parçaları tek yerde"
+          action={<Link className="rail-all" href="/arama">Tüm parçalar</Link>}
+        >
+          {rootCats.map((c, idx) => {
+            const kind = partKind(c.name);
+            return (
+              <li key={c.id}>
+                <Link href={`/kategori/${c.slug}`} className="cat-card">
+                  <span className="cat-card-no" aria-hidden="true">{String(idx + 1).padStart(2, "0")}</span>
+                  <span className="cat-card-icon"><PartIcon icon={kind.icon} /></span>
+                  <strong>{sentenceCaseTr(c.name)}</strong>
+                  <span className="cat-card-hint">{kind.hint}</span>
+                  <span className="cat-card-cta">Parçaları incele</span>
+                </Link>
+              </li>
+            );
+          })}
+        </HomeRail>
       )}
 
       <div className="section-head">
