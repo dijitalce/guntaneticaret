@@ -1,7 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { compileVisibility, db, tenantCatalogRules, tenantDomains } from "@guntan/db";
 import { invalidateTenantCache } from "@guntan/tenant";
-import { CATALOG_RULE_KIND, DEFAULT_THEME_TOKENS, SEO_SOCIAL_KEYS, SOCIAL_LINKS, VISIBILITY_MODE } from "@guntan/types";
+import {
+  ANNOUNCEMENT_KEYS,
+  CATALOG_RULE_KIND,
+  DEFAULT_THEME_TOKENS,
+  SEO_SOCIAL_KEYS,
+  SOCIAL_LINKS,
+  VISIBILITY_MODE,
+} from "@guntan/types";
 import { text } from "./api-helpers";
 import {
   GA_ID_RE,
@@ -34,6 +41,31 @@ export function parseTheme(form: FormData, current: Record<string, string> | nul
     if (HEX.test(v)) next[key] = v.toLowerCase();
   }
   return next;
+}
+
+const MAX_ANNOUNCEMENTS = 10;
+const MAX_ANNOUNCEMENT_LENGTH = 160;
+
+export function parseAnnouncement(form: FormData): Result<Record<string, string>> {
+  const messages = text(form, "announcementText")
+    .split("\n")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  if (messages.length > MAX_ANNOUNCEMENTS) return { ok: false, error: `Kayan yazıda en fazla ${MAX_ANNOUNCEMENTS} mesaj olabilir.` };
+  if (messages.some((m) => m.length > MAX_ANNOUNCEMENT_LENGTH)) {
+    return { ok: false, error: `Kayan yazıdaki her mesaj en fazla ${MAX_ANNOUNCEMENT_LENGTH} karakter olabilir.` };
+  }
+  const bg = text(form, "announcementBg");
+  const fg = text(form, "announcementFg");
+  if ((bg && !HEX.test(bg)) || (fg && !HEX.test(fg))) return { ok: false, error: "Kayan yazı renkleri #RRGGBB biçiminde olmalı." };
+  return {
+    ok: true,
+    value: {
+      [ANNOUNCEMENT_KEYS.text]: messages.join("\n"),
+      [ANNOUNCEMENT_KEYS.bg]: bg.toLowerCase(),
+      [ANNOUNCEMENT_KEYS.fg]: fg.toLowerCase(),
+    },
+  };
 }
 
 export function parseContact(form: FormData): Result<{

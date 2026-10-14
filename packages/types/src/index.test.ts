@@ -3,7 +3,10 @@ import {
   ROLE_PERMISSIONS,
   ADMIN_ROLE,
   ADMIN_PERMISSION,
+  ANNOUNCEMENT_KEYS,
+  DEFAULT_ANNOUNCEMENT_COLORS,
   DEFAULT_SALES_CLOSED_MESSAGE,
+  announcementFromSocial,
   SALES_SOCIAL_KEYS,
   salesStatusFromSocial,
 } from "./index";
@@ -29,5 +32,18 @@ describe("salesStatusFromSocial", () => {
   it("uses the custom message or falls back to the default", () => {
     expect(salesStatusFromSocial({ [SALES_SOCIAL_KEYS.closed]: "1", [SALES_SOCIAL_KEYS.message]: "  Tatildeyiz.  " }).message).toBe("Tatildeyiz.");
     expect(salesStatusFromSocial({ [SALES_SOCIAL_KEYS.closed]: "1", [SALES_SOCIAL_KEYS.message]: "   " }).message).toBe(DEFAULT_SALES_CLOSED_MESSAGE);
+  });
+});
+
+describe("announcementFromSocial", () => {
+  it("splits non-empty lines into messages", () => {
+    const a = announcementFromSocial({ [ANNOUNCEMENT_KEYS.text]: " Aynı gün kargo \n\n  \n14 gün iade\r\n" });
+    expect(a.messages).toEqual(["Aynı gün kargo", "14 gün iade"]);
+  });
+  it("falls back to default colors for invalid values", () => {
+    expect(announcementFromSocial(null)).toEqual({ messages: [], ...DEFAULT_ANNOUNCEMENT_COLORS });
+    const a = announcementFromSocial({ [ANNOUNCEMENT_KEYS.bg]: "#112233", [ANNOUNCEMENT_KEYS.fg]: "red" });
+    expect(a.bg).toBe("#112233");
+    expect(a.fg).toBe(DEFAULT_ANNOUNCEMENT_COLORS.fg);
   });
 });

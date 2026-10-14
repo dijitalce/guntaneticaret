@@ -16,13 +16,16 @@ import {
 } from "@guntan/db";
 import {
   CATALOG_RULE_KIND,
+  DEFAULT_ANNOUNCEMENT_COLORS,
   DEFAULT_SALES_CLOSED_MESSAGE,
   DEFAULT_THEME_TOKENS,
   SALES_SOCIAL_KEYS,
   SEO_SOCIAL_KEYS,
   SOCIAL_LINKS,
+  announcementFromSocial,
   salesStatusFromSocial,
 } from "@guntan/types";
+import { AnnouncementFields } from "@/src/announcement-fields";
 import { ConfirmButton, ImageUrlField } from "@/src/form-fields";
 import { IconBank, IconCheck, IconExternal, IconGlobe, IconPlus, IconTrash } from "@/src/icons";
 import { withBase } from "@/src/paths";
@@ -87,6 +90,7 @@ export default async function TenantEditPage({
   ]);
   const settings = settingsRow ?? null;
   const social = (settings?.socialJson ?? {}) as Record<string, string>;
+  const announcement = announcementFromSocial(social);
   const sales = salesStatusFromSocial(social);
   const theme = { ...DEFAULT_THEME_TOKENS, ...((settings?.themeTokens ?? {}) as Record<string, string>) };
   const primary = domains.find((d) => d.isPrimary) ?? domains[0];
@@ -501,6 +505,17 @@ export default async function TenantEditPage({
               defaults={{ primary: theme.primary!, secondary: theme.secondary!, accent: theme.accent!, background: theme.background! }}
             />
           </Panel>
+          <Panel
+            title="Kayan yazı çubuğu"
+            description="Sitenin en üstünde kayan duyurular. Solunda İletişim sekmesindeki sosyal medya ikonları görünür."
+            padded
+          >
+            <AnnouncementFields
+              text={announcement.messages.join("\n")}
+              colors={{ bg: announcement.bg, fg: announcement.fg }}
+              defaults={DEFAULT_ANNOUNCEMENT_COLORS}
+            />
+          </Panel>
           <div className="form-actions">
             <button className="btn btn-primary" type="submit">
               Görünümü kaydet
@@ -547,7 +562,11 @@ export default async function TenantEditPage({
               </div>
             </div>
           </Panel>
-          <Panel title="Sosyal medya" description="Organization yapısal verisine “sameAs” olarak eklenir." padded>
+          <Panel
+            title="Sosyal medya ve mağazalar"
+            description="Sitenin üst çubuğunda ve alt bilgisinde ikon olarak görünür; Organization yapısal verisine “sameAs” olarak eklenir."
+            padded
+          >
             <div className="form-row">
               {SOCIAL_LINKS.map((l) => (
                 <div className="field" key={l.key}>

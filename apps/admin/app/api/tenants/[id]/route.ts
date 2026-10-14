@@ -7,6 +7,7 @@ import {
   compileInBackground,
   mergeSocial,
   parseAdvanced,
+  parseAnnouncement,
   parseBranding,
   parseCatalog,
   parseContact,
@@ -51,7 +52,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     await db.update(tenantSettings).set({ siteName }).where(eq(tenantSettings.id, settings.id));
     after = { name, siteName, status };
   } else if (section === "gorunum") {
-    const patch = { ...parseBranding(form), themeTokens: parseTheme(form, settings.themeTokens) };
+    const announcement = parseAnnouncement(form);
+    if (!announcement.ok) return fail(announcement.error);
+    const socialJson = mergeSocial(settings.socialJson, announcement.value);
+    const patch = { ...parseBranding(form), themeTokens: parseTheme(form, settings.themeTokens), socialJson };
     await db.update(tenantSettings).set(patch).where(eq(tenantSettings.id, settings.id));
     after = patch;
   } else if (section === "iletisim") {

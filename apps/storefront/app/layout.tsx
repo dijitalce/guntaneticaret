@@ -23,6 +23,7 @@ import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { PaymentMarks } from "../src/assurance";
+import { AnnouncementBar, SocialGlyph, SocialIcons, socialLinks } from "../src/social-links";
 
 const font = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -145,22 +146,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const allParts = allCatalogHref(tenant);
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
   const cardPayments = Boolean(garantiConfigFromEnv());
+  const links = socialLinks(social);
+  const sahibinden = links.find((l) => l.key === "sahibinden");
 
   return (
     <html lang="tr" className={font.className}>
       <body style={cssVars(themeToCssVars(tenant.theme))}>
         <a className="sr-only" href="#main">İçeriğe geç</a>
         {tenant.headerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.headerHtml }} /> : null}
+        <AnnouncementBar social={social} />
         <div className="topbar">
           <div className="container topbar-inner">
             {tenant.whatsapp ? (
               <a className="topbar-wa" href={`https://wa.me/${tenant.whatsapp}`} target="_blank" rel="noreferrer">
                 <span className="topbar-dot" aria-hidden="true" />
-                WhatsApp destek {tenant.phone ? <b>{tenant.phone}</b> : null}
+                WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
               </a>
             ) : <span>{tenant.phone}</span>}
             <p className="topbar-note">Aynı gün kargo · 14 gün iade · %100 güvenli ödeme</p>
             <div className="topbar-links">
+              {sahibinden ? (
+                <a className="topbar-sahibinden" href={sahibinden.href} target="_blank" rel="noreferrer">
+                  <SocialGlyph name="sahibinden" />
+                  Sahibinden mağazamız
+                </a>
+              ) : null}
               <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
               <Link href="/iletisim">İletişim</Link>
             </div>
@@ -228,6 +238,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 ) : (
                   tenant.phone ? <p>{tenant.phone}</p> : null
                 )}
+                <SocialIcons links={links} className="footer-social" />
               </div>
               <div>
                 <h3>Kurumsal</h3>

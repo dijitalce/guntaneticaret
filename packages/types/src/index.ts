@@ -225,7 +225,35 @@ export const SOCIAL_LINKS = [
   { key: "youtube", label: "YouTube", placeholder: "https://youtube.com/@…" },
   { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@…" },
   { key: "linkedin", label: "LinkedIn", placeholder: "https://linkedin.com/company/…" },
+  { key: "sahibinden", label: "Sahibinden mağazası", placeholder: "https://magazaadi.sahibinden.com" },
 ] as const;
+
+/** tenant_settings.social_json içindeki kayan duyuru çubuğu anahtarları. Metin satır satır mesajlardır. */
+export const ANNOUNCEMENT_KEYS = {
+  text: "announcementText",
+  bg: "announcementBg",
+  fg: "announcementFg",
+} as const;
+
+export const DEFAULT_ANNOUNCEMENT_COLORS = { bg: "#c8735a", fg: "#ffffff" } as const;
+
+export type Announcement = { messages: string[]; bg: string; fg: string };
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+export function announcementFromSocial(social: Record<string, string> | null | undefined): Announcement {
+  const messages = (social?.[ANNOUNCEMENT_KEYS.text] ?? "")
+    .split("\n")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  const bg = social?.[ANNOUNCEMENT_KEYS.bg] ?? "";
+  const fg = social?.[ANNOUNCEMENT_KEYS.fg] ?? "";
+  return {
+    messages,
+    bg: HEX_COLOR.test(bg) ? bg : DEFAULT_ANNOUNCEMENT_COLORS.bg,
+    fg: HEX_COLOR.test(fg) ? fg : DEFAULT_ANNOUNCEMENT_COLORS.fg,
+  };
+}
 
 /** tenant_settings.social_json içindeki SEO anahtarları. */
 export const SEO_SOCIAL_KEYS = {

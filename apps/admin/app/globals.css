@@ -2114,3 +2114,15 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
   .gen-row > .vehicle-image { grid-column: 1 / -1; }
   .vehicle-image { flex-direction: column; align-items: flex-start; }
 }
+
+.announce-preview {
+  display: flex;
+  gap: 1.5rem;
+  overflow: hidden;
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.announce-preview span + span { padding-left: 1.5rem; border-left: 1px solid currentColor; }
