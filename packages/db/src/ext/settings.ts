@@ -111,6 +111,14 @@ export const DEFAULT_MARKETING: MarketingSettings = {
   smsQuietEnd: 9,
 };
 
+export type PaymentSettings = {
+  /** Taksit sayısı ("2"–"12") → vade farkı yüzdesi. Listede olmayan taksit kapalıdır; 0 = vade farksız. */
+  installmentRates: Record<string, number>;
+  installmentMinAmount: number;
+};
+
+export const DEFAULT_PAYMENT: PaymentSettings = { installmentRates: {}, installmentMinAmount: 0 };
+
 export type IntegrationSecrets = {
   metaCapiToken: string;
   metaTestCode: string;
@@ -157,6 +165,8 @@ export const getShippingSettings = () => load("shipping.settings", DEFAULT_SHIPP
 export const saveShippingSettings = (v: ShippingSettings) => save("shipping.settings", v);
 export const getMarketingSettings = () => load("marketing.settings", DEFAULT_MARKETING);
 export const saveMarketingSettings = (v: MarketingSettings) => save("marketing.settings", v);
+export const getPaymentSettings = () => load("payment.settings", DEFAULT_PAYMENT);
+export const savePaymentSettings = (v: PaymentSettings) => save("payment.settings", v);
 export const getIntegrationSecrets = (tenantId: string) => load(`integrations.secret.${tenantId}`, DEFAULT_SECRETS);
 export const saveIntegrationSecrets = (tenantId: string, v: IntegrationSecrets) => save(`integrations.secret.${tenantId}`, v);
 

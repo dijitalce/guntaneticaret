@@ -8,7 +8,7 @@ import { HomeRail } from "../src/home-rail";
 import { PartIcon, partKind } from "../src/part-icons";
 import { HomeAbout, autoPartsStoreJsonLd } from "../src/about";
 import { BrandMark } from "../src/brand-mark";
-import { garantiConfigFromEnv } from "@guntan/ecommerce";
+import { garantiConfig } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
 import { homeSeo } from "../src/home-seo";
 import { AssuranceGrid, MissingPartCta, assuranceItems } from "../src/assurance";
@@ -61,7 +61,7 @@ export default async function HomePage() {
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const [copy, oemBy] = await Promise.all([homeCopy(tenant), cardOems(featured.map((p) => p.id))]);
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   const maxInstallments = garanti ? Math.max(1, ...garanti.installments.keys()) : 1;
 
   return (

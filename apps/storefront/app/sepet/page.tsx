@@ -10,7 +10,7 @@ import {
   type AlternativeProduct,
 } from "@guntan/catalog";
 import { getShippingSettings } from "@guntan/db";
-import { garantiConfigFromEnv, getCartSummary, getOrCreateCart, installmentOptions } from "@guntan/ecommerce";
+import { garantiConfig, getCartSummary, getOrCreateCart, installmentOptions } from "@guntan/ecommerce";
 import type { TenantPublicConfig } from "@guntan/types";
 import { getTenant } from "../../src/tenant";
 import { getCurrentCustomer } from "../../src/customer";
@@ -111,7 +111,7 @@ export default async function CartPage({
   const itemCount = view.qty;
   const placeholder = tenant.placeholderImageUrl ?? "/placeholder-product.jpg";
   const grand = view.subtotal + view.shippingAmount;
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   const installments = garanti ? installmentOptions(grand, garanti) : [];
   const best = installments.reduce<(typeof installments)[number] | null>(
     (m, o) => (o.count > (m?.count ?? 1) ? o : m),

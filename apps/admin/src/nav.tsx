@@ -9,6 +9,7 @@ import {
   IconBox,
   IconWallet,
   IconCar,
+  IconCard,
   IconCart,
   IconExternal,
   IconFile,
@@ -105,6 +106,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/settings/notifications", label: "Bildirimler", icon: IconBell },
       { href: "/settings/shipping", label: "Kargo ve etiket", icon: IconTruck },
+      { href: "/settings/payment", label: "Ödeme ve taksit", icon: IconCard },
       { href: "/integrations", label: "Eklentiler", icon: IconPuzzle, exact: true },
       { href: "/integrations/xml", label: "XML senkron", icon: IconRefresh },
     ],

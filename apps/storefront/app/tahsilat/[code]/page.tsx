@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPaymentLinkByCode } from "@guntan/db";
-import { garantiConfigFromEnv, installmentOptions } from "@guntan/ecommerce";
+import { garantiConfig, installmentOptions } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
 import { PaymentLinkCheckout } from "./form";
 
@@ -31,7 +31,7 @@ export default async function PaymentLinkPage({
   const link = await getPaymentLinkByCode(code);
   if (!link) notFound();
 
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   const amount = Number(link.amount);
   const error =
     sp.hata === "kart"

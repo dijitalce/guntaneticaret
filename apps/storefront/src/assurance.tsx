@@ -109,7 +109,18 @@ function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 }
 
-export type InstallmentRow = { count: number; total: number; monthly: number };
+export type InstallmentRow = { count: number; total: number; monthly: number; ratePct?: number };
+
+const CARD_PROGRAMS = [
+  { key: "axess", name: "Axess" },
+  { key: "bonus", name: "Bonus" },
+  { key: "maximum", name: "Maximum" },
+  { key: "world", name: "World" },
+  { key: "paraf", name: "Paraf" },
+  { key: "cardfinans", name: "CardFinans" },
+  { key: "bankkart", name: "Bankkart" },
+  { key: "other", name: "Diğer kartlar" },
+] as const;
 
 export function InstallmentTable({ options, minAmount }: { options: InstallmentRow[]; minAmount?: number }) {
   if (options.length <= 1) {
@@ -121,25 +132,55 @@ export function InstallmentTable({ options, minAmount }: { options: InstallmentR
     );
   }
   return (
-    <div className="table-scroll">
-      <table className="installment-table">
-        <thead>
-          <tr>
-            <th>Taksit</th>
-            <th>Aylık ödeme</th>
-            <th>Toplam</th>
-          </tr>
-        </thead>
-        <tbody>
-          {options.map((o) => (
-            <tr key={o.count}>
-              <td>{o.count === 1 ? "Tek çekim" : `${o.count} taksit`}</td>
-              <td>{money(o.monthly)}</td>
-              <td>{money(o.total)}</td>
+    <div className="inst">
+      <ul className="inst-programs" aria-label="Taksit yapılabilen kart programları">
+        {CARD_PROGRAMS.map((p) => (
+          <li key={p.key} className={`card-mark is-${p.key}`}>
+            {p.name}
+          </li>
+        ))}
+      </ul>
+      <div className="table-scroll">
+        <table className="inst-table">
+          <thead>
+            <tr>
+              <th scope="col">Taksit</th>
+              {CARD_PROGRAMS.map((p) => (
+                <th key={p.key} scope="col" className="inst-prog">
+                  <span className={`card-mark is-${p.key}`}>{p.name}</span>
+                </th>
+              ))}
+              <th scope="col" className="inst-all">Aylık</th>
+              <th scope="col">Toplam</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {options.map((o) => {
+              const monthly = money(o.monthly);
+              return (
+                <tr key={o.count} className={o.count > 1 && o.ratePct === 0 ? "is-free" : undefined}>
+                  <th scope="row">{o.count === 1 ? "Tek çekim" : o.count}</th>
+                  {CARD_PROGRAMS.map((p) => (
+                    <td key={p.key} className="inst-prog">
+                      {monthly}
+                    </td>
+                  ))}
+                  <td className="inst-all">{monthly}</td>
+                  <td className="inst-total">
+                    {money(o.total)}
+                    {o.count > 1 && o.ratePct === 0 ? <small>Vade farksız</small> : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="inst-note">
+        Tutarlar aylık taksit tutarıdır ve KDV dahildir. Taksit kredi kartlarında geçerlidir; banka kartlarıyla tek
+        çekim yapılır. Taksit sayısını ödeme adımında seçersiniz.
+        {minAmount ? ` Taksit ${money(minAmount)} ve üzeri alışverişlerde geçerlidir.` : ""}
+      </p>
     </div>
   );
 }

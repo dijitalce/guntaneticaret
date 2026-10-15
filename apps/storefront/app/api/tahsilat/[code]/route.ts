@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { publicRedirect } from "@guntan/config";
 import { getPaymentLinkByCode, startPaymentLinkAttempt } from "@guntan/db";
-import { buildOosPayForm, garantiConfigFromEnv, installmentOptions } from "@guntan/ecommerce";
+import { buildOosPayForm, garantiConfig, installmentOptions } from "@guntan/ecommerce";
 import { autoPostHtml, clientIp } from "../../../../src/garanti-redirect";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ code: stri
   const link = await getPaymentLinkByCode(code);
   if (!link || link.status !== "pending") return NextResponse.redirect(publicRedirect(`/tahsilat/${code}`, request), 303);
 
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   if (!garanti) return back("kapali");
 
   const form = await request.formData();

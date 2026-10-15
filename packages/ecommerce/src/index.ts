@@ -17,13 +17,14 @@ import {
   attachOrderAttribution,
   evaluateCoupon,
   getCustomerMeta,
+  getPaymentSettings,
   getShippingSettings,
   markCouponUsed,
   notifyOrder,
   notifyOrderInBackground,
   sendServerPurchaseInBackground,
 } from "@guntan/db";
-import { amountWithInstallment, garantiConfigFromEnv, getPaymentProvider } from "@guntan/payments";
+import { amountWithInstallment, garantiConfigFromEnv, getPaymentProvider, type GarantiConfig } from "@guntan/payments";
 import {
   arasConfigFromEnv,
   createArasOrder,
@@ -223,6 +224,22 @@ export async function shippingFeeFor(subtotal: number, opts: { freeShipping?: bo
   return Math.max(0, Number(s.flatFee) || 0);
 }
 
+/**
+ * Garanti sanal POS ayarı; taksit oranları panelde girildiyse onlar, girilmediyse ortam değişkenindeki tablo.
+ * Ödeme tutarı da bununla hesaplandığı için vitrinde gösterilen taksitle çekilen tutar aynı kalır.
+ */
+export async function garantiConfig(): Promise<GarantiConfig | null> {
+  const base = garantiConfigFromEnv();
+  if (!base) return null;
+  const s = await getPaymentSettings().catch(() => null);
+  const rates = Object.entries(s?.installmentRates ?? {})
+    .map(([n, pct]) => [Number(n), Number(pct)] as const)
+    .filter(([n, pct]) => Number.isInteger(n) && n >= 2 && n <= 12 && Number.isFinite(pct) && pct >= 0)
+    .sort((a, b) => a[0] - b[0]);
+  if (rates.length === 0) return base;
+  return { ...base, installments: new Map(rates), installmentMinAmount: Math.max(0, Number(s?.installmentMinAmount) || 0) };
+}
+
 export async function getCartSummary(tenantId: string, sessionId?: string | null, customerId?: string | null) {
   const empty = {
     qty: 0,
@@ -340,7 +357,7 @@ export async function checkout(input: {
   clientIp?: string | null;
   userAgent?: string | null;
 }) {
-  const garanti = input.card ? garantiConfigFromEnv() : null;
+  const garanti = input.card ? await garantiConfig() : null;
   if (input.card && !garanti) throw new Error("Kartla ödeme şu an kullanılamıyor.");
   await expireStaleCardOrders().catch(() => undefined);
   const view = await getCartView(input.cartId);

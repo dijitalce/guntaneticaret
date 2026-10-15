@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { COOKIE_CART } from "@guntan/config";
 import {
-  garantiConfigFromEnv,
+  garantiConfig,
   getCartView,
   getOrCreateCart,
   installmentOptions,
@@ -23,7 +23,7 @@ export default async function CheckoutPage({
   searchParams: Promise<{ hata?: string; mesaj?: string; kupon?: string }>;
 }) {
   const sp = await searchParams;
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   const tenant = await getTenant();
   if (!(await getSalesStatus()).open) redirect("/sepet?satis=kapali");
   const jar = await cookies();

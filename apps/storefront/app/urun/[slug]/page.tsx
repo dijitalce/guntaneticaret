@@ -3,7 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { productImageUrl } from "@guntan/catalog";
-import { discountPercent, garantiConfigFromEnv, installmentOptions } from "@guntan/ecommerce";
+import { discountPercent, garantiConfig, installmentOptions } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
 import { JsonLd, breadcrumbJsonLd, pageTitle } from "../../../src/seo";
 import {
@@ -21,17 +21,10 @@ import { CommerceEvent } from "../../../src/visitor-tracker";
 import { ManufacturerLogo, manufacturerLogoUrl } from "../../../src/manufacturer-logo";
 import { QtyStepper } from "../../../src/qty-stepper";
 import { StickyAtc } from "../../../src/sticky-atc";
-import { IconSwap } from "../../../src/icons";
-import {
-  AssuranceGrid,
-  InstallmentTable,
-  MissingPartCta,
-  OemList,
-  PaymentMarks,
-  ReturnTerms,
-  StockLine,
-  assuranceItems,
-} from "../../../src/assurance";
+import { IconBolt, IconCard, IconCheckBadge, IconLock, IconSwap } from "../../../src/icons";
+import { InstallmentTable, MissingPartCta, OemList, PaymentMarks, StockLine } from "../../../src/assurance";
+import { ProductTabs, type ProductTab } from "../../../src/product-tabs";
+import { ReturnPolicyNotice } from "../../../src/return-notice";
 import { sentenceCaseTr } from "../../../src/format";
 import { getSalesStatus } from "../../../src/sales";
 import { listProductReviews, productReviewSummary, reviewEligibility, type ReviewSummary } from "@guntan/db";
@@ -141,9 +134,10 @@ export default async function ProductPage({
     ? `https://wa.me/${tenant.whatsapp}?text=${encodeURIComponent(product.name)}`
     : null;
   const sales = await getSalesStatus();
-  const garanti = garantiConfigFromEnv();
+  const garanti = await garantiConfig();
   const installments = garanti ? installmentOptions(Number(product.price), garanti) : [];
   const maxInstallments = installments.reduce((m, o) => Math.max(m, o.count), 1);
+  const minMonthly = installments.reduce((m, o) => Math.min(m, o.monthly), Number(product.price));
   const seo = { ...seoInput(tenant, data), available: sales.open, reviews: { summary: reviewData.summary, items: reviewData.reviews } };
   const oems = seo.oems ?? [];
   const seoParagraphs = productSeoParagraphs({ ...seo, cardPayments: Boolean(garanti) });
@@ -154,6 +148,137 @@ export default async function ProductPage({
     null,
   );
   const vehicleName = fit ? `${fit.brandName} ${fit.modelName}` : null;
+  const askHref = whatsappHref ? (
+    <a href={whatsappHref} target="_blank" rel="noreferrer">
+      WhatsApp üzerinden
+    </a>
+  ) : null;
+
+  const tabs: ProductTab[] = [
+    {
+      id: "aciklama",
+      label: "Ürün açıklaması",
+      content: (
+        <div className="pdp-tab-split">
+          <div>
+            <h2 className="pdp-tab-title">Ürün bilgileri</h2>
+            <table className="fitment-table pdp-specs">
+              <tbody>
+                {data.manufacturerName && (
+                  <tr><th scope="row">Marka</th><td>{data.manufacturerName}</td></tr>
+                )}
+                {data.categories.length > 0 && (
+                  <tr>
+                    <th scope="row">Kategori</th>
+                    <td>
+                      {data.categories.map((c, i) => (
+                        <span key={c.id}>
+                          {i > 0 && ", "}
+                          <Link href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                )}
+                {oems.length > 0 && (
+                  <tr><th scope="row">OEM no</th><td><a href="#oem">{oems[0]}{oems.length > 1 ? ` +${oems.length - 1}` : ""}</a></td></tr>
+                )}
+                {vehicleCount > 0 && (
+                  <tr><th scope="row">Uyumlu araç</th><td><a href="#uyumluluk">{vehicleCount} model</a></td></tr>
+                )}
+                <tr><th scope="row">Durum</th><td>Sıfır, orijinal ambalajında</td></tr>
+                <tr><th scope="row">Stok durumu</th><td className="is-ok">Stokta</td></tr>
+                <tr><th scope="row">Kargo</th><td>Aynı gün kargo · Aras Kargo</td></tr>
+                <tr><th scope="row">İade</th><td>Teslimattan itibaren 14 gün</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="pdp-desc-body">
+            <h2 className="pdp-tab-title">Ürün açıklaması</h2>
+            {product.description && <p className="pdp-desc">{product.description}</p>}
+            {seoParagraphs.map((p, i) => (
+              <p key={i} className="pdp-desc">{p}</p>
+            ))}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "uyumluluk",
+      label: "Uyumlu araçlar",
+      count: vehicleCount || undefined,
+      content: (
+        <>
+          <h2 className="pdp-tab-title">
+            {product.name} uyumlu araçlar
+          </h2>
+          {data.fitments.length > 0 ? (
+            <div className="table-scroll">
+              <table className="fitment-table">
+                <thead><tr><th>Marka</th><th>Model</th><th>Kasa</th><th>Yıl</th><th>Motor</th></tr></thead>
+                <tbody>
+                  {data.fitments.map((f, i) => (
+                    <tr key={i}>
+                      <td>{f.brandName}</td>
+                      <td>{f.modelName}</td>
+                      <td>{f.generationName ?? "—"}</td>
+                      <td>{f.yearFrom && f.yearTo ? `${f.yearFrom}-${f.yearTo}` : "—"}</td>
+                      <td>{f.engineName ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="pdp-desc">Uyumluluk bilgisi henüz girilmedi.</p>
+          )}
+          <p className="pdp-tab-note">
+            Emin değil misiniz? Aracınıza uyup uymadığını{askHref ? <> {askHref} veya</> : null} şasi numaranızla bize
+            sorun; siparişten önce uyumu teyit edelim.
+          </p>
+        </>
+      ),
+    },
+  ];
+  if (oems.length > 0) {
+    tabs.push({
+      id: "oem",
+      label: "OEM numaraları",
+      count: oems.length,
+      content: (
+        <>
+          <h2 className="pdp-tab-title">OEM / orijinal parça numaraları</h2>
+          <ul className="pdp-oem-grid">
+            {oems.map((o) => (
+              <li key={o}>
+                <Link href={`/arama?q=${encodeURIComponent(o)}`} title={`${o} numaralı tüm parçalar`}>
+                  <code>{o}</code>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className="pdp-tab-note">
+            Eski parçanızın üzerindeki veya servis kaydındaki numarayı bu kodlarla karşılaştırın. Bir numaraya tıklayarak
+            aynı OEM numaralı diğer marka parçaları görebilirsiniz.
+          </p>
+        </>
+      ),
+    });
+  }
+  tabs.push({
+    id: "taksit",
+    label: "Taksit seçenekleri",
+    content: (
+      <>
+        <h2 className="pdp-tab-title">Taksit seçenekleri</h2>
+        {garanti ? (
+          <InstallmentTable options={installments} minAmount={garanti.installmentMinAmount || undefined} />
+        ) : (
+          <p className="installment-note muted">Havale / EFT ile güvenli ödeme yapabilirsiniz.</p>
+        )}
+      </>
+    ),
+  });
 
   return (
     <div className="container page-surface">
@@ -233,7 +358,10 @@ export default async function ProductPage({
             </p>
             {maxInstallments > 1 ? (
               <a className="pdp-installment-hint" href="#taksit">
-                {maxInstallments} aya varan taksit
+                <IconCard />
+                <span>
+                  Aylık <b>{money(minMonthly)}</b>&apos;den başlayan, {maxInstallments} aya varan taksit
+                </span>
               </a>
             ) : null}
           </div>
@@ -297,10 +425,36 @@ export default async function ProductPage({
               </span>
             </a>
           )}
-          <AssuranceGrid items={assuranceItems({ card: Boolean(garanti), maxInstallments })} />
+          <ul className="pdp-perks">
+            <li>
+              <IconBolt />
+              <span>
+                <b>Aynı gün kargo</b> · stoktaki ürünler aynı gün Aras Kargo&apos;ya verilir
+              </span>
+            </li>
+            <li>
+              <ReturnPolicyNotice whatsapp={tenant.whatsapp} phone={tenant.phone} />
+            </li>
+            <li>
+              <a href="#uyumluluk">
+                <IconCheckBadge />
+                <span>
+                  <u>Bu parça hangi araçlara uyumlu?</u> · şasi numaranızla teyit ediyoruz
+                </span>
+              </a>
+            </li>
+            <li>
+              <IconLock />
+              <span>
+                {garanti ? "3D Secure ve 256-bit SSL ile güvenli ödeme" : "256-bit SSL ile korunan alışveriş"} · faturalı satış
+              </span>
+            </li>
+          </ul>
           <PaymentMarks card={Boolean(garanti)} />
         </div>
       </div>
+
+      <ProductTabs tabs={tabs} />
 
       {alternatives.length > 0 && (
         <section className="pdp-block" id="alternatifler" aria-labelledby="alternatifler-baslik">
@@ -318,96 +472,6 @@ export default async function ProductPage({
           </div>
         </section>
       )}
-
-      <h2 className="pdp-section" id="uyumluluk">
-        Uyumlu araçlar{vehicleCount > 0 ? <span className="pdp-section-count">{vehicleCount} model</span> : null}
-      </h2>
-      {data.fitments.length > 0 ? (
-        <div className="table-scroll">
-          <table className="fitment-table">
-            <thead><tr><th>Marka</th><th>Model</th><th>Kasa</th><th>Yıl</th><th>Motor</th></tr></thead>
-            <tbody>
-              {data.fitments.map((f, i) => (
-                <tr key={i}>
-                  <td>{f.brandName}</td>
-                  <td>{f.modelName}</td>
-                  <td>{f.generationName ?? "—"}</td>
-                  <td>{f.yearFrom && f.yearTo ? `${f.yearFrom}-${f.yearTo}` : "—"}</td>
-                  <td>{f.engineName ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="pdp-desc">
-          Uyumluluk bilgisi henüz girilmedi. Aracınıza uyup uymadığını
-          {whatsappHref ? <> <a href={whatsappHref} target="_blank" rel="noreferrer">WhatsApp üzerinden</a> veya</> : null} şasi numaranızla bize sorabilirsiniz.
-        </p>
-      )}
-      <h2 className="pdp-section">Ürün bilgileri</h2>
-      <div className="table-scroll">
-        <table className="fitment-table pdp-specs">
-          <tbody>
-            {data.manufacturerName && (
-              <tr><th scope="row">Marka</th><td>{data.manufacturerName}</td></tr>
-            )}
-            {data.categories.length > 0 && (
-              <tr>
-                <th scope="row">Kategori</th>
-                <td>
-                  {data.categories.map((c, i) => (
-                    <span key={c.id}>
-                      {i > 0 && ", "}
-                      <Link href={`/kategori/${c.slug}`}>{sentenceCaseTr(c.name)}</Link>
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            )}
-            {oems.length > 0 && (
-              <tr>
-                <th scope="row">OEM numaraları</th>
-                <td className="pdp-oem-cell">
-                  {oems.map((o) => (
-                    <code key={o}>{o}</code>
-                  ))}
-                </td>
-              </tr>
-            )}
-            {vehicleCount > 0 && (
-              <tr><th scope="row">Uyumlu araç</th><td><a href="#uyumluluk">{vehicleCount} model</a></td></tr>
-            )}
-            <tr><th scope="row">Durum</th><td>Sıfır, orijinal ambalajında</td></tr>
-            <tr><th scope="row">Stok durumu</th><td className="is-ok">Stokta</td></tr>
-            <tr><th scope="row">Kargo</th><td>Aynı gün kargo · Aras Kargo</td></tr>
-            <tr><th scope="row">İade</th><td>Teslimattan itibaren 14 gün</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h2 className="pdp-section">Ürün açıklaması</h2>
-      <div className="pdp-desc-body">
-        {product.description && <p className="pdp-desc">{product.description}</p>}
-        {seoParagraphs.map((p, i) => (
-          <p key={i} className="pdp-desc">{p}</p>
-        ))}
-      </div>
-
-      <div className="pdp-info-cols">
-        <section id="taksit" className="pdp-panel" aria-labelledby="taksit-baslik">
-          <h2 id="taksit-baslik">Taksit seçenekleri</h2>
-          {garanti ? (
-            <InstallmentTable options={installments} minAmount={garanti.installmentMinAmount || undefined} />
-          ) : (
-            <p className="installment-note muted">Havale / EFT ile güvenli ödeme yapabilirsiniz.</p>
-          )}
-        </section>
-        <section id="iade" className="pdp-panel" aria-labelledby="iade-baslik">
-          <h2 id="iade-baslik">İade şartları</h2>
-          <ReturnTerms />
-        </section>
-      </div>
 
       <MissingPartCta whatsapp={tenant.whatsapp} phone={tenant.phone} context={vehicleName ?? undefined} />
 

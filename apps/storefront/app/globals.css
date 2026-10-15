@@ -3682,11 +3682,236 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 .pdp-info-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.6rem; }
 .pdp-panel { padding: 1.1rem 1.2rem; border: 1px solid var(--border); border-radius: 16px; background: #fff; scroll-margin-top: 170px; }
 .pdp-panel h2 { margin: 0 0 0.75rem; font-size: 1.05rem; letter-spacing: -0.02em; }
-.installment-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
-.installment-table th, .installment-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; }
-.installment-table th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); }
-.installment-table td:last-child, .installment-table th:last-child { text-align: right; }
 .installment-note { margin: 0; font-size: 0.86rem; }
+
+/* Ürün sayfası: taksit ipucu ve kısa bilgi satırları */
+.pdp-installment-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 6%, #fff);
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border));
+  color: var(--foreground);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.pdp-installment-hint svg { width: 17px; height: 17px; color: var(--primary); flex: none; }
+.pdp-installment-hint b { color: var(--primary); font-weight: 800; }
+.pdp-installment-hint:hover span { text-decoration: underline; }
+.pdp-perks { list-style: none; margin: 1rem 0 0; padding: 0; border-top: 1px solid var(--border); }
+.pdp-perks > li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.6rem;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}
+.pdp-perks > li:last-child { border-bottom: 0; }
+.pdp-perks > li > a,
+.pdp-perks > li > .policy-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pdp-perks > li > svg, .pdp-perks > li > a > svg, .pdp-perks > li > .policy-trigger > svg { width: 18px; height: 18px; flex: none; color: var(--foreground); }
+.pdp-perks > li > span > b { color: var(--foreground); font-weight: 700; }
+.pdp-perks u { color: var(--foreground); font-weight: 650; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--foreground) 35%, transparent); }
+.pdp-perks > li > a:hover u, .pdp-perks > li > .policy-trigger:hover u { color: var(--primary); text-decoration-color: currentColor; }
+
+/* Ürün sayfası sekmeleri */
+.pdp-tabs { margin-top: 1.6rem; border: 1px solid var(--border); border-radius: 16px; background: #fff; overflow: hidden; }
+.pdp-tablist {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 55%, #fff);
+  scroll-margin-top: 150px;
+}
+.pdp-tablist::-webkit-scrollbar { display: none; }
+.pdp-tablist button {
+  position: relative;
+  flex: 1 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.95rem 1.2rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pdp-tablist button + button { border-left: 1px solid var(--border); }
+.pdp-tablist button:hover { color: var(--foreground); }
+.pdp-tablist button[aria-selected="true"] { background: #fff; color: var(--foreground); font-weight: 750; }
+.pdp-tablist button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: var(--primary);
+}
+.pdp-tablist button:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; }
+.pdp-tab-count { padding: 0.1rem 0.45rem; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: 0.72rem; font-weight: 750; }
+.pdp-tablist button[aria-selected="true"] .pdp-tab-count { background: color-mix(in srgb, var(--primary) 12%, #fff); color: var(--primary); }
+.pdp-tabpanel { padding: 1.3rem 1.4rem 1.4rem; }
+.pdp-tab-title { margin: 0 0 0.8rem; font-size: 1rem; letter-spacing: -0.02em; }
+.pdp-tab-split { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 1.8rem; align-items: start; }
+.pdp-tab-split .pdp-specs { border: 1px solid var(--border); border-collapse: separate; border-spacing: 0; }
+.pdp-tab-split .pdp-specs tr:last-child > * { border-bottom: 0; }
+.pdp-tabpanel .fitment-table { border: 1px solid var(--border); border-collapse: separate; border-spacing: 0; }
+.pdp-tabpanel .fitment-table thead th { background: color-mix(in srgb, var(--muted) 60%, #fff); font-size: 0.78rem; }
+.pdp-tabpanel .fitment-table tbody tr:last-child > * { border-bottom: 0; }
+.pdp-tab-note { margin: 0.9rem 0 0; font-size: 0.84rem; color: var(--muted-foreground); }
+.pdp-tab-note a { color: var(--primary); font-weight: 700; }
+.pdp-oem-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.5rem; }
+.pdp-oem-grid a {
+  display: block;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 35%, #fff);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pdp-oem-grid a:hover { border-color: var(--primary); background: #fff; }
+.pdp-oem-grid code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; }
+
+/* Taksit tablosu (kart programları) */
+.inst-programs { display: none; list-style: none; margin: 0 0 0.7rem; padding: 0; flex-wrap: wrap; gap: 0.35rem; }
+.inst-programs li { padding: 0.25rem 0.55rem; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 0.8rem; }
+.inst-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.inst-table th, .inst-table td { padding: 0.62rem 0.55rem; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; }
+.inst-table thead th { padding: 0.8rem 0.5rem; background: color-mix(in srgb, var(--muted) 60%, #fff); font-size: 0.76rem; color: var(--muted-foreground); }
+.inst-table tbody th { width: 5.5rem; background: color-mix(in srgb, var(--muted) 35%, #fff); font-weight: 750; color: var(--foreground); }
+.inst-table tbody tr:last-child > * { border-bottom: 0; }
+.inst-table tbody tr:hover > td { background: color-mix(in srgb, var(--primary) 3%, #fff); }
+.inst-table td { color: #3a3d44; }
+.inst-table .inst-total { font-weight: 750; color: var(--foreground); border-left: 1px solid var(--border); }
+.inst-total small { display: block; margin-top: 0.1rem; font-size: 0.68rem; font-weight: 700; color: #047857; }
+.inst-table tr.is-free th { color: #047857; }
+.inst-all { display: none; }
+.inst-note { margin: 0.75rem 0 0; font-size: 0.78rem; line-height: 1.5; color: var(--muted-foreground); }
+.card-mark { display: inline-block; font-size: 0.95rem; font-weight: 850; letter-spacing: -0.02em; line-height: 1; color: var(--foreground); }
+.card-mark.is-axess { text-transform: lowercase; color: #1f2a1b; }
+.card-mark.is-axess::first-letter { color: #7cb82f; }
+.card-mark.is-bonus { text-transform: lowercase; font-style: italic; color: #3aa548; }
+.card-mark.is-maximum { text-transform: lowercase; font-style: italic; color: #e2007a; }
+.card-mark.is-world { text-transform: uppercase; color: #6c2a8f; letter-spacing: 0.02em; }
+.card-mark.is-paraf { font-style: italic; color: #00a0d6; }
+.card-mark.is-cardfinans { color: #22408f; }
+.card-mark.is-bankkart { color: #d71920; }
+.card-mark.is-other { font-size: 0.78rem; font-weight: 750; color: var(--muted-foreground); }
+
+/* Politika penceresi (iade koşulları) */
+.policy-trigger { cursor: pointer; }
+.policy-dialog {
+  width: min(760px, calc(100vw - 1.5rem));
+  max-width: none;
+  max-height: min(86vh, 900px);
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgb(0 0 0 / 30%);
+  color: var(--foreground);
+  overflow: hidden;
+}
+.policy-dialog[open] { display: flex; flex-direction: column; }
+.policy-dialog::backdrop { background: rgb(15 15 20 / 55%); backdrop-filter: blur(2px); }
+.policy-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.25rem; background: #17181c; color: #fff; }
+.policy-head strong { display: block; font-size: 1.02rem; line-height: 1.35; letter-spacing: -0.01em; }
+.policy-head small { display: block; margin-top: 0.2rem; font-size: 0.78rem; color: rgb(255 255 255 / 68%); }
+.policy-x { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: rgb(255 255 255 / 10%); color: #fff; cursor: pointer; }
+.policy-x:hover { background: rgb(255 255 255 / 18%); }
+.policy-x svg { width: 18px; height: 18px; }
+.policy-body { overflow-y: auto; overscroll-behavior: contain; padding: 1.1rem 1.25rem; display: grid; gap: 1rem; font-size: 0.86rem; line-height: 1.6; color: #3a3d44; }
+.policy-body p { margin: 0 0 0.5rem; }
+.policy-body b { color: var(--foreground); }
+.policy-body a { color: var(--primary); font-weight: 700; }
+.policy-intro { padding: 0.9rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--primary) 5%, #fff); border: 1px solid color-mix(in srgb, var(--primary) 15%, var(--border)); }
+.policy-intro p:last-child { margin-bottom: 0; }
+.policy-step { padding-top: 1rem; border-top: 1px solid var(--border); }
+.policy-step h3 { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.55rem; font-size: 0.95rem; color: var(--foreground); }
+.policy-step h3 span { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: #17181c; color: #fff; font-size: 0.8rem; }
+.policy-step.is-ok h3 span { background: #047857; }
+.policy-list { margin: 0 0 0.5rem; padding: 0; list-style: none; display: grid; gap: 0.4rem; }
+.policy-list li { position: relative; padding-left: 1.4rem; }
+.policy-list li::before { content: "•"; position: absolute; left: 0.35rem; color: var(--primary); font-weight: 800; }
+.policy-list.is-no li::before { content: "✕"; left: 0.1rem; color: #dc2626; font-size: 0.8rem; }
+.policy-list.is-yes li::before { content: "✓"; left: 0.1rem; color: #047857; }
+.policy-flow { margin: 0 0 0.5rem; padding: 0; list-style: none; counter-reset: flow; display: grid; gap: 0.45rem; }
+.policy-flow li { counter-increment: flow; position: relative; padding-left: 2rem; }
+.policy-flow li::before {
+  content: counter(flow);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #17181c;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.policy-legal { margin: 0.4rem 0 0; padding: 0.6rem 0.8rem; border-left: 3px solid #f59e0b; border-radius: 0 8px 8px 0; background: #fffbeb; font-size: 0.78rem; color: #78350f; }
+.policy-legal b { color: inherit; }
+.policy-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 1.25rem; border-top: 1px solid var(--border); background: #fafafa; }
+.policy-foot a { font-size: 0.84rem; font-weight: 700; color: var(--primary); }
+
+@media (max-width: 900px) {
+  .pdp-tab-split { grid-template-columns: 1fr; gap: 1.2rem; }
+}
+@media (max-width: 760px) {
+  .inst-programs { display: flex; }
+  .inst-prog { display: none; }
+  .inst-all { display: table-cell; }
+  .inst-table { font-size: 0.84rem; }
+}
+@media (max-width: 640px) {
+  .pdp-tabs { margin-top: 1.1rem; border-radius: 14px; }
+  .pdp-tablist button { flex: 0 0 auto; padding: 0.8rem 0.95rem; font-size: 0.84rem; }
+  .pdp-tabpanel { padding: 1rem 0.9rem 1.1rem; }
+  .policy-dialog { width: calc(100vw - 1rem); max-height: 90vh; border-radius: 14px; }
+  .policy-head, .policy-body, .policy-foot { padding-left: 1rem; padding-right: 1rem; }
+}
 .return-terms ul { margin: 0 0 0.6rem; padding-left: 1.1rem; display: grid; gap: 0.35rem; font-size: 0.86rem; color: var(--muted-foreground); }
 .return-terms strong { color: var(--foreground); }
 .return-terms a { font-size: 0.84rem; font-weight: 700; color: var(--primary); }
