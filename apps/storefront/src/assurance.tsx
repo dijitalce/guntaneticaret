@@ -2,18 +2,39 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import {
   IconBolt,
+  IconBox,
   IconCard,
   IconCheckBadge,
   IconLock,
   IconPhone,
   IconReturn,
+  IconTag,
   IconTruck,
   IconWhatsapp,
 } from "./icons";
 
-export const MISSING_PART_CATALOG = "1.000.000";
+export const MISSING_PART_CATALOG = "2.000.000";
+export const SLOGAN = "Her Parçada Biz, Her Yolda Siz!";
+
+export const PART_REQUEST_TEXT = "Merhaba, sitede bulamadığım bir parça arıyorum.\nAraç / şasi no:\nParça:";
+export const BULK_QUOTE_TEXT = "Merhaba, toplu parça teklifi almak istiyorum.\nAraç / şasi no:\nParça listesi:";
+
+export function whatsappHref(whatsapp: string, text: string) {
+  return `https://wa.me/${whatsapp}?text=${encodeURIComponent(text)}`;
+}
 
 type Assurance = { key: string; icon: ReactNode; title: string; text: string };
+
+export function homeAssuranceItems(): Assurance[] {
+  return [
+    { key: "installments", icon: <IconCard />, title: "Kredi kartına 12 taksit", text: "Taksit seçenekleri ödeme adımında" },
+    { key: "interest-free", icon: <IconTag />, title: "20.000+ üründe vade farksız 3 taksit", text: "Seçili ürünlerde ek ücret ödemeden" },
+    { key: "free-ship", icon: <IconTruck />, title: "30.000+ üründe kargo bizden!", text: "Seçili ürünlerde kargo ücretsiz" },
+    { key: "same-day", icon: <IconBolt />, title: "Aynı gün kargo", text: "Stoktaki ürünler aynı gün kargoda" },
+    { key: "return", icon: <IconReturn />, title: "14 gün iade hakkı", text: "Teslimattan itibaren 14 gün içinde" },
+    { key: "secure", icon: <IconLock />, title: "%100 güvenli ödeme", text: "256-bit SSL ve 3D Secure" },
+  ];
+}
 
 export function assuranceItems(opts: { card?: boolean; maxInstallments?: number } = {}): Assurance[] {
   const items: Assurance[] = [
@@ -207,7 +228,7 @@ export function MissingPartCta({
       <div>
         <strong>Aradığınız parçayı bulamadınız mı?</strong>
         <p>
-          Stoğumuzda olmayan <b>+{MISSING_PART_CATALOG} ürün</b> için bize ulaşın; OEM veya şasi numaranızla doğru parçayı
+          Sitemizde görünmeyen <b>{MISSING_PART_CATALOG}+ ürün</b> için bize ulaşın; OEM veya şasi numaranızla doğru parçayı
           bulup fiyat verelim.
         </p>
       </div>
@@ -227,6 +248,34 @@ export function MissingPartCta({
             <IconPhone /> {phone}
           </a>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+export function HomeQuoteBand({ whatsapp, phone }: { whatsapp: string | null; phone: string | null }) {
+  if (!whatsapp && !phone) return null;
+  const href = (text: string) => (whatsapp ? whatsappHref(whatsapp, text) : telHref(phone!));
+  const external = whatsapp ? { target: "_blank", rel: "noreferrer" } : {};
+  return (
+    <section className="home-quote" aria-labelledby="home-quote-title">
+      <div className="home-quote-copy">
+        <span className="home-quote-slogan">{SLOGAN}</span>
+        <h2 id="home-quote-title">
+          Sitemizde gözükmeyen <b>{MISSING_PART_CATALOG}+</b> ürün
+        </h2>
+        <p>
+          Aradığınız parça listede yoksa parça adı, OEM veya şasi numaranızı gönderin; tedarik ağımızdan bulup hızlıca fiyat
+          verelim. Servis, usta ve filolara toplu parça teklifi hazırlıyoruz.
+        </p>
+      </div>
+      <div className="home-quote-actions">
+        <a className="btn home-quote-bulk" href={href(BULK_QUOTE_TEXT)} {...external}>
+          <IconBox /> Toplu Parça Teklifi Al
+        </a>
+        <a className="btn btn-whatsapp" href={href(PART_REQUEST_TEXT)} {...external}>
+          <IconWhatsapp /> Parçanı bulamadın mı?
+        </a>
       </div>
     </section>
   );

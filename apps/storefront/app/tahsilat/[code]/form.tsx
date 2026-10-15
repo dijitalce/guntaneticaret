@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { PaymentLinkBilling } from "@guntan/db";
 
 function money(n: number) {
   return `${n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -30,9 +31,12 @@ export function PaymentLinkCheckout({
   options: Option[];
   testMode: boolean;
   error: string | null;
-  defaults: { fullName: string; email: string; phone: string };
+  defaults: { fullName: string; email: string; phone: string; billing: PaymentLinkBilling | null };
 }) {
+  const billing = defaults.billing;
   const [installments, setInstallments] = useState(1);
+  const [addBilling, setAddBilling] = useState(Boolean(billing));
+  const [invoiceType, setInvoiceType] = useState<"individual" | "corporate">(billing?.invoiceType ?? "individual");
   const [submitting, setSubmitting] = useState(false);
   useEffect(() => {
     // Bankadan tarayıcının geri tuşuyla dönülürse sayfa önbellekten gelir; buton kilitli kalmasın.
@@ -100,6 +104,99 @@ export function PaymentLinkCheckout({
                 </label>
               </div>
             </div>
+          </section>
+
+          <section className="checkout-form-card">
+            <h2>
+              Fatura ve adres bilgileri <span className="checkout-optional">(isteğe bağlı)</span>
+            </h2>
+            <label className="checkout-check">
+              <input type="checkbox" name="addBilling" value="1" checked={addBilling} onChange={(e) => setAddBilling(e.target.checked)} />
+              <span>Fatura ve adres bilgilerimi eklemek istiyorum</span>
+            </label>
+            {!addBilling ? (
+              <p className="checkout-hint muted">Bireysel veya kurumsal fatura için adres ve vergi bilgilerinizi ekleyebilirsiniz.</p>
+            ) : (
+              <>
+                <div className="checkout-segment" role="radiogroup" aria-label="Fatura tipi" style={{ marginTop: "0.85rem" }}>
+                  {(["individual", "corporate"] as const).map((t) => (
+                    <label key={t} className={`checkout-segment-option${invoiceType === t ? " is-active" : ""}`}>
+                      <input type="radio" name="invoiceType" value={t} checked={invoiceType === t} onChange={() => setInvoiceType(t)} />
+                      <span>{t === "individual" ? "Bireysel" : "Kurumsal"}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="checkout-form-grid">
+                  {invoiceType === "corporate" ? (
+                    <>
+                      <label>
+                        Firma ünvanı
+                        <input className="input" name="companyName" autoComplete="organization" required minLength={2} defaultValue={billing?.companyName ?? ""} />
+                      </label>
+                      <div className="checkout-form-row">
+                        <label>
+                          Vergi dairesi
+                          <input className="input" name="taxOffice" required defaultValue={billing?.taxOffice ?? ""} />
+                        </label>
+                        <label>
+                          Vergi numarası
+                          <input
+                            className="input"
+                            name="taxNumber"
+                            inputMode="numeric"
+                            required
+                            pattern="[0-9]{10,11}"
+                            title="10 haneli vergi numarası (şahıs şirketlerinde 11 haneli T.C. kimlik no)"
+                            maxLength={11}
+                            defaultValue={billing?.taxNumber ?? ""}
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : (
+                    <label>
+                      T.C. kimlik no <span className="checkout-optional">(isteğe bağlı)</span>
+                      <input
+                        className="input"
+                        name="nationalId"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="11 haneli T.C. kimlik no"
+                        pattern="[1-9][0-9]{10}"
+                        title="T.C. kimlik numarası 11 haneli olmalı"
+                        maxLength={11}
+                        defaultValue={billing?.nationalId ?? ""}
+                      />
+                    </label>
+                  )}
+                  <div className="checkout-form-row">
+                    <label>
+                      İl
+                      <input className="input" name="billingCity" autoComplete="address-level1" required defaultValue={billing?.city ?? ""} />
+                    </label>
+                    <label>
+                      İlçe
+                      <input className="input" name="billingDistrict" autoComplete="address-level2" required defaultValue={billing?.district ?? ""} />
+                    </label>
+                  </div>
+                  <label>
+                    Posta kodu <span className="checkout-optional">(isteğe bağlı)</span>
+                    <input
+                      className="input"
+                      name="billingPostalCode"
+                      autoComplete="postal-code"
+                      inputMode="numeric"
+                      maxLength={5}
+                      defaultValue={billing?.postalCode ?? ""}
+                    />
+                  </label>
+                  <label>
+                    Fatura adresi
+                    <textarea className="input" name="billingLine1" autoComplete="street-address" required minLength={5} defaultValue={billing?.line1 ?? ""} />
+                  </label>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="checkout-pay-card">

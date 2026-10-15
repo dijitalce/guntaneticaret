@@ -2,58 +2,126 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { TenantPublicConfig } from "@guntan/types";
-import { IconCard, IconCheckBadge, IconPhone, IconShield, IconTruck, IconWhatsapp } from "./icons";
+import { COMPANY_CONTACT } from "@guntan/db/content/contact";
+import {
+  IconBolt,
+  IconCard,
+  IconCheckBadge,
+  IconLock,
+  IconParts,
+  IconPhone,
+  IconReturn,
+  IconShield,
+  IconWhatsapp,
+} from "./icons";
+import { MISSING_PART_CATALOG, SLOGAN } from "./assurance";
 import { absoluteUrl } from "./seo";
 
 export const ABOUT = {
-  company: "Aktan Otomotiv",
   shopName: "Aktan Oto Yedek Parça",
-  years: 13,
-  extraPhone: "+90 531 431 71 97",
-  street: "İkitelli OSB Mah. Güngören Bağcılar Sanayi Sitesi 15. Blok No: 49",
+  years: 6,
+  team: 10,
+  street: "İkitelli OSB Mah. Bağcılar Güngören Sanayi Sitesi 15. Blok No: 49",
   district: "Başakşehir",
   city: "İstanbul",
   photo: {
     src: "/about/aktan-oto-yedek-parca-ikitelli-basaksehir.webp",
     width: 768,
     height: 576,
-    alt: "Aktan Oto Yedek Parça dükkanı – İkitelli OSB Güngören Bağcılar Sanayi Sitesi, Başakşehir / İstanbul",
+    alt: "Aktan Oto Yedek Parça dükkanı – Bağcılar Güngören Sanayi Sitesi 15. Blok No: 49, İkitelli / İstanbul",
   },
 } as const;
 
+export function aboutMeta(siteName: string) {
+  return {
+    title: `Hakkımızda | ${siteName} – ${SLOGAN}`,
+    description: `${siteName}: ${ABOUT.years} yıllık tecrübe ve ${ABOUT.team} kişilik ekiple Bağcılar Güngören Sanayi Sitesi, İstanbul'dan A'dan Z'ye tüm marka ve modellere oto yedek parça. Faturalı satış, kredi kartına 12 taksit, Türkiye geneline kargo.`,
+  };
+}
+
 const STATS = [
-  { value: `${ABOUT.years}+`, label: "yıllık tecrübe" },
-  { value: "150.000+", label: "ürün çeşidi" },
-  { value: "500+", label: "araç markası" },
-  { value: "350+", label: "ürün markası" },
+  { value: `${ABOUT.years}+`, label: "yıllık sektör tecrübesi" },
+  { value: `${ABOUT.team}`, label: "kişilik uzman ekip" },
+  { value: `${MISSING_PART_CATALOG}+`, label: "tedarik edilebilir ürün" },
+  { value: "A'dan Z'ye", label: "marka ve model" },
 ];
 
 const PROMISES = [
-  { icon: <IconShield />, title: "Tamamı faturalı", text: "Sattığımız her ürün faturalıdır." },
-  { icon: <IconCard />, title: "Vade farksız taksit", text: "Kredi kartına vade farksız taksit imkânı." },
-  { icon: <IconTruck />, title: "Türkiye geneline kargo", text: "Anlaşmalı kargo ile her ile gönderim." },
-  { icon: <IconCheckBadge />, title: "Şase numarasıyla doğru parça", text: "Uyumu şase numaranızla birlikte kontrol ediyoruz." },
+  { icon: <IconShield />, title: "Güvenmediğimiz parçayı satmayız", text: "Kendi aracımıza takmayacağımız hiçbir parçayı size sunmayız." },
+  { icon: <IconCheckBadge />, title: "Doğru parça, titiz kontrol", text: "Uyumu OEM ve şasi numaranızla kontrol ederiz." },
+  { icon: <IconBolt />, title: "Söz verilen zamanda gönderim", text: "Stoktaki ürünler aynı gün kargoda, takip no SMS ile." },
+  { icon: <IconCard />, title: "Faturalı ve güvenli alışveriş", text: "Her ürün faturalı; kredi kartına 12 taksit, 3D Secure." },
+];
+
+const VALUES: { title: string; body: ReactNode[] }[] = [
+  {
+    title: "Kendi Aracımıza Takmayacağımız Parçayı Müşterimize Sunmayız!",
+    body: [
+      <>
+        Kalite anlayışımız çok net: <strong>kendi aracımıza takmayacağımız hiçbir parçayı müşterimize sunmayız.</strong>{" "}
+        Ürün seçiminde kaliteyi, araçla uyumluluğu ve müşteri memnuniyetini ön planda tutuyor; her siparişi titizlikle
+        değerlendirerek yanlış parça riskini en aza indiriyoruz.
+      </>,
+      "Çünkü satın aldığınız bir yedek parça yalnızca bir ürün değil; aracınıza, yol güvenliğinize ve bize duyduğunuz güvene yapılan bir yatırımdır.",
+    ],
+  },
+  {
+    title: "Doğru Parça İçin Titiz, Her Siparişte Dikkatliyiz.",
+    body: [
+      "Araç ve parça uyumluluğuna önem veriyoruz. İhtiyacınızı doğru anlamak için OEM numarası ve şasi numarası üzerinden uyumu kontrol ediyor, size uygun ürünü bulmak için çalışıyoruz.",
+      <>
+        Aradığınız parça sitemizde görünmüyor mu? Endişelenmeyin! Sitemizde listelenmeyen{" "}
+        <strong>{MISSING_PART_CATALOG}+ ürüne</strong> tedarik ağımız üzerinden ulaşabiliyoruz. Parça adı, OEM ya da şasi
+        numaranızla bize yazmanız yeterli.
+      </>,
+    ],
+  },
+  {
+    title: "Hızlı Geri Dönüş, Söz Verilen Zamanda Gönderim.",
+    body: [
+      "Zamanın sizin için ne kadar değerli olduğunu biliyoruz. Sorularınıza en kısa sürede dönüş yapıyor, stoktaki ürünleri aynı gün kargoya veriyor, tedarikli siparişlerde ise size bildirdiğimiz gönderim tarihine sadık kalıyoruz.",
+      "Verilen söz, müşterimize duyduğumuz saygının bir parçasıdır. Siparişinizin her aşamasında açık iletişim kurar, sizi bilgilendiririz; kargo takip numaranız SMS ve e-posta ile iletilir.",
+    ],
+  },
+  {
+    title: "Sizin Sorununuz, Bizim Sorumluluğumuz.",
+    body: [
+      "Müşterilerimizi bir sipariş numarasından ibaret görmüyoruz. Karşılaştığınız bir sorunu kendi sorunumuz gibi ele alıyor, çözüm üretmek için üzerimize düşeni yapıyoruz.",
+      "Müşteri memnuniyeti bizim için satışla bitmez. Sipariş öncesinden satış sonrasına kadar yanınızdayız: 14 gün içinde iade hakkınız saklıdır, hata bizden kaynaklanıyorsa hiçbir masraf ödemezsiniz.",
+    ],
+  },
+  {
+    title: `${ABOUT.years} Yıllık Tecrübe, ${ABOUT.team} Kişilik Ekip, Tek Bir Hedef.`,
+    body: [
+      `Geride bıraktığımız ${ABOUT.years} yılda edindiğimiz tecrübeyi ${ABOUT.team} kişilik ekibimizin emeği ve özverisiyle birleştiriyoruz. Her müşterimize aynı özenle yaklaşıyor, hizmet kalitemizi sürekli geliştiriyoruz.`,
+      "Hedefimiz yalnızca bugünkü ihtiyacınızı karşılamak değil; yarın yedek parça ihtiyacınız olduğunda ilk aklınıza gelen adres olmaktır.",
+    ],
+  },
+];
+
+const TRUST = [
+  {
+    icon: <IconParts />,
+    title: "Gerçek dükkan, gerçek ekip",
+    text: `Bağcılar Güngören Sanayi Sitesi 15. Blok No: 49'daki dükkanımızda ${ABOUT.team} kişilik ekibimizle hizmet veriyoruz.`,
+  },
+  {
+    icon: <IconShield />,
+    title: "Faturalı satış",
+    text: `Sattığımız her ürün faturalıdır. Vergi dairesi: ${COMPANY_CONTACT.taxOffice} · VKN: ${COMPANY_CONTACT.taxId}`,
+  },
+  { icon: <IconLock />, title: "Güvenli ödeme", text: "Garanti BBVA 3D Secure altyapısı, kredi kartına 12 taksit ve havale/EFT." },
+  { icon: <IconReturn />, title: "14 gün iade hakkı", text: "Orijinal ambalajında, kullanılmamış ürünlerde teslimattan itibaren 14 gün." },
 ];
 
 export const ABOUT_FULL_ADDRESS = `${ABOUT.street}, ${ABOUT.district} / ${ABOUT.city}`;
 
 const MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-  `${ABOUT.shopName}, Güngören Bağcılar Sanayi Sitesi 15. Blok No 49, İkitelli OSB, ${ABOUT.district}, ${ABOUT.city}`,
+  `${ABOUT.shopName}, Bağcılar Güngören Sanayi Sitesi 15. Blok No 49, İkitelli OSB, ${ABOUT.district}, ${ABOUT.city}`,
 )}`;
 
 function telHref(phone: string) {
   return `tel:${phone.replace(/[^\d+]/g, "")}`;
-}
-
-function phones(tenant: TenantPublicConfig) {
-  const list = [tenant.phone, ABOUT.extraPhone].filter((p): p is string => Boolean(p));
-  const seen = new Set<string>();
-  return list.filter((p) => {
-    const key = p.replace(/\D/g, "").slice(-10);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function ShopPhoto({ priority = false }: { priority?: boolean }) {
@@ -71,7 +139,7 @@ function ShopPhoto({ priority = false }: { priority?: boolean }) {
         <b>{ABOUT.years}+</b>
         <span>yıldır<br />sektörde</span>
       </span>
-      <figcaption>Dükkanımız · İkitelli OSB, {ABOUT.district} / {ABOUT.city}</figcaption>
+      <figcaption>Dükkanımız · Bağcılar Güngören Sanayi Sitesi, {ABOUT.city}</figcaption>
     </figure>
   );
 }
@@ -108,11 +176,11 @@ function AboutContact({ tenant }: { tenant: TenantPublicConfig }) {
             <IconWhatsapp /> WhatsApp
           </a>
         ) : null}
-        {phones(tenant).map((p) => (
-          <a key={p} className="btn btn-secondary" href={telHref(p)}>
-            <IconPhone /> {p}
+        {tenant.phone ? (
+          <a className="btn btn-secondary" href={telHref(tenant.phone)}>
+            <IconPhone /> {tenant.phone}
           </a>
-        ))}
+        ) : null}
       </div>
     </div>
   );
@@ -125,17 +193,17 @@ export function HomeAbout({ tenant }: { tenant: TenantPublicConfig }) {
       <div className="about-body">
         <span className="rail-eyebrow">Hakkımızda</span>
         <h2 id="home-about-title">
-          {ABOUT.company}: {ABOUT.years} yılı aşkın tecrübeyle orijinal ve kaliteli oto yedek parça
+          {tenant.siteName}: {SLOGAN}
         </h2>
+        <p className="about-lead">Bizim için yedek parça satmak değil, güven kazanmak önemlidir.</p>
         <p>
-          {tenant.siteName}, İstanbul İkitelli OSB&apos;deki Güngören Bağcılar Sanayi Sitesi&apos;nde hizmet veren{" "}
-          <strong>{ABOUT.company}</strong>&apos;in online yedek parça mağazasıdır. {ABOUT.years} yılı aşkın süredir
-          sektördeyiz; tecrübeli kadromuzla aracınıza uyumlu orijinal ve kaliteli yedek parçayı en uygun fiyatla
-          sunuyoruz.
+          {tenant.siteName} olarak {ABOUT.years} yıllık sektör tecrübemiz ve {ABOUT.team} kişilik ekibimizle İstanbul
+          Bağcılar Güngören Sanayi Sitesi&apos;nden Türkiye&apos;nin her yerine güvenilir, hızlı ve çözüm odaklı oto yedek
+          parça hizmeti sunuyoruz. A&apos;dan Z&apos;ye tüm marka ve modeller için doğru parçayı bulmaktan teslimata kadar
+          her aşamada yanınızdayız.
         </p>
         <p>
-          Kendi aracımıza takmayacağımız hiçbir parçayı size satmıyoruz. Gözünüz gibi baktığınız aracınızın parçaları
-          güvenilir ellerden, müşteri memnuniyeti ön planda tutularak tedarik edilir.
+          Kalite anlayışımız çok net: <strong>kendi aracımıza takmayacağımız hiçbir parçayı müşterimize sunmayız.</strong>
         </p>
         <AboutStats />
         <ul className="about-promises">
@@ -151,7 +219,7 @@ export function HomeAbout({ tenant }: { tenant: TenantPublicConfig }) {
         </ul>
         <div className="about-foot">
           <AboutContact tenant={tenant} />
-          <Link className="about-more" href="/sayfa/hakkimizda">Hikâyemizi okuyun →</Link>
+          <Link className="about-more" href="/sayfa/hakkimizda">Hikâyemizi ve değerlerimizi okuyun →</Link>
         </div>
       </div>
     </section>
@@ -163,57 +231,63 @@ export function AboutPage({ tenant, extra }: { tenant: TenantPublicConfig; extra
     <article className="container page-surface about-page">
       <header className="about-page-head">
         <span className="rail-eyebrow">Hakkımızda</span>
-        <h1>{ABOUT.company} – İkitelli&apos;de {ABOUT.years} yılı aşkın tecrübeyle oto yedek parça</h1>
-        <p>En uygun fiyat ve kaliteli hizmetin tek adresi: orijinal yedek parça, faturalı satış, Türkiye geneline kargo.</p>
+        <h1>
+          {tenant.siteName}
+          <span className="about-slogan">{SLOGAN}</span>
+        </h1>
+        <p className="about-lead">Bizim için yedek parça satmak değil, güven kazanmak önemlidir.</p>
       </header>
       <div className="about-page-grid">
         <ShopPhoto priority />
         <div className="about-body cms-prose">
           <p>
-            {ABOUT.company} ailesi olarak {ABOUT.years} yılı aşkın süredir oto yedek parça sektöründe, tecrübeli kadromuzla
-            hizmet veriyoruz. {tenant.siteName}, İstanbul {ABOUT.district}&apos;teki İkitelli OSB Güngören Bağcılar Sanayi
-            Sitesi&apos;nde bulunan dükkanımızın online yedek parça mağazasıdır.
+            {tenant.siteName} olarak {ABOUT.years} yıllık sektör tecrübemiz ve {ABOUT.team} kişilik ekibimizle otomotiv
+            yedek parça sektöründe güvenilir, hızlı ve çözüm odaklı hizmet sunuyoruz.
           </p>
           <p>
-            Kendi aracımıza takmayacağımız hiçbir yedek parçayı size vermeyiz; bundan gönül rahatlığıyla emin olabilirsiniz.
-            Gözünüz gibi baktığınız aracınızın yedek parça tedariği en güvenilir kişiler tarafından sağlanır. Müşteri
-            memnuniyetini ön planda tutar, olabilecek en uygun fiyatı almanızı sağlarız. Zoru başararak en kaliteli ürünleri
-            en uygun fiyata getirdiğimize şahit olmak isterseniz bir telefon kadar yakınınızdayız.
+            A&apos;dan Z&apos;ye farklı marka ve model araçların yedek parça ihtiyaçlarına yönelik geniş ürün seçeneklerimizle
+            aradığınız parçaya en doğru şekilde ulaşmanızı sağlıyoruz. Bizim için iş yalnızca parça satmakla bitmiyor; doğru
+            parçayı bulmaktan siparişin teslimatına kadar her aşamada yanınızda olmak en önemli önceliğimiz.
           </p>
           <AboutStats />
         </div>
       </div>
 
-      <div className="about-page-sections cms-prose">
-        <section>
-          <h2>Sitede bulamadığınız parçalar için bize ulaşın</h2>
-          <p>
-            Sitemizde yer almayan 150.000&apos;den fazla ürün, 500&apos;ün üzerinde araç markası ve 350&apos;den fazla ürün
-            markasıyla geniş bir yelpazeye sahibiz. Aradığınız parçayı sitede göremiyorsanız lütfen bizimle iletişime
-            geçin; ürün hakkında detaylı bilgi vermekten memnuniyet duyarız.
-          </p>
-        </section>
-        <section>
-          <h2>Doğru parça için şase numaranızı paylaşın</h2>
-          <p>
-            Doğru parça teminatı için şase (şasi) numaranızla birlikte bizimle irtibata geçmeniz bizi memnun eder. Parçanın
-            aracınıza uyumunu OEM numarası ve şase numarası üzerinden kontrol ederek size gönderiyoruz.
-          </p>
-        </section>
-        <section>
-          <h2>Faturalı ürün, vade farksız taksit</h2>
-          <p>
-            Ürünlerimizin tamamı faturalıdır. Kredi kartına vade farksız taksit imkânımız mevcuttur. Güncel stok bilgisi
-            için lütfen bizimle iletişime geçin.
-          </p>
-        </section>
-        <section>
-          <h2>Türkiye&apos;nin her yerine kargo</h2>
-          <p>
-            Anlaşmalı kargo firmamız ile Türkiye&apos;nin her yerine gönderim yapıyoruz. Kargo ücreti alıcıya aittir.
-          </p>
-        </section>
+      <div className="about-values">
+        {VALUES.map((v, i) => (
+          <section key={v.title} className="about-value">
+            <span className="about-value-no" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+            <h2>{v.title}</h2>
+            {v.body.map((p, j) => (
+              <p key={j}>{p}</p>
+            ))}
+          </section>
+        ))}
       </div>
+
+      <section className="about-trust" aria-labelledby="about-trust-title">
+        <h2 id="about-trust-title">Neden gönül rahatlığıyla alışveriş yapabilirsiniz?</h2>
+        <ul>
+          {TRUST.map((t) => (
+            <li key={t.title}>
+              <span className="about-promise-icon">{t.icon}</span>
+              <span>
+                <b>{t.title}</b>
+                {t.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <blockquote className="about-closing">
+        <p>
+          {tenant.siteName} olarak <strong>kaliteyi ürünlerimizde, güveni sözümüzde, memnuniyeti ise yaptığımız işte</strong>{" "}
+          yaşatıyoruz. Bizi tercih ettiğinizde yalnızca bir yedek parça tedarikçisiyle değil, ihtiyacınızı önemseyen ve
+          çözüm için yanınızda olan bir ekiple çalışırsınız.
+        </p>
+        <footer>— {ABOUT.shopName}</footer>
+      </blockquote>
 
       {extra}
 
@@ -235,13 +309,16 @@ export function autoPartsStoreJsonLd(tenant: TenantPublicConfig, host: string, s
     "@type": "AutoPartsStore",
     "@id": `${absoluteUrl(host, "/")}#store`,
     name: tenant.siteName,
-    alternateName: [ABOUT.company, ABOUT.shopName],
-    description: `${ABOUT.company}: ${ABOUT.years} yılı aşkın tecrübeyle İstanbul İkitelli OSB'de orijinal ve kaliteli oto yedek parça. Faturalı satış, vade farksız taksit, Türkiye geneline kargo.`,
+    alternateName: [ABOUT.shopName, COMPANY_CONTACT.legalName],
+    slogan: SLOGAN,
+    description: aboutMeta(tenant.siteName).description,
     url: absoluteUrl(host, "/"),
     logo,
     image: absoluteUrl(host, ABOUT.photo.src),
-    telephone: tenant.phone ?? ABOUT.extraPhone,
+    telephone: tenant.phone ?? COMPANY_CONTACT.phone,
     email: tenant.email ?? undefined,
+    taxID: COMPANY_CONTACT.taxId,
+    numberOfEmployees: { "@type": "QuantitativeValue", value: ABOUT.team },
     address: {
       "@type": "PostalAddress",
       streetAddress: ABOUT.street,
@@ -250,13 +327,9 @@ export function autoPartsStoreJsonLd(tenant: TenantPublicConfig, host: string, s
       addressCountry: "TR",
     },
     areaServed: { "@type": "Country", name: "Türkiye" },
-    contactPoint: phones(tenant).map((p) => ({
-      "@type": "ContactPoint",
-      telephone: p,
-      contactType: "customer service",
-      areaServed: "TR",
-      availableLanguage: "Turkish",
-    })),
+    contactPoint: tenant.phone
+      ? [{ "@type": "ContactPoint", telephone: tenant.phone, contactType: "customer service", areaServed: "TR", availableLanguage: "Turkish" }]
+      : undefined,
     paymentAccepted: "Kredi kartı, Havale/EFT",
     currenciesAccepted: "TRY",
     sameAs,

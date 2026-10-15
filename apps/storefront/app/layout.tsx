@@ -16,7 +16,8 @@ import { cachedPopularCategories, cachedVisibleBrands, cachedVisibleGenerations,
 import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
-import { IconHeart, IconUser } from "../src/icons";
+import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
+import { PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
@@ -163,7 +164,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
               </a>
             ) : <span>{tenant.phone}</span>}
-            <p className="topbar-note">Aynı gün kargo · 14 gün iade · %100 güvenli ödeme</p>
+            <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>
             <div className="topbar-links">
               {sahibinden ? (
                 <a className="topbar-sahibinden" href={sahibinden.href} target="_blank" rel="noreferrer">
@@ -190,6 +191,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             <SearchBox quickLinks={navCats.slice(0, 8).map((c) => ({ name: sentenceCaseTr(c.name), slug: c.slug }))} />
             <nav className="header-tools" aria-label="Hesap">
+              {tenant.whatsapp ? (
+                <a
+                  className="header-wa"
+                  href={whatsappHref(tenant.whatsapp, PART_REQUEST_TEXT)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Parçanı bulamadın mı? WhatsApp'tan sor"
+                >
+                  <IconWhatsapp />
+                  <span>
+                    <small>Parçanı bulamadın mı?</small>
+                    <b>WhatsApp&apos;tan sor</b>
+                  </span>
+                </a>
+              ) : null}
               <Link className="icon-btn" href="/hesabim">
                 <IconUser />
                 <span>Hesabım</span>
@@ -215,6 +231,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="footer-grid">
               <div>
                 <h3>{tenant.siteName}</h3>
+                <p className="footer-slogan">{SLOGAN}</p>
                 {tenant.tenant.slug === "guntan" ? (
                   <p className="footer-address">
                     {COMPANY_CONTACT.lines.map((line) => (

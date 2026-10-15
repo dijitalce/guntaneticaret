@@ -4425,3 +4425,123 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .about-promises { grid-template-columns: minmax(0, 1fr); }
   .about-contact { flex-direction: column; align-items: flex-start; }
 }
+
+.about-body > .about-lead, .about-page-head > .about-lead { font-size: 1.02rem; font-weight: 700; color: var(--foreground); }
+.about-page-head > .about-lead { font-size: 1.1rem; }
+.about-slogan {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.62em;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.about-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.75rem;
+}
+.about-value {
+  position: relative;
+  padding: 1.15rem 1.25rem 1.05rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.about-value:first-child { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); background: color-mix(in srgb, var(--primary) 3%, #fff); }
+.about-value-no { font-size: 0.75rem; font-weight: 800; color: var(--primary); letter-spacing: 0.08em; }
+.about-value h2 { margin: 0.3rem 0 0.55rem; font-size: 1.05rem; line-height: 1.3; letter-spacing: -0.015em; }
+.about-value p { margin: 0 0 0.55rem; color: var(--muted-foreground); font-size: 0.92rem; line-height: 1.65; }
+.about-value p:last-child { margin-bottom: 0; }
+.about-value strong { color: var(--foreground); }
+.about-trust {
+  margin-top: 1.75rem;
+  padding: 1.15rem 1.25rem;
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.about-trust h2 { margin: 0 0 0.85rem; font-size: 1.05rem; letter-spacing: -0.01em; }
+.about-trust ul { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9rem 1.1rem; margin: 0; padding: 0; list-style: none; }
+.about-trust li { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.8rem; line-height: 1.45; color: var(--muted-foreground); }
+.about-trust b { display: block; margin-bottom: 0.1rem; color: var(--foreground); font-size: 0.88rem; }
+.about-closing {
+  margin: 1.75rem 0 0;
+  padding: 1.35rem 1.5rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #14161a, #2a2f37);
+  color: rgb(255 255 255 / 82%);
+}
+.about-closing p { margin: 0; font-size: 1rem; line-height: 1.7; }
+.about-closing strong { color: #fff; }
+.about-closing footer { margin-top: 0.75rem; font-weight: 800; color: #fff; letter-spacing: 0.01em; }
+
+.footer-slogan { margin: -0.35rem 0 0.6rem; font-weight: 700; color: var(--primary); }
+
+.header-wa {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-right: 0.35rem;
+  padding: 0.45rem 0.85rem 0.45rem 0.6rem;
+  border-radius: 12px;
+  background: #effaf3;
+  border: 1px solid #a7e3c1;
+  color: #0f7a40;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.header-wa:hover { background: #e1f6e9; border-color: #7fd3a4; }
+.header-wa svg { flex: none; width: 26px; height: 26px; }
+.header-wa span { display: flex; flex-direction: column; line-height: 1.15; }
+.header-wa small { font-size: 0.72rem; font-weight: 650; color: #276749; }
+.header-wa b { font-size: 0.86rem; font-weight: 800; }
+
+.home-quote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem 1.75rem;
+  margin: 0 0 1.1rem;
+  padding: clamp(1.05rem, 2.4vw, 1.5rem) clamp(1.1rem, 2.8vw, 1.85rem);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--primary) 38%, transparent), transparent 55%),
+    linear-gradient(135deg, #14161a, #262b33);
+  color: #fff;
+}
+.home-quote-slogan {
+  display: inline-block;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.home-quote h2 { margin: 0.5rem 0 0.35rem; font-size: clamp(1.2rem, 2.4vw, 1.6rem); line-height: 1.2; letter-spacing: -0.025em; }
+.home-quote h2 b { color: color-mix(in srgb, var(--primary) 55%, #fff); }
+.home-quote p { margin: 0; max-width: 62ch; color: rgb(255 255 255 / 76%); font-size: 0.9rem; line-height: 1.55; }
+.home-quote-actions { display: flex; flex-direction: column; gap: 0.55rem; min-width: 250px; }
+.home-quote-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.8rem 1.1rem; font-weight: 800; }
+.home-quote-actions .btn svg { width: 20px; height: 20px; }
+.home-quote-bulk { background: var(--primary); color: #fff; border: 1px solid transparent; }
+.home-quote-bulk:hover { filter: brightness(1.08); }
+
+@media (max-width: 1100px) {
+  .header-wa { padding: 0; width: 44px; height: 44px; justify-content: center; margin-right: 0.15rem; border-radius: 50%; }
+  .header-wa span { display: none; }
+  .header-wa svg { width: 24px; height: 24px; }
+  .about-trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .home-quote { grid-template-columns: minmax(0, 1fr); }
+  .home-quote-actions { min-width: 0; }
+  .about-values { grid-template-columns: minmax(0, 1fr); }
+  .about-trust ul { grid-template-columns: minmax(0, 1fr); }
+  .about-closing { padding: 1.1rem 1.15rem; }
+  .about-closing p { font-size: 0.94rem; }
+}

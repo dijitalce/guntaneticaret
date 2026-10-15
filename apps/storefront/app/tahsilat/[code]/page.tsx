@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPaymentLinkByCode } from "@guntan/db";
+import { getPaymentLinkByCode, paymentLinkBilling } from "@guntan/db";
 import { garantiConfig, installmentOptions } from "@guntan/ecommerce";
 import { getTenant } from "../../../src/tenant";
 import { PaymentLinkCheckout } from "./form";
@@ -18,6 +18,8 @@ const ERRORS: Record<string, string> = {
   onay: "Devam etmek için mesafeli satış sözleşmesini ve aydınlatma metnini onaylayın.",
   bilgi: "Ad soyad, geçerli bir e-posta adresi ve telefon numarası girin.",
   taksit: "Seçilen taksit bu tutar için geçerli değil.",
+  fatura:
+    "Fatura bilgilerini kontrol edin: il, ilçe ve adres zorunludur; kurumsal faturada firma ünvanı, vergi dairesi ve 10–11 haneli vergi numarası gerekir.",
 };
 
 export default async function PaymentLinkPage({
@@ -92,6 +94,7 @@ export default async function PaymentLinkPage({
             fullName: link.payer_name ?? link.customer_name ?? "",
             email: link.payer_email ?? link.customer_email ?? "",
             phone: link.payer_phone ?? link.customer_phone ?? "",
+            billing: paymentLinkBilling(link),
           }}
         />
       ) : (

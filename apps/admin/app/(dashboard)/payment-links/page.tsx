@@ -1,4 +1,11 @@
-import { getPaymentLink, listPaymentLinks, paymentLinkStats, type PaymentLinkStatus } from "@guntan/db";
+import {
+  getPaymentLink,
+  listPaymentLinks,
+  paymentLinkBilling,
+  paymentLinkStats,
+  type PaymentLink,
+  type PaymentLinkStatus,
+} from "@guntan/db";
 import { CopyButton } from "@/src/copy-button";
 import { ConfirmButton } from "@/src/form-fields";
 import { withBase } from "@/src/paths";
@@ -18,6 +25,28 @@ const STATUS: Record<PaymentLinkStatus, { label: string; tone: Tone }> = {
   paid: { label: "Ödendi", tone: "ok" },
   cancelled: { label: "İptal", tone: "neutral" },
 };
+
+function BillingInfo({ link }: { link: PaymentLink }) {
+  const b = paymentLinkBilling(link);
+  if (!b) return null;
+  const who =
+    b.invoiceType === "corporate"
+      ? [b.companyName, b.taxOffice && `VD: ${b.taxOffice}`, b.taxNumber && `VKN: ${b.taxNumber}`]
+      : [b.nationalId && `TCKN: ${b.nationalId}`];
+  return (
+    <details style={{ marginTop: "0.3rem" }}>
+      <summary className="muted" style={{ cursor: "pointer" }}>
+        Fatura: {b.invoiceType === "corporate" ? "Kurumsal" : "Bireysel"}
+      </summary>
+      <div className="muted" style={{ maxWidth: 260, whiteSpace: "normal" }}>
+        {who.filter(Boolean).join(" · ")}
+        {who.some(Boolean) ? <br /> : null}
+        {b.line1}
+        {b.postalCode ? ` ${b.postalCode}` : ""} — {b.district} / {b.city}
+      </div>
+    </details>
+  );
+}
 
 const OK_MESSAGE: Record<string, string> = {
   cancelled: "Bağlantı iptal edildi; müşteri artık ödeme yapamaz.",
@@ -184,6 +213,8 @@ export default async function PaymentLinksPage({
                       <td className="text-sm">
                         {l.payer_name ? <div>{l.payer_name}</div> : "—"}
                         {l.payer_email ? <div className="muted">{l.payer_email}</div> : null}
+                        {l.payer_phone ? <div className="muted">{l.payer_phone}</div> : null}
+                        <BillingInfo link={l} />
                         {l.status === "paid" && l.bank_ref ? <div className="muted mono">Ref: {l.bank_ref}</div> : null}
                       </td>
                       <td className="text-sm">

@@ -8,10 +8,9 @@ import { HomeRail } from "../src/home-rail";
 import { PartIcon, partKind } from "../src/part-icons";
 import { HomeAbout, autoPartsStoreJsonLd } from "../src/about";
 import { BrandMark } from "../src/brand-mark";
-import { garantiConfig } from "@guntan/ecommerce";
 import { sentenceCaseTr } from "../src/format";
 import { homeSeo } from "../src/home-seo";
-import { AssuranceGrid, MissingPartCta, assuranceItems } from "../src/assurance";
+import { AssuranceGrid, HomeQuoteBand, homeAssuranceItems } from "../src/assurance";
 import {
   JsonLd,
   absoluteUrl,
@@ -61,8 +60,6 @@ export default async function HomePage() {
   const rootCats = cats.filter((c) => !c.parentId);
   const host = tenant.tenant.canonicalHost;
   const [copy, oemBy] = await Promise.all([homeCopy(tenant), cardOems(featured.map((p) => p.id))]);
-  const garanti = await garantiConfig();
-  const maxInstallments = garanti ? Math.max(1, ...garanti.installments.keys()) : 1;
 
   return (
     <div className="container home">
@@ -99,7 +96,8 @@ export default async function HomePage() {
           ]}
         />
       </div>
-      <AssuranceGrid variant="strip" items={assuranceItems({ card: Boolean(garanti), maxInstallments })} />
+      <AssuranceGrid variant="strip" items={homeAssuranceItems()} />
+      <HomeQuoteBand whatsapp={tenant.whatsapp} phone={tenant.phone} />
       <div className="home-intro">
         <h1>{copy.h1}</h1>
         <p>{copy.lead}</p>
@@ -186,8 +184,6 @@ export default async function HomePage() {
       </div>
 
       <HomeAbout tenant={tenant} />
-
-      <MissingPartCta whatsapp={tenant.whatsapp} phone={tenant.phone} />
 
       <section className="seo-block">
         <h2>{copy.heading}</h2>

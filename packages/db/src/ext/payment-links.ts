@@ -31,6 +31,8 @@ export type PaymentLink = {
   payer_name: string | null;
   payer_email: string | null;
   payer_phone: string | null;
+  /** JSON, bkz. PaymentLinkBilling; ödeyen fatura bilgisi girmediyse null. */
+  payer_billing: string | null;
   bank_ref: string | null;
   paid_order_id: string | null;
   paid_at: Date | null;
@@ -38,6 +40,28 @@ export type PaymentLink = {
   created_at: Date;
   updated_at: Date;
 };
+
+export type PaymentLinkBilling = {
+  invoiceType: "individual" | "corporate";
+  nationalId?: string;
+  companyName?: string;
+  taxOffice?: string;
+  taxNumber?: string;
+  city: string;
+  district: string;
+  line1: string;
+  postalCode?: string;
+};
+
+export function paymentLinkBilling(link: Pick<PaymentLink, "payer_billing">): PaymentLinkBilling | null {
+  if (!link.payer_billing) return null;
+  try {
+    const v = JSON.parse(link.payer_billing) as PaymentLinkBilling;
+    return v && typeof v === "object" && (v.invoiceType === "individual" || v.invoiceType === "corporate") ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 function newCode() {
   let code = "";
@@ -130,12 +154,20 @@ export async function deletePaymentLink(id: string) {
 /** Her kart denemesi bankaya yeni bir sipariş numarasıyla gider; Garanti aynı numarayla ikinci denemeyi reddeder. */
 export async function startPaymentLinkAttempt(
   code: string,
-  input: { amount: number; installment: number; payerName: string; payerEmail: string; payerPhone: string },
+  input: {
+    amount: number;
+    installment: number;
+    payerName: string;
+    payerEmail: string;
+    payerPhone: string;
+    billing?: PaymentLinkBilling | null;
+  },
 ): Promise<string> {
   await ensureExtTables();
   const res = await exec(sql`update payment_links set attempts = attempts + 1,
       pending_amount = ${input.amount.toFixed(2)}, pending_installment = ${input.installment},
       payer_name = ${input.payerName}, payer_email = ${input.payerEmail}, payer_phone = ${input.payerPhone || null},
+      payer_billing = ${input.billing ? JSON.stringify(input.billing) : null},
       pending_order_id = concat(${PAYMENT_LINK_ORDER_PREFIX}, code, '-', attempts)
     where code = ${code} and status = 'pending'`);
   if (res.affectedRows !== 1) throw new Error("Bu ödeme bağlantısı artık geçerli değil.");

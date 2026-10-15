@@ -272,6 +272,7 @@ const CUSTOMER_COLUMNS = [
   sql`alter table customers add column tax_number varchar(64) null`,
   sql`alter table customers add column national_id varchar(32) null`,
   sql`alter table customer_addresses add column kind varchar(32) not null default 'shipping'`,
+  sql`alter table payment_links add column payer_billing text null`,
 ];
 
 let ensured: Promise<void> | null = null;
