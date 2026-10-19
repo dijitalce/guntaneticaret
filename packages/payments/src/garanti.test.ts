@@ -114,6 +114,10 @@ describe("garanti", () => {
     expect(parseCallback(config, md0)).toMatchObject({ ok: false, verified: true, reason: "Doğrulama başarısız" });
     const declined = signed({ oid: "GNT-1", mdstatus: "1", procreturncode: "51" }, { errmsg: "Limit yetersiz" });
     expect(parseCallback(config, declined)).toMatchObject({ ok: false, verified: true, reason: "Limit yetersiz" });
+    expect((parseCallback(config, declined) as { detail: string }).detail).toContain("procreturncode=51");
+    // OOS_PAY: banka provizyon verdiyse mdstatus boş gelse de ödeme başarılıdır.
+    const noMd = signed({ oid: "GNT-1", procreturncode: "00" }, { txnamount: "100" });
+    expect(parseCallback(config, noMd)).toMatchObject({ ok: true, orderId: "GNT-1" });
   });
 
   it("is disabled unless credentials are set", () => {

@@ -640,10 +640,11 @@ export async function confirmCardPayment(
 }
 
 /** Başarısız/iptal edilen kart ödemesinde siparişi iptal edip rezervasyonu bırakır; sepet yerinde kalır. */
-export async function failCardPayment(orderNo: string) {
+export async function failCardPayment(orderNo: string, bank?: { reason: string; detail: string }) {
   const found = await getCardOrder(orderNo);
   if (!found || found.order.status !== ORDER_STATUS.PENDING_PAYMENT) return;
-  await cancelOrder(found.order.id, { reason: "Kart ödemesi banka tarafından onaylanmadı." });
+  const why = bank ? ` Banka: ${bank.reason} (${bank.detail})` : "";
+  await cancelOrder(found.order.id, { reason: `Kart ödemesi banka tarafından onaylanmadı.${why}` });
 }
 
 export async function markOrderPreparing(orderId: string, actor?: string) {

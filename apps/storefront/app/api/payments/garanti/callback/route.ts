@@ -28,13 +28,12 @@ export async function POST(request: Request) {
     console.warn("[garanti] ödeme başarısız", {
       orderId: result.orderId,
       reason: result.reason,
-      mdstatus: data.mdstatus,
-      procreturncode: data.procreturncode,
+      detail: result.detail,
     });
     // Hash tutmuyorsa cevap bankadan gelmemiş olabilir; siparişe dokunma.
     if (result.orderId && result.verified) {
-      if (linkCode) await failPaymentLink(result.orderId, result.reason).catch(() => undefined);
-      else await failCardPayment(result.orderId).catch(() => undefined);
+      if (linkCode) await failPaymentLink(result.orderId, `${result.reason} (${result.detail})`).catch(() => undefined);
+      else await failCardPayment(result.orderId, result).catch(() => undefined);
     }
     return fail(request, result.reason, linkCode);
   }

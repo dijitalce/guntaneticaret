@@ -194,8 +194,8 @@ export function verifyCallbackHash(config: GarantiConfig, data: Record<string, s
 
 export type GarantiResult =
   | { ok: true; orderId: string; amountKurus: string; installment: number; authCode: string; hostRef: string }
-  /** verified=false: cevabın bankadan geldiği doğrulanamadı. */
-  | { ok: false; verified: boolean; orderId: string; reason: string };
+  /** verified=false: cevabın bankadan geldiği doğrulanamadı. detail: yönetici için banka kodları. */
+  | { ok: false; verified: boolean; orderId: string; reason: string; detail: string };
 
 const MD_OK = new Set(["1", "2", "3", "4"]);
 
@@ -204,15 +204,26 @@ export function parseCallback(config: GarantiConfig, data: Record<string, string
   const orderId = data.oid ?? "";
   const signedFields = (data.hashparams ?? "").split(":").map((k) => k.toLowerCase());
   if (!orderId || !signedFields.includes("oid") || !verifyCallbackHash(config, data)) {
-    return { ok: false, verified: false, orderId, reason: "Banka cevabı doğrulanamadı." };
+    return { ok: false, verified: false, orderId, reason: "Banka cevabı doğrulanamadı.", detail: "hash doğrulanamadı" };
   }
   const md = data.mdstatus ?? "";
   const proc = data.procreturncode ?? "";
-  if (!MD_OK.has(md)) {
-    return { ok: false, verified: true, orderId, reason: data.mderrormessage || "3D Secure doğrulaması başarısız." };
-  }
+  const detail = [
+    `mdstatus=${md || "-"}`,
+    `procreturncode=${proc || "-"}`,
+    data.errmsg && `errmsg=${data.errmsg}`,
+    data.mderrormessage && `mderrormessage=${data.mderrormessage}`,
+    data.response && `response=${data.response}`,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  // procreturncode=00 bankanın provizyonu verdiği anlamına gelir; para çekilmiştir.
+  // OOS_PAY'de mdstatus her zaman dönmeyebilir, bu yüzden 00 iken siparişi asla iptal etme.
   if (proc !== "00") {
-    return { ok: false, verified: true, orderId, reason: data.errmsg || data.response || "Ödeme onaylanmadı." };
+    const reason = !MD_OK.has(md)
+      ? data.mderrormessage || data.errmsg || "3D Secure doğrulaması başarısız."
+      : data.errmsg || data.response || "Ödeme onaylanmadı.";
+    return { ok: false, verified: true, orderId, reason, detail };
   }
   return {
     ok: true,
