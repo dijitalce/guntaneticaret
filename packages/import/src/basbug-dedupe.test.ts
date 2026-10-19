@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  basbugVatRate,
   fxRatesFromEnv,
   inferBasbugFitments,
   mapBasbugRow,
@@ -24,7 +25,7 @@ describe("basbug mapping", () => {
       externalId: "FILT OE 693/1",
       sku: "FILT OE 693/1",
       manufacturer: "FILTRON",
-      price: "130.00",
+      price: "156.00",
       category: "AĞIR VASITA",
       stock: 4,
     });
@@ -38,7 +39,8 @@ describe("basbug mapping", () => {
     expect(priceToTry(2, "USD", rates)).toBe(80);
     expect(priceToTry(2, "TL", rates)).toBe(2);
     const mapped = mapBasbugRow({ no: "X1", ac: "P", oe: "12345678", uk: "B", dc: "EUR", lf: 2 }, rates);
-    expect(mapped?.price).toBe("130.00");
+    // 2 EUR × 50 = 100 TL + %20 KDV = 120 → %30
+    expect(mapped?.price).toBe("156.00");
   });
 
   it("infers fitments from liste grubu + model field", () => {
@@ -54,10 +56,32 @@ describe("basbug mapping", () => {
   it("marks up net price (nf) instead of list price when present", () => {
     const rates = { EUR: 50, USD: 40 };
     const mapped = mapBasbugRow({ no: "BCH 1", ac: "P", dc: "EUR", lf: 29.92, nf: 22.23 }, rates);
-    // 22.23 EUR × 50 = 1111.50 TL maliyet → %25 kademe
-    expect(mapped?.price).toBe("1389.38");
+    // 22.23 EUR × 50 = 1111.50 TL + %20 KDV = 1333.80 TL maliyet → %25 kademe
+    expect(mapped?.price).toBe("1667.25");
     const noNet = mapBasbugRow({ no: "BCH 2", ac: "P", dc: "TL", lf: 100 }, rates);
-    expect(noNet?.price).toBe("130.00");
+    expect(noNet?.price).toBe("156.00");
+  });
+
+  it("adds VAT to the net price before the margin (BSG 40-923-035 / 86822-1E000)", () => {
+    // nf 79.65 TL KDV hariç → 95.58 TL KDV dahil maliyet → %30 → 124.25 (önceden KDV'siz 103.55)
+    const row = { no: "BSG 40-923-035", ac: "CAMURLUK DAVLUMBAZI ARKA SAG", oe: "86822-1E000", dc: "TL", lf: 120, nf: 79.65 };
+    expect(mapBasbugRow(row)?.price).toBe("124.25");
+    expect(mapBasbugRow(row, undefined, 0)?.price).toBe("103.55");
+  });
+
+  it("reads the VAT rate from BASBUG_VAT_RATE", () => {
+    const prev = process.env.BASBUG_VAT_RATE;
+    try {
+      delete process.env.BASBUG_VAT_RATE;
+      expect(basbugVatRate()).toBe(20);
+      process.env.BASBUG_VAT_RATE = "0";
+      expect(basbugVatRate()).toBe(0);
+      process.env.BASBUG_VAT_RATE = "abc";
+      expect(basbugVatRate()).toBe(20);
+    } finally {
+      if (prev == null) delete process.env.BASBUG_VAT_RATE;
+      else process.env.BASBUG_VAT_RATE = prev;
+    }
   });
 
   it("maps stock flags from StokGetir", () => {

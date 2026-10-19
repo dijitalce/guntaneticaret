@@ -14,7 +14,7 @@ export type BasbugRaw = {
   y?: string;
   dc?: string;
   lf?: number | string;
-  /** Net alış fiyatı (FiyatGetir); varsa marj bunun üzerine basılır. */
+  /** Net alış fiyatı (FiyatGetir), KDV hariç; varsa marj bunun üzerine basılır. */
   nf?: number | string;
   /** StokGetir: seçili depoda stok (0/1). */
   stok?: number;
@@ -46,6 +46,15 @@ const GROUP_BRAND: Record<string, string> = {
 };
 
 const FX_DEFAULTS = { EUR: 56.3, USD: 48.4 };
+
+/** Başbuğ `nf`/`lf` KDV hariç gelir; site fiyatları KDV dahil olduğundan marjdan önce eklenir. */
+const BASBUG_VAT_DEFAULT = 20;
+
+export function basbugVatRate(): number {
+  const raw = process.env.BASBUG_VAT_RATE;
+  const n = raw == null || raw === "" ? BASBUG_VAT_DEFAULT : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : BASBUG_VAT_DEFAULT;
+}
 
 export function slugify(value: string): string {
   return value
@@ -105,13 +114,14 @@ export function basbugStock(row: BasbugRaw): number {
   return (row.stok ?? 0) > 0 || (row.sFarkliDepo ?? 0) > 0 ? BASBUG_IN_STOCK_QTY : 0;
 }
 
-export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv()): MappedProduct | null {
+export function mapBasbugRow(row: BasbugRaw, rates = fxRatesFromEnv(), vatRate = basbugVatRate()): MappedProduct | null {
   const externalId = row.no?.trim();
   if (!externalId) return null;
   const cost = basbugCost(row);
   if (cost == null) return null;
-  const priceTry = priceToTry(cost, row.dc, rates);
-  const sellTry = applyMarginToPrice(priceTry);
+  // KDV dahil TL maliyet; marj dilimi de bu tutara göre seçilir.
+  const costTry = priceToTry(cost, row.dc, rates) * (1 + vatRate / 100);
+  const sellTry = applyMarginToPrice(costTry);
   const oems = splitOems(row.oe);
   const category = row._listeGrubuAd?.trim() || row.lgk?.trim() || undefined;
   return {

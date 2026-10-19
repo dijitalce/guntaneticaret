@@ -85,6 +85,9 @@ tail -f /tmp/basbug-import.log
 
 Kurlar (EUR/USD → TL): Başbuğ API'nin kendi satış kuru, yoksa TCMB. Elle sabitlemek için `BASBUG_EUR_TRY=56.3` `BASBUG_USD_TRY=48.4`.
 
+Başbuğ net fiyatı (`nf`, yoksa `lf`) KDV hariçtir: maliyet = fiyat × kur × 1,20 (KDV dahil), marj dilimi bu tutara uygulanır.
+Oran `BASBUG_VAT_RATE` ile değişir (varsayılan 20).
+
 ### Otomatik fiyat/stok güncellemesi (12 saatte bir)
 
 `pnpm import:sync` şunları yapar:
