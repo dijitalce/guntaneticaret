@@ -11,7 +11,8 @@ describe("xml mapping", () => {
     const a = mapRaw({ id: "1", sku: "S", name: "N", price: "10" }, mapping);
     const b = mapRaw({ id: "1", sku: "S", name: "N", price: "10" }, mapping);
     expect(a?.sku).toBe("S");
-    expect(a?.price).toBe("13.00");
+    // 10 KDV hariç → 12 KDV dahil → %30
+    expect(a?.price).toBe("15.60");
     expect(contentHash(a!)).toBe(contentHash(b!));
   });
   it("marks up list price with the cost band percent", () => {
@@ -19,8 +20,18 @@ describe("xml mapping", () => {
       { id: "1", sku: "S", name: "N", price: "1000", list: "1500" },
       { externalId: "id", sku: "sku", name: "name", price: "price", compareAtPrice: "list" },
     );
-    expect(row?.price).toBe("1300.00");
-    expect(row?.compareAtPrice).toBe("1950.00");
+    // 1000 + %20 KDV = 1200 → %25 dilimi; liste de aynı oranla
+    expect(row?.price).toBe("1500.00");
+    expect(row?.compareAtPrice).toBe("2250.00");
+  });
+  it("adds VAT to the supplier price before the margin tier (Altay MHR-14988)", () => {
+    const mapping = { externalId: "Id", sku: "Code", name: "Name", price: "Price" };
+    const raw = { Id: "37295", Code: "MHR-14988", Name: "ÇAMURLUK DAVLUMBAZI", Price: "166.6" };
+    // 166.60 × 1.20 = 199.92 → %30 → 259.90
+    expect(mapRaw(raw, mapping)?.price).toBe("259.90");
+    expect(mapRaw(raw, mapping, 0)?.price).toBe("216.58");
+    // 900 KDV hariç %30 dilimindeyken KDV ile 1080 olur → %25 dilimi
+    expect(mapRaw({ ...raw, Price: "900" }, mapping)?.price).toBe("1350.00");
   });
   it("skips rows with zero price (Eryaz sends Price=0 for unpriced items)", () => {
     const mapping = { externalId: "Id", sku: "Code", name: "Name", price: "Price" };

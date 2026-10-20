@@ -22,7 +22,7 @@ import {
   xmlFeeds,
 } from "@guntan/db";
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type XmlFieldMapping } from "@guntan/types";
-import { applyMarginToAmount, applyMarginToPrice } from "./price-tiers";
+import { addVat, applyMarginToAmount, applyMarginToPrice, vatRateFromEnv } from "./price-tiers";
 import { useStoredPriceTiers } from "./price-tier-store";
 
 export {
@@ -106,22 +106,29 @@ function stockValue(raw: string | undefined) {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping): MappedProduct | null {
+/** Tedarikçi XML fiyatları (Altay/Eryaz vb.) KDV hariç gelir; `XML_VAT_RATE` ile değişir. */
+export function xmlVatRate(): number {
+  return vatRateFromEnv("XML_VAT_RATE");
+}
+
+export function mapRaw(raw: Record<string, unknown>, mapping: XmlFieldMapping, vatRate = xmlVatRate()): MappedProduct | null {
   const externalId = mapping.externalId ? getPath(raw, mapping.externalId) : undefined;
   const sku = mapping.sku ? getPath(raw, mapping.sku) : undefined;
   const name = mapping.name ? getPath(raw, mapping.name) : undefined;
   const price = mapping.price ? getPath(raw, mapping.price) : undefined;
   if (!externalId || !sku || !name || !price) return null;
-  const costNum = Number(price);
+  const netCost = Number(price);
   // Fiyatsız (0) satırlar satışa açılmaz; ürün akışta yokmuş gibi pasife alınır.
-  if (!Number.isFinite(costNum) || costNum <= 0) return null;
+  if (!Number.isFinite(netCost) || netCost <= 0) return null;
+  // KDV dahil maliyet; marj dilimi de bu tutara göre seçilir.
+  const costNum = addVat(netCost, vatRate);
   const sell = applyMarginToPrice(costNum);
   let compareAt: string | undefined;
   if (mapping.compareAtPrice) {
     const rawList = getPath(raw, mapping.compareAtPrice);
     const listNum = rawList != null && rawList !== "" ? Number(rawList) : Number.NaN;
     if (Number.isFinite(listNum) && listNum > 0) {
-      const markedList = applyMarginToAmount(costNum, listNum);
+      const markedList = applyMarginToAmount(costNum, addVat(listNum, vatRate));
       if (markedList > sell) compareAt = markedList.toFixed(2);
     }
   }

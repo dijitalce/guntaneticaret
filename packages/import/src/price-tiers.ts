@@ -102,6 +102,20 @@ export function marginPercentForPrice(costTry: number, tiers = activeTiers): num
   return tiers[tiers.length - 1]?.percent ?? 0;
 }
 
+/** Tedarikçi fiyatları KDV hariç gelir; marj dilimi KDV dahil maliyete uygulanır. */
+export const SUPPLIER_VAT_DEFAULT = 20;
+
+/** Ortam değişkeninden KDV oranı (boş/geçersizse %20, kapatmak için 0). */
+export function vatRateFromEnv(name: string): number {
+  const raw = process.env[name];
+  const n = raw == null || raw === "" ? SUPPLIER_VAT_DEFAULT : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : SUPPLIER_VAT_DEFAULT;
+}
+
+export function addVat(amount: number, vatRate: number): number {
+  return amount * (1 + vatRate / 100);
+}
+
 export function applyPercent(amountTry: number, percent: number): number {
   return Math.round(amountTry * (1 + percent / 100) * 100) / 100;
 }

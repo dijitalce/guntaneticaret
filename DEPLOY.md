@@ -98,6 +98,8 @@ Oran `BASBUG_VAT_RATE` ile değişir (varsayılan 20).
 4. Aynı OE+marka için stoktaki en ucuz ürünü aktif bırakır, görünürlüğü derler
 
 Marj her seferinde tedarikçinin ham fiyatından hesaplanır, tekrar çalıştırmak marjı ikilemez.
+Tedarikçi fiyatları KDV hariç gelir: önce %20 KDV eklenir, marj dilimi KDV dahil maliyete uygulanır
+(Altay/XML `XML_VAT_RATE`, Başbuğ `BASBUG_VAT_RATE`, varsayılan 20).
 Marj dilimleri admin → Katalog → Fiyat oranları'ndan düzenlenir (`app_settings` tablosu, ilk erişimde otomatik oluşur);
 kayıt yoksa `price-tiers.ts` içindeki varsayılanlar kullanılır.
 **Senkron açıkken `pnpm import:price-tiers --from-cost` çalıştırma** — marj üstüne marj biner.
