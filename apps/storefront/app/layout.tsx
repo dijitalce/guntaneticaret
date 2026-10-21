@@ -20,7 +20,7 @@ import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
 import { PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
-import { SEO_SOCIAL_KEYS, TENANT_STATUS } from "@guntan/types";
+import { SEO_SOCIAL_KEYS, TENANT_STATUS, announcementFromSocial } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { PaymentMarks } from "../src/assurance";
@@ -148,6 +148,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const logoSrc = `${tenant.logoUrl ?? "/brand/logo.png"}?v=3`;
   const cardPayments = Boolean(garantiConfigFromEnv());
   const links = socialLinks(social);
+  const hasAnnouncement = announcementFromSocial(social).messages.length > 0;
   const sahibinden = links.find((l) => l.key === "sahibinden");
 
   return (
@@ -164,7 +165,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
               </a>
             ) : <span>{tenant.phone}</span>}
-            <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>
+            {/* Kayan yazı varsa aynı mesajlar burada tekrar edilmez. */}
+            {hasAnnouncement ? null : <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>}
             <div className="topbar-links">
               {sahibinden ? (
                 <a className="topbar-sahibinden" href={sahibinden.href} target="_blank" rel="noreferrer">
@@ -197,12 +199,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   href={whatsappHref(tenant.whatsapp, PART_REQUEST_TEXT)}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label="Parçanı bulamadın mı? WhatsApp'tan sor"
+                  aria-label="Parçanızı bulamadınız mı? WhatsApp'tan sorun"
                 >
                   <IconWhatsapp />
                   <span>
-                    <small>Parçanı bulamadın mı?</small>
-                    <b>WhatsApp&apos;tan sor</b>
+                    <small>Parçanızı bulamadınız mı?</small>
+                    <b>WhatsApp&apos;tan sorun</b>
                   </span>
                 </a>
               ) : null}

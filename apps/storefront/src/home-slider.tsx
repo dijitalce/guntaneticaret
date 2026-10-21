@@ -17,11 +17,13 @@ export function HomeSlider({ slides }: { slides: Slide[] }) {
     setI((cur) => (cur + dir + slides.length) % slides.length);
   }, [slides.length]);
 
+  const single = slides.length < 2;
+
   useEffect(() => {
-    if (paused) return;
+    if (paused || single) return;
     const t = setInterval(() => go(1), 6500);
     return () => clearInterval(t);
-  }, [go, paused]);
+  }, [go, paused, single]);
 
   const slide = slides[i]!;
   return (
@@ -44,22 +46,24 @@ export function HomeSlider({ slides }: { slides: Slide[] }) {
           loading={i === 0 ? "eager" : "lazy"}
         />
       </Link>
-      <div className="home-slider-nav">
-        <button type="button" className="home-slider-arrow" onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(-1); }} aria-label="Önceki slayt">‹</button>
-        <div className="home-slider-dots">
-          {slides.map((s, idx) => (
-            <button
-              key={s.image}
-              type="button"
-              className={idx === i ? "is-active" : undefined}
-              aria-label={`Slayt ${idx + 1}`}
-              aria-current={idx === i || undefined}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setI(idx); }}
-            />
-          ))}
+      {single ? null : (
+        <div className="home-slider-nav">
+          <button type="button" className="home-slider-arrow" onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(-1); }} aria-label="Önceki slayt">‹</button>
+          <div className="home-slider-dots">
+            {slides.map((s, idx) => (
+              <button
+                key={s.image}
+                type="button"
+                className={idx === i ? "is-active" : undefined}
+                aria-label={`Slayt ${idx + 1}`}
+                aria-current={idx === i || undefined}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setI(idx); }}
+              />
+            ))}
+          </div>
+          <button type="button" className="home-slider-arrow" onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(1); }} aria-label="Sonraki slayt">›</button>
         </div>
-        <button type="button" className="home-slider-arrow" onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(1); }} aria-label="Sonraki slayt">›</button>
-      </div>
+      )}
     </section>
   );
 }

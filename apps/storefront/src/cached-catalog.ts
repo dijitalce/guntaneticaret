@@ -57,10 +57,36 @@ export const cachedBanners = cache((tenantId: string) =>
   )(),
 );
 
+/**
+ * Başbuğ liste grupları (araç markası/menşei) kategori olarak gelir; "Parça kategorileri"nde
+ * fren, motor gibi parça gruplarının arasında görünmemeleri için ayıklanır.
+ */
+const VEHICLE_GROUP_CATEGORY_SLUGS = new Set([
+  "agir-vasita",
+  "bmw",
+  "cin",
+  "elektri-kli-araclar",
+  "elektrikli-araclar",
+  "fiat",
+  "ford",
+  "japon",
+  "kore",
+  "mercedes",
+  "opel",
+  "peugeot-citroen",
+  "renault",
+  "universal",
+  "volkswagen",
+  "volvo",
+]);
+
 export const cachedPopularCategories = cache((limit = 8) => {
   return unstable_cache(
-    () => listPopularCategories(limit),
-    ["nav-categories", String(limit)],
+    async () =>
+      (await listPopularCategories(limit + VEHICLE_GROUP_CATEGORY_SLUGS.size))
+        .filter((c) => !VEHICLE_GROUP_CATEGORY_SLUGS.has(c.slug))
+        .slice(0, limit),
+    ["nav-categories", String(limit), "v2"],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 });

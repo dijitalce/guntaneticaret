@@ -394,7 +394,7 @@ export default async function ProductPage({
                 </button>
                 {whatsappHref && (
                   <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
-                    WhatsApp ile sor
+                    WhatsApp ile sorun
                   </a>
                 )}
               </div>
@@ -407,7 +407,7 @@ export default async function ProductPage({
               {whatsappHref && (
                 <div className="pdp-actions">
                   <a className="btn btn-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer">
-                    WhatsApp ile sor
+                    WhatsApp ile sorun
                   </a>
                 </div>
               )}

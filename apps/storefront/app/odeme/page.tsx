@@ -39,7 +39,7 @@ export default async function CheckoutPage({
         </nav>
         <div className="empty-state">
           <h1>Sepet boş</h1>
-          <p>Ödemeye geçmek için önce sepete ürün ekle.</p>
+          <p>Ödemeye geçmek için önce sepete ürün ekleyin.</p>
           <Link className="btn btn-primary" href="/">
             Alışverişe başla
           </Link>
@@ -63,7 +63,7 @@ export default async function CheckoutPage({
         </nav>
         <div className="empty-state">
           <h1>Sepet boş</h1>
-          <p>Ödemeye geçmek için önce sepete ürün ekle.</p>
+          <p>Ödemeye geçmek için önce sepete ürün ekleyin.</p>
           <Link className="btn btn-primary" href="/sepet">
             Sepete git
           </Link>
@@ -158,8 +158,8 @@ export default async function CheckoutPage({
       )}
       {sp.hata === "kart" && (
         <p className="account-alert is-bad" role="alert">
-          Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetin duruyor; tekrar deneyebilir veya
-          havale ile ödeyebilirsin.
+          Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetiniz duruyor; tekrar deneyebilir veya
+          havale ile ödeyebilirsiniz.
         </p>
       )}
 

@@ -153,7 +153,7 @@ export function CartShell({ placeholder }: { placeholder: string }) {
               <div className="cart-drawer-body">
                 {cart.items.length === 0 ? (
                   <div className="cart-drawer-empty">
-                    <p>Sepetin boş. Aracına uygun parçayı ekleyerek başla.</p>
+                    <p>Sepetiniz boş. Aracınıza uygun parçayı ekleyerek başlayın.</p>
                     <Link className="btn btn-secondary" href="/" onClick={() => setOpen(false)}>
                       Alışverişe başla
                     </Link>

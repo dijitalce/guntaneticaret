@@ -31,7 +31,7 @@ export default async function AddressesPage({
       {rows.length === 0 ? (
         <div className="empty-state account-empty">
           <h3>Kayıtlı adres yok</h3>
-          <p>Siparişlerini hızlandırmak için teslimat adresini kaydet.</p>
+          <p>Siparişlerinizi hızlandırmak için teslimat adresinizi kaydedin.</p>
         </div>
       ) : (
         <ul className="account-address-list">
@@ -111,7 +111,7 @@ export default async function AddressesPage({
         </label>
         <button className="btn btn-primary" type="submit">Adresi kaydet</button>
         <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-          Fatura tipi için <Link href="/hesabim/profil">profil</Link> sayfasını kullan. Ödeme sırasında da adres girebilirsin.
+          Fatura tipi için <Link href="/hesabim/profil">profil</Link> sayfasını kullanın. Ödeme sırasında da adres girebilirsiniz.
         </p>
       </form>
     </section>

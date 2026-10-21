@@ -10,6 +10,7 @@ import { HomeAbout, autoPartsStoreJsonLd } from "../src/about";
 import { BrandMark } from "../src/brand-mark";
 import { sentenceCaseTr } from "../src/format";
 import { homeSeo } from "../src/home-seo";
+import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { AssuranceGrid, HomeQuoteBand, homeAssuranceItems } from "../src/assurance";
 import {
   JsonLd,
@@ -24,7 +25,12 @@ export const revalidate = 60;
 async function homeCopy(tenant: Awaited<ReturnType<typeof getTenant>>) {
   const [brands, cats] = await Promise.all([cachedVisibleBrands(tenant.tenant.id), cachedPopularCategories(8)]);
   const rootCats = cats.filter((c) => !c.parentId);
-  return homeSeo(tenant.siteName, brands, rootCats.map((c) => sentenceCaseTr(c.name).toLocaleLowerCase("tr-TR")));
+  return homeSeo(
+    tenant.siteName,
+    brands,
+    rootCats.map((c) => sentenceCaseTr(c.name).toLocaleLowerCase("tr-TR")),
+    Boolean(garantiConfigFromEnv()),
+  );
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -84,14 +90,9 @@ export default async function HomePage() {
         <HomeSlider
           slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
             {
-              alt: "Aracınıza uygun parçalar — motor, fren, süspansiyon. Hemen incele.",
+              alt: "Sitemizde gözükmeyen 2.000.000+ ürün — kredi kartına 12 taksit, 20.000+ üründe vade farksız 3 taksit, 30.000+ üründe kargo bizden.",
               href: "/arama",
-              image: "/slider/araciniza-uygun.jpg",
-            },
-            {
-              alt: "Güvenilir oto yedek parça — 140.000+ ürün, kaliteli ürünler, hızlı tedarik.",
-              href: "/arama",
-              image: "/slider/guvenilir-yedek-parca.jpg",
+              image: "/slider/sitemizde-gozukmeyen-2-milyon-urun.webp",
             },
           ]}
         />

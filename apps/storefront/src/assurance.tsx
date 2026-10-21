@@ -274,7 +274,7 @@ export function HomeQuoteBand({ whatsapp, phone }: { whatsapp: string | null; ph
           <IconBox /> Toplu Parça Teklifi Al
         </a>
         <a className="btn btn-whatsapp" href={href(PART_REQUEST_TEXT)} {...external}>
-          <IconWhatsapp /> Parçanı bulamadın mı?
+          <IconWhatsapp /> Parçanızı bulamadınız mı?
         </a>
       </div>
     </section>

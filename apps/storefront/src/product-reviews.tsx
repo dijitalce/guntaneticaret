@@ -9,10 +9,10 @@ export type ReviewViewer =
 
 const RESULT: Record<string, { ok: boolean; text: string }> = {
   ok: { ok: true, text: "Teşekkürler! Değerlendirmen onaylandıktan sonra yayınlanacak." },
-  puan: { ok: false, text: "Lütfen 1 ile 5 arasında bir puan seç." },
+  puan: { ok: false, text: "Lütfen 1 ile 5 arasında bir puan seçin." },
   metin: { ok: false, text: "Yorum en az 10, en fazla 2000 karakter olmalı." },
   yetki: { ok: false, text: "Bu ürünü yalnızca satın alıp teslim alan müşteriler değerlendirebilir." },
-  hata: { ok: false, text: "Değerlendirme kaydedilemedi. Lütfen tekrar dene." },
+  hata: { ok: false, text: "Değerlendirme kaydedilemedi. Lütfen tekrar deneyin." },
 };
 
 export function Stars({ value, size = "md" }: { value: number; size?: "sm" | "md" | "lg" }) {
@@ -32,7 +32,7 @@ function ReviewForm({ productId, existing }: { productId: string; existing: Extr
       {existing?.status === "pending" && <p className="muted">Önceki değerlendirmen onay bekliyor.</p>}
       <input type="hidden" name="productId" value={productId} />
       <fieldset className="review-rating-input">
-        <legend>Puanın</legend>
+        <legend>Puanınız</legend>
         <div className="review-rating-stars">
           {[5, 4, 3, 2, 1].map((n) => (
             <span key={n}>
@@ -50,7 +50,7 @@ function ReviewForm({ productId, existing }: { productId: string; existing: Extr
       </label>
       <label>
         Yorumun
-        <textarea name="body" rows={4} minLength={10} maxLength={2000} required defaultValue={existing?.body ?? ""} placeholder="Ürünün kalitesi, aracına uyumu, paketleme…" />
+        <textarea name="body" rows={4} minLength={10} maxLength={2000} required defaultValue={existing?.body ?? ""} placeholder="Ürünün kalitesi, aracınıza uyumu, paketleme…" />
       </label>
       <button className="btn btn-primary" type="submit">Değerlendirmeyi gönder</button>
       <p className="muted review-form-note">Değerlendirmeler onaylandıktan sonra adının baş harfiyle birlikte yayınlanır.</p>
@@ -120,7 +120,7 @@ export function ProductReviews({
             </p>
           )}
           {viewer.kind === "ineligible" && (
-            <p className="reviews-cta muted">Bu ürünü satın alıp teslim aldıktan sonra değerlendirebilirsin.</p>
+            <p className="reviews-cta muted">Bu ürünü satın alıp teslim aldıktan sonra değerlendirebilirsiniz.</p>
           )}
           {viewer.kind === "eligible" && <ReviewForm productId={productId} existing={viewer.existing} />}
         </div>

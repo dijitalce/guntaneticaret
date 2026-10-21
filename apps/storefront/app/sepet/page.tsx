@@ -62,8 +62,8 @@ function EmptyCart({ tenant }: { tenant: TenantPublicConfig }) {
         <Link href="/">Ana Sayfa</Link> › Sepet
       </nav>
       <div className="empty-state">
-        <h1>Sepetin boş</h1>
-        <p>Marka ve model seçerek aracına uygun parçayı ekleyebilirsin.</p>
+        <h1>Sepetiniz boş</h1>
+        <p>Marka ve model seçerek aracınıza uygun parçayı ekleyebilirsiniz.</p>
         <Link className="btn btn-primary" href="/">
           Alışverişe başla
         </Link>
@@ -145,8 +145,8 @@ export default async function CartPage({
       {(sp.giris === "1" || sp.uyelik === "1") && (
         <p className="account-alert is-ok" role="status">
           {sp.uyelik === "1"
-            ? "Hesabın oluşturuldu. Sepetin hesabına bağlandı."
-            : "Giriş yaptın. Sepetin hesabına bağlandı."}
+            ? "Hesabınız oluşturuldu. Sepetiniz hesabınıza bağlandı."
+            : "Giriş yaptınız. Sepetiniz hesabınıza bağlandı."}
         </p>
       )}
 
@@ -158,19 +158,19 @@ export default async function CartPage({
 
       {!sales.open && (
         <p className="account-alert is-bad" role="alert">
-          {sales.message} Sepetindeki ürünler saklanır; satışlar yeniden açıldığında siparişini tamamlayabilirsin.
+          {sales.message} Sepetinizdeki ürünler saklanır; satışlar yeniden açıldığında siparişinizi tamamlayabilirsiniz.
         </p>
       )}
 
       {sp.hata === "stok" && (
         <p className="account-alert is-bad" role="alert">
-          İstediğin adet stokta yok. Adeti düşürüp tekrar dene.
+          İstediğiniz adet stokta yok. Adedi düşürüp tekrar deneyin.
         </p>
       )}
 
       {sp.hata === "degisim" && (
         <p className="account-alert is-bad" role="alert">
-          Ürün değiştirilemedi. Lütfen tekrar dene.
+          Ürün değiştirilemedi. Lütfen tekrar deneyin.
         </p>
       )}
 

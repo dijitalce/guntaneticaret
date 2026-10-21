@@ -26,7 +26,7 @@ export default async function OrdersPage() {
       {rows.length === 0 ? (
         <div className="empty-state account-empty">
           <h3>Sipariş bulunamadı</h3>
-          <p>İlk siparişini verdikten sonra durumunu buradan takip edebilirsin.</p>
+          <p>İlk siparişinizi verdikten sonra durumunu buradan takip edebilirsiniz.</p>
           <Link className="btn btn-primary" href="/">Alışverişe başla</Link>
         </div>
       ) : (

@@ -17,14 +17,14 @@ export function AccountAuthForms({
     <div className="account-auth">
       <aside className="account-auth-aside">
         <p className="account-auth-eyebrow">Hesabım</p>
-        <h1>Alışverişine kaldığın yerden devam et</h1>
+        <h1>Alışverişinize kaldığınız yerden devam edin</h1>
         <p>
-          Siparişlerini takip et, adreslerini kaydet ve {siteName} alışverişini daha hızlı tamamla.
+          Siparişlerinizi takip edin, adreslerinizi kaydedin ve {siteName} alışverişinizi daha hızlı tamamlayın.
         </p>
         <ul className="account-auth-benefits">
-          <li>Sipariş ve kargo durumunu gör</li>
-          <li>Teslimat adreslerini kaydet</li>
-          <li>Havale / EFT ödemelerini kolayca takip et</li>
+          <li>Sipariş ve kargo durumunu görün</li>
+          <li>Teslimat adreslerinizi kaydedin</li>
+          <li>Ödemelerinizi kolayca takip edin</li>
           <li>KDV dahil fiyatlarla güvenli alışveriş</li>
         </ul>
         <div className="account-auth-legal-links">
@@ -82,7 +82,7 @@ export function AccountAuthForms({
               Giriş yap
             </button>
             <p className="account-auth-switch muted">
-              Hesabın yok mu?{" "}
+              Hesabınız yok mu?{" "}
               <button type="button" className="account-auth-text-btn" onClick={() => setTab("register")}>
                 Üye ol
               </button>
@@ -92,7 +92,7 @@ export function AccountAuthForms({
           <form action="/api/auth/register" method="post" className="account-auth-form" aria-labelledby="register-title">
             <h2 id="register-title">Üye ol</h2>
             <p className="account-auth-hint muted">
-              Fatura tipini ve adresini kaydet; sepetin hesabına bağlanır, siparişlerde kullanılır.
+              Fatura tipinizi ve adresinizi kaydedin; sepetiniz hesabınıza bağlanır, siparişlerde kullanılır.
             </p>
             <div className="account-field-row">
               <label>
@@ -237,7 +237,7 @@ export function AccountAuthForms({
               Hesap oluştur
             </button>
             <p className="account-auth-switch muted">
-              Zaten üye misin?{" "}
+              Zaten üye misiniz?{" "}
               <button type="button" className="account-auth-text-btn" onClick={() => setTab("login")}>
                 Giriş yap
               </button>

@@ -23,22 +23,22 @@ export default async function AccountPage({
         </nav>
         {sp.hata === "1" && (
           <p className="account-alert is-bad" role="alert">
-            E-posta veya şifre hatalı. Tekrar dene.
+            E-posta veya şifre hatalı. Tekrar deneyin.
           </p>
         )}
         {sp.kayit === "email" && (
           <p className="account-alert is-bad" role="alert">
-            Bu e-posta ile zaten bir hesap var. Giriş yapmayı dene.
+            Bu e-posta ile zaten bir hesap var. Giriş yapmayı deneyin.
           </p>
         )}
         {sp.kayit === "onay" && (
           <p className="account-alert is-bad" role="alert">
-            Üyelik için kullanım koşulları ve KVKK onaylarını işaretlemen gerekir.
+            Üyelik için kullanım koşulları ve KVKK onaylarını işaretlemeniz gerekir.
           </p>
         )}
         {sp.kayit === "eksik" && (
           <p className="account-alert is-bad" role="alert">
-            Lütfen ad, soyad, e-posta ve en az 6 karakterlik şifre gir.
+            Lütfen ad, soyad, e-posta ve en az 6 karakterlik şifre girin.
           </p>
         )}
         {sp.kayit === "fatura" && (
@@ -53,7 +53,7 @@ export default async function AccountPage({
         )}
         {sp.kayit === "1" && (
           <p className="account-alert is-ok" role="status">
-            Hesabın oluşturuldu.
+            Hesabınız oluşturuldu.
           </p>
         )}
         <AccountAuthForms
@@ -85,7 +85,7 @@ export default async function AccountPage({
     <>
       {sp.ok === "profil" && (
         <p className="account-alert is-ok" role="status">
-          Profil bilgilerin güncellendi.
+          Profil bilgileriniz güncellendi.
         </p>
       )}
       {sp.ok === "sifre" && (
@@ -95,7 +95,7 @@ export default async function AccountPage({
       )}
       {sp.kayit === "1" && (
         <p className="account-alert is-ok" role="status">
-          Hoş geldin! Hesabın hazır.
+          Hoş geldiniz! Hesabınız hazır.
         </p>
       )}
       <div className="account-stats">
@@ -121,7 +121,7 @@ export default async function AccountPage({
         {recent.length === 0 ? (
           <div className="empty-state account-empty">
             <h3>Henüz sipariş yok</h3>
-            <p>Marka ve model seçerek uygun parçaları hemen bulabilirsin.</p>
+            <p>Marka ve model seçerek uygun parçaları hemen bulabilirsiniz.</p>
             <Link className="btn btn-primary" href="/">
               Alışverişe başla
             </Link>

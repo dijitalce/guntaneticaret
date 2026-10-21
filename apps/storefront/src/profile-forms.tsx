@@ -33,7 +33,7 @@ export function ProfileForms({
       </div>
       {alerts.ok === "1" && (
         <p className="account-alert is-ok" role="status">
-          Bilgilerin kaydedildi.
+          Bilgileriniz kaydedildi.
         </p>
       )}
       {alerts.hata === "sifre" && (
@@ -43,7 +43,7 @@ export function ProfileForms({
       )}
       {alerts.hata === "1" && (
         <p className="account-alert is-bad" role="alert">
-          Profil kaydedilemedi. Alanları kontrol et.
+          Profil kaydedilemedi. Alanları kontrol edin.
         </p>
       )}
 
@@ -139,7 +139,7 @@ export function ProfileForms({
             Şifreyi güncelle
           </button>
           <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-            Şifreni unuttuysan destek için <Link href="/iletisim">iletişim</Link> sayfasını kullan.
+            Şifrenizi unuttuysanız destek için <Link href="/iletisim">iletişim</Link> sayfasını kullanın.
           </p>
         </form>
       </div>
