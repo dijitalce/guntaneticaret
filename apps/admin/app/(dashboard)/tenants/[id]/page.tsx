@@ -535,11 +535,11 @@ export default async function TenantEditPage({
               <div className="form-row">
                 <div className="field">
                   <label htmlFor="phone">Telefon</label>
-                  <input className="input" id="phone" name="phone" defaultValue={settings?.phone ?? ""} placeholder="0216 000 00 00" />
+                  <input className="input" id="phone" name="phone" defaultValue={settings?.phone ?? ""} placeholder="0551 194 61 68" />
                 </div>
                 <div className="field">
                   <label htmlFor="whatsapp">WhatsApp</label>
-                  <input className="input" id="whatsapp" name="whatsapp" defaultValue={settings?.whatsapp ?? ""} placeholder="0532 000 00 00" />
+                  <input className="input" id="whatsapp" name="whatsapp" defaultValue={settings?.whatsapp ?? ""} placeholder="905511946168" />
                   <small className="field-hint">
                     {settings?.whatsapp ? (
                       <>

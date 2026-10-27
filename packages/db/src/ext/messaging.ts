@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { asc, eq, sql } from "drizzle-orm";
 import { db } from "../client";
+import { COMPANY_CONTACT } from "../content/contact";
 import { tenantDomains, tenantSettings, tenants } from "../schema";
 import { ensureExtTables } from "./tables";
 import { exec, first } from "./sql";
@@ -13,7 +14,7 @@ const tenantCache = new Map<string, { at: number; value: TenantContext }>();
 
 export async function getTenantContext(tenantId: string | null | undefined): Promise<TenantContext> {
   const fallbackUrl = (process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com").replace(/\/$/, "");
-  if (!tenantId) return { id: "", name: "Güntan", url: fallbackUrl, logoUrl: null, email: null, phone: null };
+  if (!tenantId) return { id: "", name: "Güntan", url: fallbackUrl, logoUrl: null, email: null, phone: COMPANY_CONTACT.phone };
   const hit = tenantCache.get(tenantId);
   if (hit && Date.now() - hit.at < 300_000) return hit.value;
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
@@ -32,7 +33,7 @@ export async function getTenantContext(tenantId: string | null | undefined): Pro
     url,
     logoUrl: logo ? (/^https?:\/\//.test(logo) ? logo : `${url}${logo.startsWith("/") ? "" : "/"}${logo}`) : null,
     email: settings?.email ?? null,
-    phone: settings?.phone ?? null,
+    phone: COMPANY_CONTACT.phone,
   };
   tenantCache.set(tenantId, { at: Date.now(), value });
   return value;

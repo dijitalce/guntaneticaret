@@ -422,8 +422,8 @@ async function main() {
     {
       tenantId: japon.id,
       siteName: "Japon Grup Oto Yedek Parça",
-      phone: "0216 000 00 01",
-      whatsapp: "905550000001",
+      phone: COMPANY_CONTACT.phone,
+      whatsapp: COMPANY_CONTACT.whatsapp,
       email: japonSite.email,
       address: "İstanbul",
       themeTokens: japonTheme,

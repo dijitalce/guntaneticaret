@@ -42,7 +42,7 @@ INSERT INTO `tenant_settings` (
   '33333333-3333-4333-8333-333333333333',
   '11111111-1111-4111-8111-111111111111',
   'Güntan Oto Yedek Parça',
-  '+90 551 194 61 68',
+  '0551 194 61 68',
   '905511946168',
   'info@guntanotoyedekparca.com',
   'Bağcılar Güngören Sanayi Sitesi, 15. Blok No: 49, Başakşehir / İstanbul',

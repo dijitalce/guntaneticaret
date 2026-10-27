@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, tenantDomains, tenantSettings, tenants } from "@guntan/db";
+import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { CACHE_KEYS, TENANT_CONFIG_CACHE_TTL_SECONDS, TENANT_HOST_CACHE_TTL_SECONDS } from "@guntan/config";
 import {
   DEFAULT_THEME_TOKENS,
@@ -193,8 +194,9 @@ export async function resolveTenantByHostOrThrow(rawHost: string): Promise<Tenan
     logoDarkUrl: settings?.logoDarkUrl ?? null,
     faviconUrl: settings?.faviconUrl ?? null,
     placeholderImageUrl: settings?.placeholderImageUrl ?? null,
-    phone: settings?.phone ?? null,
-    whatsapp: settings?.whatsapp ?? null,
+    // Tüm siteler tek hat kullanır (arama + WhatsApp).
+    phone: COMPANY_CONTACT.phone,
+    whatsapp: COMPANY_CONTACT.whatsapp,
     email: settings?.email ?? null,
     address: settings?.address ?? null,
     theme,

@@ -28,13 +28,11 @@ async function cachedTenantByHost(host: string): Promise<TenantPublicConfig | nu
 export const tryGetTenant = cache(async (): Promise<TenantPublicConfig | null> => {
   const h = await headers();
   const tenant = await cachedTenantByHost(requestHost(h));
-  if (!tenant || tenant.tenant.slug !== "guntan") return tenant;
-  return {
-    ...tenant,
-    address: COMPANY_ADDRESS,
-    phone: COMPANY_CONTACT.phone,
-    whatsapp: COMPANY_CONTACT.whatsapp,
-  };
+  if (!tenant) return tenant;
+  // Tüm siteler tek hat kullanır (arama + WhatsApp); DB'deki eski numaralar gösterilmez.
+  const contact = { ...tenant, phone: COMPANY_CONTACT.phone, whatsapp: COMPANY_CONTACT.whatsapp };
+  if (tenant.tenant.slug !== "guntan") return contact;
+  return { ...contact, address: COMPANY_ADDRESS };
 });
 
 export const getTenant = cache(async (): Promise<TenantPublicConfig> => {

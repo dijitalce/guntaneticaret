@@ -9,7 +9,7 @@ export const COMPANY_CONTACT = {
   ],
   taxOffice: "İkitelli",
   taxId: "10397550392",
-  phone: "+90 551 194 61 68",
+  phone: "0551 194 61 68",
   phoneTel: "+905511946168",
   whatsapp: "905511946168",
   email: "info@guntanotoyedekparca.com",

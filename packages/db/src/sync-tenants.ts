@@ -67,8 +67,8 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
   const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
   const payload = {
     siteName: site.name,
-    phone: site.slug === "guntan" ? COMPANY_CONTACT.phone : "0216 000 00 00",
-    whatsapp: site.slug === "guntan" ? COMPANY_CONTACT.whatsapp : "905550000000",
+    phone: COMPANY_CONTACT.phone,
+    whatsapp: COMPANY_CONTACT.whatsapp,
     email: site.email,
     address: site.slug === "guntan" ? COMPANY_ADDRESS : "İstanbul",
     themeTokens: { ...DEFAULT_THEME_TOKENS },
