@@ -1,12 +1,31 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { getAppSetting, setAppSetting } from "../app-settings";
 
+/** Yöneticiye giden bildirim olayları; her birinin alıcısı boşsa genel adreslere düşer. */
+export const ADMIN_NOTIFY_EVENTS = [
+  { key: "new_order", label: "Yeni sipariş", hint: "Kartlı ve havale siparişleri" },
+  { key: "payment", label: "Ödeme alındı", hint: "Havale onayı ve tahsilat linki ödemeleri" },
+  { key: "low_stock", label: "Düşük stok", hint: "Düşük stok otomasyonu" },
+] as const;
+export type AdminNotifyEvent = (typeof ADMIN_NOTIFY_EVENTS)[number]["key"];
+
+export type SmtpSecurity = "ssl" | "starttls" | "none";
+
 export type NotifySettings = {
-  emailProvider: "none" | "resend" | "brevo";
+  emailProvider: "none" | "smtp" | "resend" | "brevo";
   emailApiKey: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: SmtpSecurity;
+  smtpUser: string;
+  smtpPass: string;
   fromEmail: string;
   fromName: string;
   replyTo: string;
+  /** Genel yönetici adresleri (virgülle ayrılmış). */
   adminEmails: string;
+  /** Olay bazlı alıcılar; boş olay genel adreslere gider. */
+  adminRecipients: Partial<Record<AdminNotifyEvent, string>>;
   smsProvider: "none" | "netgsm";
   netgsmUser: string;
   netgsmPass: string;
@@ -16,10 +35,16 @@ export type NotifySettings = {
 export const DEFAULT_NOTIFY: NotifySettings = {
   emailProvider: "none",
   emailApiKey: "",
+  smtpHost: "",
+  smtpPort: 465,
+  smtpSecurity: "ssl",
+  smtpUser: "",
+  smtpPass: "",
   fromEmail: "",
   fromName: "",
   replyTo: "",
   adminEmails: "",
+  adminRecipients: {},
   smsProvider: "none",
   netgsmUser: "",
   netgsmPass: "",
@@ -157,8 +182,48 @@ function mergeDeep<T extends object>(defaults: T, stored: Partial<T>): T {
   return out as T;
 }
 
-export const getNotifySettings = () => load("notify.settings", DEFAULT_NOTIFY);
-export const saveNotifySettings = (v: NotifySettings) => save("notify.settings", v);
+const SECRET_PREFIX = "enc:v1:";
+
+function secretKey() {
+  const base = process.env.APP_SECRET || process.env.AUTH_SECRET || process.env.SESSION_SECRET || process.env.BETTER_AUTH_SECRET || process.env.DATABASE_URL || "guntan";
+  return createHash("sha256").update(`notify:${base}`).digest();
+}
+
+/** Veritabanında düz metin şifre tutulmaz; AES-256-GCM ile saklanır. */
+export function sealSecret(value: string): string {
+  if (!value || value.startsWith(SECRET_PREFIX)) return value;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", secretKey(), iv);
+  const data = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  return `${SECRET_PREFIX}${Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64")}`;
+}
+
+/** Eski düz metin kayıtlar olduğu gibi döner; anahtar değiştiyse boş döner (şifre yeniden girilmeli). */
+export function openSecret(value: string): string {
+  if (!value?.startsWith(SECRET_PREFIX)) return value ?? "";
+  try {
+    const buf = Buffer.from(value.slice(SECRET_PREFIX.length), "base64");
+    const decipher = createDecipheriv("aes-256-gcm", secretKey(), buf.subarray(0, 12));
+    decipher.setAuthTag(buf.subarray(12, 28));
+    return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+const SEALED_NOTIFY_KEYS = ["smtpPass", "emailApiKey", "netgsmPass"] as const;
+
+export async function getNotifySettings(): Promise<NotifySettings> {
+  const raw = await load("notify.settings", DEFAULT_NOTIFY);
+  const out = { ...raw };
+  for (const k of SEALED_NOTIFY_KEYS) out[k] = openSecret(raw[k]);
+  return out;
+}
+export const saveNotifySettings = (v: NotifySettings) => {
+  const sealed = { ...v };
+  for (const k of SEALED_NOTIFY_KEYS) sealed[k] = sealSecret(v[k]);
+  return save("notify.settings", sealed);
+};
 export const getAutomationSettings = () => load("automations", DEFAULT_AUTOMATIONS);
 export const saveAutomationSettings = (v: AutomationSettings) => save("automations", v);
 export const getShippingSettings = () => load("shipping.settings", DEFAULT_SHIPPING);
@@ -223,4 +288,17 @@ export function csvList(value: string): string[] {
     .split(/[,;\s]+/)
     .map((s) => s.trim())
     .filter((s) => s.includes("@"));
+}
+
+/** Olayın alıcıları; olaya özel adres girilmemişse genel yönetici adresleri. */
+export function adminRecipientsFor(settings: NotifySettings, event: AdminNotifyEvent): string[] {
+  const own = csvList(settings.adminRecipients?.[event] ?? "");
+  return [...new Set((own.length ? own : csvList(settings.adminEmails)).map((e) => e.toLowerCase()))];
+}
+
+export function emailConfigured(settings: NotifySettings): boolean {
+  if (!settings.fromEmail) return false;
+  if (settings.emailProvider === "smtp") return Boolean(settings.smtpHost && settings.smtpPort);
+  if (settings.emailProvider === "resend" || settings.emailProvider === "brevo") return Boolean(settings.emailApiKey);
+  return false;
 }

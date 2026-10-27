@@ -2,6 +2,8 @@ import { randomInt, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { ensureExtTables } from "./tables";
 import { exec, first, num, rows } from "./sql";
+import { sendAdminTemplate } from "./messaging";
+import { formatMoney } from "./orders";
 
 export const PAYMENT_LINK_STATUS = { PENDING: "pending", PAID: "paid", CANCELLED: "cancelled" } as const;
 export type PaymentLinkStatus = (typeof PAYMENT_LINK_STATUS)[keyof typeof PAYMENT_LINK_STATUS];
@@ -198,7 +200,29 @@ export async function confirmPaymentLink(
   const res = await exec(sql`update payment_links set status = 'paid', paid_amount = ${(paidKurus / 100).toFixed(2)},
       paid_installment = ${installment}, bank_ref = ${ref}, paid_order_id = ${orderId}, paid_at = current_timestamp, last_error = null
     where id = ${link.id} and status <> 'paid'`);
-  return { link: (await getPaymentLink(link.id))!, alreadyPaid: res.affectedRows !== 1 };
+  const updated = (await getPaymentLink(link.id))!;
+  const alreadyPaid = res.affectedRows !== 1;
+  if (!alreadyPaid) notifyPaymentLinkPaid(updated);
+  return { link: updated, alreadyPaid };
+}
+
+function notifyPaymentLinkPaid(link: PaymentLink) {
+  const adminBase = `${(process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com").replace(/\/$/, "")}${process.env.ADMIN_BASE_PATH ?? "/yonetim"}`;
+  void sendAdminTemplate(
+    "admin_payment_link_paid",
+    link.tenant_id,
+    {
+      link_title: link.title,
+      link_code: link.code,
+      amount: formatMoney(link.paid_amount ?? link.amount),
+      installment: link.paid_installment && link.paid_installment > 1 ? ` · ${link.paid_installment} taksit` : "",
+      payer_name: link.payer_name ?? link.customer_name ?? "",
+      payer_email: link.payer_email ?? link.customer_email ?? "",
+      payer_phone: link.payer_phone ?? link.customer_phone ?? "",
+      admin_link_url: `${adminBase}/payment-links`,
+    },
+    "payment",
+  ).catch(() => undefined);
 }
 
 export async function failPaymentLink(orderId: string, reason: string) {

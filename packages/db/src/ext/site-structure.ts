@@ -37,9 +37,16 @@ export const SITEMAP_STATIC_PAGES = [
   { path: "/site-haritasi", label: "Site haritası" },
 ] as const;
 
-export function sitemapFileNames(productCount: number) {
+/** blog.xml yalnızca yayında blog yazısı varsa listelenir. */
+export function sitemapFileNames(productCount: number, hasBlog = false) {
   const parts = Math.max(1, Math.ceil(productCount / SITEMAP_PRODUCTS_PER_FILE));
-  return ["sayfalar.xml", "kategoriler.xml", "markalar.xml", ...Array.from({ length: parts }, (_, i) => `urunler-${i + 1}.xml`)];
+  return [
+    "sayfalar.xml",
+    "kategoriler.xml",
+    "markalar.xml",
+    ...(hasBlog ? ["blog.xml"] : []),
+    ...Array.from({ length: parts }, (_, i) => `urunler-${i + 1}.xml`),
+  ];
 }
 
 const TTL_MS = 30 * 60_000;

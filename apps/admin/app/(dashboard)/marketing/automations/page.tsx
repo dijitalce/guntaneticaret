@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { automationStats, getAutomationSettings, getNotifySettings, recentAutomationRuns } from "@guntan/db";
+import { automationStats, emailConfigured, getAutomationSettings, getNotifySettings, recentAutomationRuns } from "@guntan/db";
 import { ConfirmButton } from "@/src/form-fields";
 import { IconZap } from "@/src/icons";
 import { MarketingNav } from "@/src/marketing-nav";
@@ -79,7 +79,7 @@ export default async function AutomationsPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const [s, stats, runs, notify] = await Promise.all([getAutomationSettings(), automationStats(), recentAutomationRuns(25), getNotifySettings()]);
   const st = (k: string) => stats.byKey.get(k);
-  const emailReady = notify.emailProvider !== "none" && Boolean(notify.emailApiKey);
+  const emailReady = emailConfigured(notify);
   const production = process.env.NODE_ENV === "production" && process.env.AUTOMATIONS_DISABLED !== "1";
 
   return (

@@ -19,16 +19,16 @@ export function vehicleImageType(bytes: Buffer): keyof typeof EXT | null {
  * hostinger-start.mjs /arac-gorsel/ isteklerini ürün görsel klasörünün kardeşi olan
  * guntan-images/vehicles klasöründen sunar; deploy klasörü her yayında sıfırlandığı için dışarıda tutulur.
  */
-function resolveDir(): string | null {
-  if (process.env.PRODUCT_IMAGE_DIR) return join(dirname(process.env.PRODUCT_IMAGE_DIR), "vehicles");
+function resolveDir(folder: "vehicles" | "blog" = "vehicles"): string | null {
+  if (process.env.PRODUCT_IMAGE_DIR) return join(dirname(process.env.PRODUCT_IMAGE_DIR), folder);
   let dir = process.cwd();
   for (let i = 0; i < 10; i++) {
-    if (existsSync(join(dir, "guntan-images", "files"))) return join(dir, "guntan-images", "vehicles");
+    if (existsSync(join(dir, "guntan-images", "files"))) return join(dir, "guntan-images", folder);
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return process.env.NODE_ENV === "production" ? null : join(tmpdir(), "guntan-images", "vehicles");
+  return process.env.NODE_ENV === "production" ? null : join(tmpdir(), "guntan-images", folder);
 }
 
 export async function saveVehicleImage(prefix: string, bytes: Buffer, type: keyof typeof EXT): Promise<string> {
@@ -45,4 +45,19 @@ export async function deleteVehicleImage(url: string | null | undefined) {
   const dir = resolveDir();
   if (!dir) return;
   await unlink(join(dir, basename(url))).catch(() => {});
+}
+
+export const BLOG_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
+/** hostinger-start.mjs /blog-gorsel/ isteklerini guntan-images/blog klasöründen sunar. */
+export const BLOG_IMAGE_PREFIX = "/blog-gorsel/";
+
+export async function saveBlogImage(baseName: string, bytes: Buffer, type: keyof typeof EXT): Promise<string> {
+  const dir = resolveDir("blog");
+  if (!dir) throw new Error("Görsel klasörü bulunamadı (guntan-images).");
+  await mkdir(dir, { recursive: true });
+  // Dosya adı görsel SEO'su için yazı başlığından türetilir.
+  const stem = baseName.replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "gorsel";
+  const name = `${stem}-${Date.now().toString(36)}.${EXT[type]}`;
+  await writeFile(join(dir, name), bytes);
+  return `${BLOG_IMAGE_PREFIX}${name}`;
 }

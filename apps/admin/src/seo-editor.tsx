@@ -12,7 +12,7 @@ const STATE_TEXT: Record<LengthState, string> = {
   long: "Uzun — kesilir",
 };
 
-function Counter({ value, min, max }: { value: string; min: number; max: number }) {
+export function Counter({ value, min, max }: { value: string; min: number; max: number }) {
   const n = value.trim().length;
   const state = lengthState(value, min, max);
   const pct = Math.min(100, Math.round((n / max) * 100));

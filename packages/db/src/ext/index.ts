@@ -18,3 +18,5 @@ export * from "./catalog-export";
 export * from "./site-structure";
 export * from "./reviews";
 export * from "./payment-links";
+export * from "./blog";
+export * from "./blog-html";

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import {
+  blogSitemapData,
   catalogHealth,
   db,
   getTenantContext,
@@ -27,6 +28,7 @@ const FILE_LABEL: Record<string, string> = {
   "sayfalar.xml": "Ana sayfa ve kurumsal sayfalar",
   "kategoriler.xml": "Ürünü olan kategoriler",
   "markalar.xml": "Araç markaları ve modelleri",
+  "blog.xml": "Blog yazıları, kategorileri ve etiketleri",
 };
 
 export default async function SeoPage({ searchParams }: { searchParams: Promise<{ site?: string; kontrol?: string }> }) {
@@ -41,7 +43,7 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
     );
   }
   const current = sites.find((s) => s.id === sp.site) ?? sites[0]!;
-  const [structure, health, ctx, [settings], [sampleProduct]] = await Promise.all([
+  const [structure, health, ctx, [settings], [sampleProduct], blog] = await Promise.all([
     siteStructure(current.id),
     catalogHealth(),
     getTenantContext(current.id),
@@ -51,7 +53,9 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
       .from(products)
       .where(and(eq(products.status, "active"), eq(products.stockStatus, "in_stock")))
       .limit(1),
+    blogSitemapData(current.id),
   ]);
+  const blogUrls = blog.posts.length ? 1 + blog.posts.length + blog.categories.length + blog.tags.length : 0;
   const site = ctx.url.replace(/\/$/, "");
   const social = (settings?.socialJson ?? {}) as Record<string, string>;
 
@@ -64,7 +68,7 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
   const liveBrands = structure.brands.filter((b) => b.count > 0);
   const sampleCategory = [...liveCats].sort((a, b) => b.count - a.count)[0];
 
-  const files = sitemapFileNames(structure.products).map((file) => {
+  const files = sitemapFileNames(structure.products, blogUrls > 0).map((file) => {
     const part = /^urunler-(\d+)\.xml$/.exec(file);
     const urls = part
       ? Math.min(SITEMAP_PRODUCTS_PER_FILE, structure.products - (Number(part[1]) - 1) * SITEMAP_PRODUCTS_PER_FILE)
@@ -72,7 +76,9 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
         ? SITEMAP_STATIC_PAGES.length + 1
         : file === "kategoriler.xml"
           ? liveCats.length
-          : liveBrands.length + liveModels.length;
+          : file === "blog.xml"
+            ? blogUrls
+            : liveBrands.length + liveModels.length;
     return { file, label: part ? `Ürünler (${part[1]}. dosya)` : FILE_LABEL[file]!, urls };
   });
   const totalUrls = files.reduce((s, f) => s + f.urls, 0);

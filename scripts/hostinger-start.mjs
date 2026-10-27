@@ -2053,11 +2053,13 @@ function serveProductImage(req, res, pathOnly) {
 }
 
 const VEHICLE_IMAGE_PATH = /^\/arac-gorsel\/([a-z0-9][a-z0-9-]*\.(webp|jpg|png))$/;
-const VEHICLE_IMAGE_TYPES = { webp: "image/webp", jpg: "image/jpeg", png: "image/png" };
-function serveVehicleImage(req, res, pathOnly) {
-  const m = VEHICLE_IMAGE_PATH.exec(pathOnly);
+const BLOG_IMAGE_PATH = /^\/blog-gorsel\/([a-z0-9][a-z0-9-]*\.(webp|jpg|png|gif))$/;
+const VEHICLE_IMAGE_TYPES = { webp: "image/webp", jpg: "image/jpeg", png: "image/png", gif: "image/gif" };
+/** Panelden yüklenen araç ve blog görselleri: ürün görsel klasörünün kardeş klasörleri. */
+function serveVehicleImage(req, res, pathOnly, pattern = VEHICLE_IMAGE_PATH, folder = "vehicles") {
+  const m = pattern.exec(pathOnly);
   const productDir = m ? resolveProductImageDir() : null;
-  const file = productDir ? join(dirname(productDir), "vehicles", m[1]) : null;
+  const file = productDir ? join(dirname(productDir), folder, m[1]) : null;
   let st = null;
   if (file) {
     try {
@@ -2099,6 +2101,10 @@ async function routeRequest(req, res) {
   }
   if (pathOnly.startsWith("/arac-gorsel/")) {
     serveVehicleImage(req, res, pathOnly);
+    return;
+  }
+  if (pathOnly.startsWith("/blog-gorsel/")) {
+    serveVehicleImage(req, res, pathOnly, BLOG_IMAGE_PATH, "blog");
     return;
   }
 

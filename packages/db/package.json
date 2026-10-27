@@ -22,22 +22,25 @@
     "compile-visibility": "tsx src/compile-cli.ts",
     "prune": "tsx src/prune-cli.ts",
     "studio": "drizzle-kit studio",
-    "lint": "echo ok"
+    "lint": "echo ok",
+    "test": "vitest run"
   },
   "dependencies": {
     "@guntan/types": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "mysql2": "^3.14.0",
-    "sql-escaper": "^1.5.1",
-    "lru.min": "^1.1.4",
     "aws-ssl-profiles": "^1.1.2",
+    "drizzle-orm": "^0.45.2",
     "generate-function": "^2.3.1",
     "iconv-lite": "^0.7.3",
-    "safer-buffer": "^2.1.2",
     "long": "^5.3.2",
-    "named-placeholders": "^1.1.6"
+    "lru.min": "^1.1.4",
+    "mysql2": "^3.14.0",
+    "named-placeholders": "^1.1.6",
+    "nodemailer": "^6.10.1",
+    "safer-buffer": "^2.1.2",
+    "sql-escaper": "^1.5.1"
   },
   "devDependencies": {
+    "@types/nodemailer": "^6.4.24",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.19.3"
   }

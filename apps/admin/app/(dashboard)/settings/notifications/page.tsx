@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { sql } from "drizzle-orm";
-import { TEMPLATES, TEMPLATE_GROUPS, ensureExtTables, extRows, getNotifySettings, getTemplateOverrides } from "@guntan/db";
+import {
+  ADMIN_NOTIFY_EVENTS,
+  TEMPLATES,
+  TEMPLATE_GROUPS,
+  csvList,
+  emailConfigured,
+  ensureExtTables,
+  extRows,
+  getNotifySettings,
+  getTemplateOverrides,
+} from "@guntan/db";
+import { EmailListField, EmailProviderFields } from "@/src/notify-fields";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { Pager, TabNav, pageNumber } from "@/src/ui-ext";
@@ -41,7 +52,8 @@ export default async function NotificationsPage({
       from message_log where created_at > now() - interval 30 day and campaign_id is null`),
   ]);
   const s = stats[0];
-  const emailReady = settings.emailProvider !== "none" && Boolean(settings.emailApiKey && settings.fromEmail);
+  const emailReady = emailConfigured(settings);
+  const adminList = csvList(settings.adminEmails);
   const smsReady = settings.smsProvider === "netgsm" && Boolean(settings.netgsmUser && settings.netgsmPass && settings.netgsmHeader);
 
   const page = pageNumber(sp.sayfa);
@@ -70,6 +82,7 @@ export default async function NotificationsPage({
       <PageHeader title="Bildirimler" description="Müşterilere ve ekibinize giden e-posta ve SMS bildirimleri, şablonları ve gönderim geçmişi." />
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Kaydedildi.</Alert> : null}
       {sp.ok === "test" ? <Alert tone="ok">Test mesajı gönderildi. Gelen kutunuzu (ve spam klasörünü) kontrol edin.</Alert> : null}
+      {sp.ok === "smtp" ? <Alert tone="ok">SMTP bağlantısı başarılı; sunucu kullanıcı adı ve şifreyi kabul etti.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
       {!emailReady ? (
         <Alert tone="warn">
@@ -168,27 +181,24 @@ export default async function NotificationsPage({
 
       {tab === "ayarlar" ? (
         <div className="grid-halves">
-          <Panel title="E-posta" description="Resend veya Brevo hesabınızın API anahtarı" padded>
+          <Panel title="E-posta" description="SMTP (kendi alan adınızın e-posta sunucusu) veya Resend/Brevo API ile gönderim" padded>
             <form action={withBase("/api/settings/notifications")} method="post" className="form-stack">
               <input type="hidden" name="_action" value="provider" />
-              <div className="field">
-                <label htmlFor="emailProvider">Sağlayıcı</label>
-                <select className="select" id="emailProvider" name="emailProvider" defaultValue={settings.emailProvider}>
-                  <option value="none">Kapalı</option>
-                  <option value="resend">Resend</option>
-                  <option value="brevo">Brevo (Sendinblue)</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="emailApiKey">API anahtarı</label>
-                <input className="input" id="emailApiKey" name="emailApiKey" type="password" defaultValue={settings.emailApiKey ? MASK : ""} autoComplete="off" />
-                <small className="field-hint">Kayıtlı anahtar gizli gösterilir; değiştirmek için yenisini yapıştırın.</small>
-              </div>
+              <EmailProviderFields
+                provider={settings.emailProvider}
+                smtpHost={settings.smtpHost}
+                smtpPort={settings.smtpPort}
+                smtpSecurity={settings.smtpSecurity}
+                smtpUser={settings.smtpUser}
+                hasSmtpPass={Boolean(settings.smtpPass)}
+                hasApiKey={Boolean(settings.emailApiKey)}
+                mask={MASK}
+              />
               <div className="form-row">
                 <div className="field">
                   <label htmlFor="fromEmail">Gönderen e-posta</label>
                   <input className="input" id="fromEmail" name="fromEmail" type="email" defaultValue={settings.fromEmail} placeholder="siparis@alanadiniz.com" />
-                  <small className="field-hint">Alan adı sağlayıcıda doğrulanmış olmalı.</small>
+                  <small className="field-hint">SMTP'de genelde kullanıcı adıyla aynı olmalı; SPF/DKIM kayıtları alan adında tanımlı olmalı.</small>
                 </div>
                 <div className="field">
                   <label htmlFor="fromName">Gönderen adı</label>
@@ -199,11 +209,32 @@ export default async function NotificationsPage({
                 <label htmlFor="replyTo">Yanıt adresi</label>
                 <input className="input" id="replyTo" name="replyTo" type="email" defaultValue={settings.replyTo} />
               </div>
-              <div className="field">
-                <label htmlFor="adminEmails">Yönetici bildirim adresleri</label>
-                <input className="input" id="adminEmails" name="adminEmails" defaultValue={settings.adminEmails} placeholder="ali@firma.com, depo@firma.com" />
-                <small className="field-hint">Yeni sipariş ve düşük stok e-postaları bu adreslere gider.</small>
-              </div>
+
+              <h3 className="subhead">Yönetici bildirim alıcıları</h3>
+              <EmailListField
+                id="adminEmails"
+                name="adminEmails"
+                label="Genel alıcılar"
+                defaultValue={settings.adminEmails}
+                placeholder="ali@firma.com"
+                hint="Enter, virgül veya boşlukla birden fazla adres ekleyin. Aşağıda adres girilmeyen tüm bildirimler bu adreslere gider."
+              />
+              <details className="fieldset" open={ADMIN_NOTIFY_EVENTS.some((e) => settings.adminRecipients?.[e.key])}>
+                <summary>Bildirim türüne göre farklı alıcılar</summary>
+                <div className="form-stack" style={{ marginTop: "0.75rem" }}>
+                  {ADMIN_NOTIFY_EVENTS.map((e) => (
+                    <EmailListField
+                      key={e.key}
+                      id={`recipients-${e.key}`}
+                      name={`recipients.${e.key}`}
+                      label={e.label}
+                      defaultValue={settings.adminRecipients?.[e.key] ?? ""}
+                      placeholder={adminList.length ? `Boş: genel alıcılar (${adminList.length})` : "Boş: genel alıcılar"}
+                      hint={e.hint}
+                    />
+                  ))}
+                </div>
+              </details>
               <h3 className="subhead">SMS (Netgsm)</h3>
               <div className="field">
                 <label htmlFor="smsProvider">Sağlayıcı</label>
@@ -230,6 +261,11 @@ export default async function NotificationsPage({
                 <button className="btn btn-primary" type="submit">
                   Ayarları kaydet
                 </button>
+                {settings.emailProvider === "smtp" ? (
+                  <button className="btn btn-secondary" type="submit" name="then" value="verify">
+                    Kaydet ve SMTP bağlantısını dene
+                  </button>
+                ) : null}
               </div>
             </form>
           </Panel>
@@ -238,7 +274,8 @@ export default async function NotificationsPage({
               <form action={withBase("/api/settings/notifications")} method="post" className="form-stack">
                 <div className="field">
                   <label htmlFor="test-to">Alıcı (e-posta veya telefon)</label>
-                  <input className="input" id="test-to" name="to" required placeholder="siz@firma.com veya 05xx…" />
+                  <input className="input" id="test-to" name="to" required defaultValue={adminList.join(", ")} placeholder="siz@firma.com veya 05xx…" />
+                  <small className="field-hint">Birden fazla e-posta adresini virgülle ayırabilirsiniz.</small>
                 </div>
                 <div className="op-actions">
                   <button className="btn btn-secondary" type="submit" name="_action" value="test_email" disabled={!emailReady}>
@@ -249,10 +286,19 @@ export default async function NotificationsPage({
                   </button>
                 </div>
               </form>
+              {settings.emailProvider === "smtp" ? (
+                <form action={withBase("/api/settings/notifications")} method="post" style={{ marginTop: "0.75rem" }}>
+                  <input type="hidden" name="_action" value="verify_smtp" />
+                  <button className="btn btn-ghost btn-sm" type="submit" disabled={!settings.smtpHost}>
+                    SMTP bağlantısını e-posta göndermeden dene
+                  </button>
+                </form>
+              ) : null}
             </Panel>
             <Panel title="Nasıl çalışır?" padded>
               <ul className="note-list">
                 <li>Sipariş, ödeme, kargo, teslim ve iptal adımlarında müşteriye otomatik bildirim gider.</li>
+                <li>Yeni sipariş, havale ödeme onayı, tahsilat linki ödemesi ve düşük stokta yönetici alıcılarına e-posta gider.</li>
                 <li>Her gönderim “Gönderim geçmişi” sekmesinde ve sipariş zaman çizelgesinde görünür.</li>
                 <li>Şablonlarda {"{{customer_name}}"}, {"{{order_no}}"} gibi değişkenler kullanılabilir.</li>
                 <li>Pazarlama e-postalarına otomatik “abonelikten çık” bağlantısı eklenir.</li>

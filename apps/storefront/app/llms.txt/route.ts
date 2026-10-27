@@ -1,3 +1,4 @@
+import { latestBlogPosts, publishedBlogCategories } from "@guntan/db";
 import { tryGetTenant } from "../../src/tenant";
 import { cachedPopularCategories, cachedVisibleBrands } from "../../src/cached-catalog";
 import { sentenceCaseTr } from "../../src/format";
@@ -16,7 +17,13 @@ export async function GET() {
   if (!tenant || tenantNoIndex(tenant)) return new Response("Bulunamadı", { status: 404 });
   const host = tenant.tenant.canonicalHost;
   const url = (path: string) => absoluteUrl(host, path);
-  const [brands, cats] = await Promise.all([cachedVisibleBrands(tenant.tenant.id), cachedPopularCategories(50)]);
+  const [brands, cats, posts, blogCats] = await Promise.all([
+    cachedVisibleBrands(tenant.tenant.id),
+    cachedPopularCategories(50),
+    latestBlogPosts(tenant.tenant.id, 30).catch(() => []),
+    publishedBlogCategories(tenant.tenant.id).catch(() => []),
+  ]);
+  const blogPosts = posts.filter((p) => !p.noindex);
   const social = (tenant.social ?? {}) as Record<string, string>;
   const feeds = FEEDS.filter((f) => social[f.flag] === "1");
   const summary =
@@ -56,8 +63,18 @@ export async function GET() {
     `- [Gizlilik](${url("/sayfa/gizlilik")})`,
     `- [Hakkımızda](${url("/sayfa/hakkimizda")})`,
     `- [İletişim](${url("/iletisim")})${tenant.phone ? `: ${tenant.phone}` : ""}`,
+    ...(blogPosts.length ? [`- [Blog](${url("/blog")}): bakım, arıza ve parça seçimi rehberleri ([RSS](${url("/blog/rss.xml")}))`] : []),
     "",
   ];
+  if (blogPosts.length) {
+    lines.push(
+      "## Blog rehberleri",
+      "",
+      ...blogPosts.map((p) => `- [${p.title}](${url(`/blog/${p.slug}`)})${p.excerpt ? `: ${p.excerpt.replace(/\s+/g, " ").slice(0, 200)}` : ""}`),
+      ...blogCats.map((c) => `- Kategori: [${c.name}](${url(`/blog/kategori/${c.slug}`)})`),
+      "",
+    );
+  }
   if (cats.length) {
     lines.push("## Kategoriler", "", ...cats.filter((c) => !c.parentId).map((c) => `- [${sentenceCaseTr(c.name)}](${url(`/kategori/${c.slug}`)})`), "");
   }

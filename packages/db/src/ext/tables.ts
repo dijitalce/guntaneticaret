@@ -263,6 +263,56 @@ const TABLES = [
     created_at timestamp not null default current_timestamp,
     index automation_runs_idx (automation, created_at)
   )`,
+  sql`create table if not exists blog_categories (
+    id char(36) not null primary key,
+    tenant_id char(36) not null,
+    slug varchar(191) not null,
+    name varchar(191) not null,
+    description text null,
+    meta_title varchar(255) null,
+    meta_description varchar(500) null,
+    sort_order int not null default 0,
+    created_at timestamp not null default current_timestamp,
+    updated_at timestamp not null default current_timestamp on update current_timestamp,
+    unique key blog_categories_tenant_slug_uidx (tenant_id, slug)
+  )`,
+  sql`create table if not exists blog_articles (
+    id char(36) not null primary key,
+    tenant_id char(36) not null,
+    slug varchar(191) not null,
+    title varchar(255) not null,
+    excerpt text null,
+    body mediumtext not null,
+    cover_url varchar(1000) null,
+    cover_alt varchar(255) null,
+    category_id char(36) null,
+    status varchar(16) not null default 'draft',
+    published_at timestamp null default null,
+    author_name varchar(191) null,
+    meta_title varchar(255) null,
+    meta_description varchar(500) null,
+    canonical_url varchar(1000) null,
+    og_image_url varchar(1000) null,
+    noindex tinyint not null default 0,
+    focus_keyword varchar(191) null,
+    related_categories text null,
+    related_products text null,
+    faq json null,
+    word_count int not null default 0,
+    created_at timestamp not null default current_timestamp,
+    updated_at timestamp not null default current_timestamp on update current_timestamp,
+    unique key blog_articles_tenant_slug_uidx (tenant_id, slug),
+    index blog_articles_list_idx (tenant_id, status, published_at),
+    index blog_articles_category_idx (category_id, status, published_at)
+  )`,
+  sql`create table if not exists blog_article_tags (
+    article_id char(36) not null,
+    tenant_id char(36) not null,
+    slug varchar(191) not null,
+    name varchar(191) not null,
+    primary key (article_id, slug),
+    index blog_article_tags_tenant_idx (tenant_id, slug)
+  )`,
 ];
 
 const CUSTOMER_COLUMNS = [

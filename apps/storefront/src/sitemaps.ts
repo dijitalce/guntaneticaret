@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
+  blogSitemapData,
+  countPublishedPosts,
   db,
   products,
   siteStructure,
@@ -57,7 +59,8 @@ function absoluteImage(base: string, url: string | null) {
 export async function sitemapIndexResponse() {
   const ctx = await sitemapContext();
   if (!ctx) return new Response("Site bulunamadı", { status: 404 });
-  const body = sitemapFileNames(ctx.structure.products)
+  const hasBlog = (await countPublishedPosts(ctx.tenantId).catch(() => 0)) > 0;
+  const body = sitemapFileNames(ctx.structure.products, hasBlog)
     .map((f) => `<sitemap><loc>${esc(`${ctx.base}/sitemaps/${f}`)}</loc></sitemap>`)
     .join("\n");
   return new Response(
@@ -85,6 +88,20 @@ export async function sitemapFileResponse(file: string) {
         { loc: `${base}/${b.slug}` },
         ...b.models.filter((m) => m.count > 0).map((m) => ({ loc: `${base}/${b.slug}/${m.slug}` })),
       ]);
+    return new Response(urlset(entries), { headers: XML_HEADERS });
+  }
+
+  if (file === "blog.xml") {
+    const blog = await blogSitemapData(ctx.tenantId);
+    if (!blog.posts.length) return new Response("Bulunamadı", { status: 404 });
+    const self = (p: { slug: string; canonicalUrl: string | null }) =>
+      !p.canonicalUrl || p.canonicalUrl === `/blog/${p.slug}` || p.canonicalUrl === `${base}/blog/${p.slug}`;
+    const entries = [
+      { loc: `${base}/blog`, lastmod: isoDate(blog.posts[0]?.updatedAt) },
+      ...blog.posts.filter(self).map((p) => ({ loc: `${base}/blog/${p.slug}`, lastmod: isoDate(p.updatedAt), image: absoluteImage(base, p.coverUrl) })),
+      ...blog.categories.map((c) => ({ loc: `${base}/blog/kategori/${c.slug}`, lastmod: isoDate(c.updatedAt) })),
+      ...blog.tags.map((t) => ({ loc: `${base}/blog/etiket/${t.slug}`, lastmod: isoDate(t.updatedAt) })),
+    ];
     return new Response(urlset(entries), { headers: XML_HEADERS });
   }
 

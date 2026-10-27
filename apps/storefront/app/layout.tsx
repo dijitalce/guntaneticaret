@@ -20,6 +20,7 @@ import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
 import { PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
+import { cachedBlogPostCount } from "../src/blog";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS, announcementFromSocial } from "@guntan/types";
 import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
@@ -133,13 +134,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (tenant.tenant.status === TENANT_STATUS.MAINTENANCE) {
     redirect("/bakim");
   }
-  const [brands, models, generations, categories, popup, sales] = await Promise.all([
+  const [brands, models, generations, categories, popup, sales, blogCount] = await Promise.all([
     cachedVisibleBrands(tenant.tenant.id),
     cachedVisibleModels(tenant.tenant.id),
     cachedVisibleGenerations(tenant.tenant.id).catch(() => []),
     cachedPopularCategories(8),
     getActivePopup(tenant.tenant.id),
     getSalesStatus(),
+    cachedBlogPostCount(tenant.tenant.id),
   ]);
   const social = (tenant.social ?? {}) as Record<string, string>;
   const navCats = categories.filter((c) => !c.parentId);
@@ -174,6 +176,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   Sahibinden mağazamız
                 </a>
               ) : null}
+              {blogCount > 0 ? <Link href="/blog">Blog</Link> : null}
               <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
               <Link href="/iletisim">İletişim</Link>
             </div>
@@ -262,6 +265,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div>
                 <h3>Kurumsal</h3>
                 <Link href="/sayfa/hakkimizda">Hakkımızda</Link>
+                {blogCount > 0 ? <Link href="/blog">Blog</Link> : null}
                 <Link href="/iletisim">İletişim</Link>
                 <Link href="/hesabim">Hesabım</Link>
               </div>

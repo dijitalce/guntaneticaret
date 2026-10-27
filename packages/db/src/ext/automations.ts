@@ -251,6 +251,7 @@ async function runLowStock(): Promise<RunResult> {
       threshold: String(threshold),
       items_table: itemsTableHtml(list.map((p) => ({ name: `${p.name} (${p.sku})`, qty: num(p.available), price: `${num(p.available)} adet` }))),
     },
+    "low_stock",
     csvList(s.emails),
   );
   return { processed: list.length, sent: 1 };

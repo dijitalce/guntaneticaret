@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { siteStructure, sitemapFileNames, SITEMAP_STATIC_PAGES } from "@guntan/db";
+import { latestBlogPosts, siteStructure, sitemapFileNames, SITEMAP_STATIC_PAGES } from "@guntan/db";
 import { getTenant } from "../../src/tenant";
 import { sentenceCaseTr } from "../../src/format";
 
@@ -16,7 +16,7 @@ const n = (v: number) => v.toLocaleString("tr-TR");
 
 export default async function SiteMapPage() {
   const tenant = await getTenant();
-  const s = await siteStructure(tenant.tenant.id);
+  const [s, posts] = await Promise.all([siteStructure(tenant.tenant.id), latestBlogPosts(tenant.tenant.id, 48).catch(() => [])]);
   const cats = s.categories.filter((c) => c.count > 0);
   const roots = cats.filter((c) => !c.parentId || !cats.some((p) => p.id === c.parentId));
   const childrenOf = (id: string) => cats.filter((c) => c.parentId === id);
@@ -97,9 +97,26 @@ export default async function SiteMapPage() {
               <Link href={p.path}>{p.label}</Link>
             </li>
           ))}
+          {posts.length ? (
+            <li>
+              <Link href="/blog">Blog</Link>
+            </li>
+          ) : null}
         </ul>
+        {posts.length ? (
+          <>
+            <h3>Blog yazıları</h3>
+            <ul className="html-sitemap-inline">
+              {posts.filter((p) => !p.noindex).map((p) => (
+                <li key={p.slug}>
+                  <Link href={`/blog/${p.slug}`}>{p.title}</Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
         <p className="html-sitemap-note">
-          Arama motorları için XML site haritası: <a href="/sitemap.xml">sitemap.xml</a> ({sitemapFileNames(s.products).length} dosya).
+          Arama motorları için XML site haritası: <a href="/sitemap.xml">sitemap.xml</a> ({sitemapFileNames(s.products, posts.length > 0).length} dosya).
         </p>
       </section>
     </div>

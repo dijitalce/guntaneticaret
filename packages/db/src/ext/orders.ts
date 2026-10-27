@@ -200,7 +200,10 @@ export async function notifyOrder(orderId: string, key: string, extraVars: Recor
       });
     }
     if (key === "order_created" || key === "order_created_bank") {
-      await sendAdminTemplate("admin_new_order", order.tenantId, vars);
+      await sendAdminTemplate("admin_new_order", order.tenantId, vars, "new_order");
+    }
+    if (key === "payment_confirmed") {
+      await sendAdminTemplate("admin_payment_received", order.tenantId, vars, "payment");
     }
   } catch {
     /* bildirim hatası siparişi etkilemez */

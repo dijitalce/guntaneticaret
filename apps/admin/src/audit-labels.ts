@@ -15,6 +15,9 @@ export const ENTITY_LABELS: Record<string, string> = {
   customer: "Müşteri",
   page: "Sayfa",
   banner: "Banner",
+  blog_post: "Blog yazısı",
+  blog_category: "Blog kategorisi",
+  blog_image: "Blog görseli",
   coupon: "Kupon",
   campaign: "Kampanya",
   popup: "Popup",
@@ -96,6 +99,10 @@ export function entityHref(entity: string, id: string): string | null {
       return `/content/pages/${id}`;
     case "banner":
       return `/content/banners/${id}`;
+    case "blog_post":
+      return `/content/blog/${id}`;
+    case "blog_category":
+      return "/content/blog/categories";
     case "coupon":
       return `/marketing/coupons/${id}`;
     case "campaign":

@@ -1,11 +1,12 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { asc, eq, sql } from "drizzle-orm";
+import nodemailer, { type Transporter } from "nodemailer";
 import { db } from "../client";
 import { COMPANY_CONTACT } from "../content/contact";
 import { tenantDomains, tenantSettings, tenants } from "../schema";
 import { ensureExtTables } from "./tables";
 import { exec, first } from "./sql";
-import { csvList, getNotifySettings, type NotifySettings } from "./settings";
+import { adminRecipientsFor, emailConfigured, getNotifySettings, type AdminNotifyEvent, type NotifySettings } from "./settings";
 import { emailLayout, renderText, resolveTemplate } from "./templates";
 
 export type TenantContext = { id: string; name: string; url: string; logoUrl: string | null; email: string | null; phone: string | null };
@@ -58,16 +59,88 @@ export function verifyUnsubscribe(email: string, key: string): boolean {
 
 export type SendResult = { ok: boolean; provider: string; error?: string };
 
+let smtpCache: { key: string; transport: Transporter } | null = null;
+
+function smtpTransport(settings: NotifySettings): Transporter {
+  const key = [settings.smtpHost, settings.smtpPort, settings.smtpSecurity, settings.smtpUser, settings.smtpPass].join("|");
+  if (smtpCache?.key === key) return smtpCache.transport;
+  smtpCache?.transport.close();
+  const transport = nodemailer.createTransport({
+    host: settings.smtpHost,
+    port: Number(settings.smtpPort) || 465,
+    secure: settings.smtpSecurity === "ssl",
+    requireTLS: settings.smtpSecurity === "starttls",
+    ignoreTLS: settings.smtpSecurity === "none",
+    auth: settings.smtpUser ? { user: settings.smtpUser, pass: settings.smtpPass } : undefined,
+    pool: true,
+    maxConnections: 2,
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  });
+  smtpCache = { key, transport };
+  return transport;
+}
+
+/** SMTP bağlantısını ve kimlik bilgilerini e-posta göndermeden dener. */
+export async function verifySmtp(settings: NotifySettings): Promise<SendResult> {
+  if (!settings.smtpHost) return { ok: false, provider: "smtp", error: "SMTP sunucusu girilmemiş." };
+  try {
+    await smtpTransport(settings).verify();
+    return { ok: true, provider: "smtp" };
+  } catch (err) {
+    return { ok: false, provider: "smtp", error: smtpError(err) };
+  }
+}
+
+/** Spam filtreleri yalnız-HTML iletileri cezalandırır; düz metin alternatifi. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<(br|\/p|\/h[1-6]|\/tr|\/li|\/div)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n\s*\n+/g, "\n\n")
+    .trim();
+}
+
+function smtpError(err: unknown): string {
+  const e = err as { code?: string; responseCode?: number; response?: string; message?: string };
+  if (e.code === "EAUTH") return `Kimlik doğrulama başarısız (kullanıcı adı/şifre). ${e.response ?? ""}`.trim();
+  if (e.code === "ECONNECTION" || e.code === "ETIMEDOUT" || e.code === "ESOCKET") {
+    return `Sunucuya bağlanılamadı (${e.code}); sunucu adı, port ve güvenlik türünü kontrol edin. ${e.message ?? ""}`.trim();
+  }
+  return e.response ?? e.message ?? String(err);
+}
+
 export async function sendEmailRaw(
   settings: NotifySettings,
   input: { to: string; subject: string; html: string; fromName?: string },
 ): Promise<SendResult> {
   const provider = settings.emailProvider;
-  if (provider === "none" || !settings.emailApiKey || !settings.fromEmail) {
+  if (!emailConfigured(settings)) {
     return { ok: false, provider, error: "E-posta sağlayıcısı ayarlanmamış." };
   }
   const fromName = input.fromName || settings.fromName || "Mağaza";
   try {
+    if (provider === "smtp") {
+      await smtpTransport(settings).sendMail({
+        from: { name: fromName, address: settings.fromEmail },
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: htmlToText(input.html),
+        ...(settings.replyTo ? { replyTo: settings.replyTo } : {}),
+      });
+      return { ok: true, provider };
+    }
     if (provider === "resend") {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -101,7 +174,7 @@ export async function sendEmailRaw(
       return { ok: true, provider };
     }
   } catch (err) {
-    return { ok: false, provider, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, provider, error: provider === "smtp" ? smtpError(err) : err instanceof Error ? err.message : String(err) };
   }
   return { ok: false, provider, error: "Bilinmeyen sağlayıcı" };
 }
@@ -227,7 +300,7 @@ export async function sendTemplate(input: {
         tenantId: input.tenantId,
         relatedType: input.relatedType,
         relatedId: input.relatedId,
-        status: result.ok ? "sent" : settings.emailProvider === "none" ? "skipped" : "failed",
+        status: result.ok ? "sent" : !emailConfigured(settings) ? "skipped" : "failed",
         error: result.error,
         provider: result.provider,
       }).catch(() => undefined);
@@ -254,9 +327,15 @@ export async function sendTemplate(input: {
   return out;
 }
 
-export async function sendAdminTemplate(key: string, tenantId: string | null, vars: Record<string, string>, extraEmails: string[] = []) {
+export async function sendAdminTemplate(
+  key: string,
+  tenantId: string | null,
+  vars: Record<string, string>,
+  event: AdminNotifyEvent,
+  extraEmails: string[] = [],
+) {
   const settings = await getNotifySettings();
-  const recipients = [...new Set([...csvList(settings.adminEmails), ...extraEmails])];
+  const recipients = [...new Set([...adminRecipientsFor(settings, event), ...extraEmails.map((e) => e.toLowerCase())])];
   for (const email of recipients) {
     await sendTemplate({ key, tenantId, email, vars, relatedType: "admin", force: { sms: false } }).catch(() => undefined);
   }
