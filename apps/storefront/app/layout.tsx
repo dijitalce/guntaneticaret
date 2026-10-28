@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { tryGetTenant, themeToCssVars, allCatalogHref } from "../src/tenant";
 import { metadataBaseForHost, pageTitle, tenantNoIndex, tenantVerification } from "../src/seo";
@@ -27,14 +26,6 @@ import { COMPANY_CONTACT } from "@guntan/db/content/contact";
 import { garantiConfigFromEnv } from "@guntan/ecommerce";
 import { PaymentMarks } from "../src/assurance";
 import { AnnouncementBar, SocialGlyph, SocialIcons, socialLinks } from "../src/social-links";
-
-const font = DM_Sans({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "600", "700"],
-  // Çoklu weight/subset preload'u kullanılmayan woff2 uyarısı üretiyor;
-  // font CSS ile yine yüklenir, sadece link rel=preload kalkar.
-  preload: false,
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await tryGetTenant();
@@ -127,7 +118,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const tenant = await tryGetTenant();
   if (!tenant) {
     return (
-      <html lang="tr" className={font.className}>
+      <html lang="tr">
         <body>{children}</body>
       </html>
     );
@@ -155,7 +146,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const sahibinden = links.find((l) => l.key === "sahibinden");
 
   return (
-    <html lang="tr" className={font.className}>
+    <html lang="tr">
       <body style={cssVars(themeToCssVars(tenant.theme))}>
         <a className="sr-only" href="#main">İçeriğe geç</a>
         {tenant.headerHtml ? <div className="site-custom-html" dangerouslySetInnerHTML={{ __html: tenant.headerHtml }} /> : null}
