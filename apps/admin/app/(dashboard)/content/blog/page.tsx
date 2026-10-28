@@ -16,7 +16,7 @@ const PER = 30;
 export default async function BlogAdmin({
   searchParams,
 }: {
-  searchParams: Promise<{ site?: string; durum?: string; q?: string; sayfa?: string; ok?: string; adet?: string; hata?: string }>;
+  searchParams: Promise<{ site?: string; durum?: string; q?: string; sayfa?: string; ok?: string; adet?: string; guncel?: string; hata?: string }>;
 }) {
   const sp = await searchParams;
   const tenantRows = await db.select({ id: tenants.id, name: tenants.name }).from(tenants).orderBy(asc(tenants.name));
@@ -56,7 +56,7 @@ export default async function BlogAdmin({
         }
       />
       {sp.ok === "silindi" ? <Alert tone="ok">Yazı silindi.</Alert> : null}
-      {sp.ok === "plan" ? <Alert tone="ok">SEO planından {sp.adet ?? "0"} yeni taslak eklendi. Metinleri tamamlayıp yayınlayın.</Alert> : null}
+      {sp.ok === "plan" ? <Alert tone="ok">SEO planı: {sp.adet ?? "0"} yeni taslak eklendi, {sp.guncel ?? "0"} taslak tam içerikle güncellendi. Düzenlediğiniz ya da yayınladığınız yazılara dokunulmaz.</Alert> : null}
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Yazı güncellendi.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
 

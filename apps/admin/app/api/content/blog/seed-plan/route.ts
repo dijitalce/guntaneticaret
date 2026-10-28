@@ -12,7 +12,12 @@ export async function POST(request: Request) {
   const rows = await db.select({ id: tenants.id }).from(tenants).orderBy(asc(tenants.name));
   const targets = site ? rows.filter((t) => t.id === site) : rows;
   let created = 0;
-  for (const t of targets) created += (await seedBlogPlan(t.id)).created;
-  await writeAudit({ actorId: session.user.id, actorEmail: session.user.email, entity: "blog_post", entityId: site || "all", action: "seed_plan", after: { created } });
-  return redirectTo(request, "/content/blog", { ok: "plan", adet: String(created) });
+  let updated = 0;
+  for (const t of targets) {
+    const r = await seedBlogPlan(t.id);
+    created += r.created;
+    updated += r.updated;
+  }
+  await writeAudit({ actorId: session.user.id, actorEmail: session.user.email, entity: "blog_post", entityId: site || "all", action: "seed_plan", after: { created, updated } });
+  return redirectTo(request, "/content/blog", { ok: "plan", adet: String(created), guncel: String(updated) });
 }
