@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { clearDeadSyncLock, readSyncLock } from "@guntan/import/sync-lock";
 import { dirname, join, resolve } from "node:path";
@@ -129,6 +129,14 @@ export function startServerSync(opts: { trigger: string; skipFetch?: boolean; fe
       env,
       detached: true,
       stdio: ["ignore", out, out],
+    });
+    // EAGAIN gibi başlatma hataları olay olarak gelir; dinleyici yoksa panel süreci çöker.
+    child.on("error", (err) => {
+      try {
+        writeSync(out, `[${new Date().toISOString()}] Senkron süreci başlatılamadı: ${err.message}\n`);
+      } catch {
+        /* günlük yazılamadı */
+      }
     });
     child.unref();
     return { ok: true };

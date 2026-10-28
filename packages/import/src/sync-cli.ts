@@ -76,7 +76,12 @@ async function acquireLock(): Promise<boolean> {
   }
 }
 
-function runScript(file: string, env: Record<string, string>, args: string[] = []): Promise<void> {
+/** Süreç açılamadığında (barındırma süreç/iş parçacığı sınırı) bekleyip yeniden denenen hata kodları. */
+const SPAWN_RETRY_CODES = new Set(["EAGAIN", "ENOMEM", "EMFILE"]);
+const SPAWN_RETRY_ATTEMPTS = 6;
+const SPAWN_RETRY_WAIT_MS = 20_000;
+
+function runScriptOnce(file: string, env: Record<string, string>, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["--v8-pool-size=2", "--import", "tsx", join(here, file), ...args], {
       cwd: join(here, ".."),
@@ -98,6 +103,20 @@ function runScript(file: string, env: Record<string, string>, args: string[] = [
     child.on("error", reject);
     child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${file} çıkış kodu ${code}`))));
   });
+}
+
+/** Süreç hiç başlatılamadıysa (EAGAIN gibi geçici kaynak sınırı) birkaç kez bekleyip tekrar dener; betik hatası tekrar denenmez. */
+async function runScript(file: string, env: Record<string, string>, args: string[] = []): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await runScriptOnce(file, env, args);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (!code || !SPAWN_RETRY_CODES.has(code) || attempt >= SPAWN_RETRY_ATTEMPTS) throw err;
+      log(`${file} başlatılamadı (${code}, barındırma süreç sınırı); ${Math.round(SPAWN_RETRY_WAIT_MS / 1000)} sn sonra tekrar denenecek (${attempt}/${SPAWN_RETRY_ATTEMPTS - 1}).`);
+      await new Promise((r) => setTimeout(r, SPAWN_RETRY_WAIT_MS));
+    }
+  }
 }
 
 async function main() {
