@@ -4543,44 +4543,26 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 
 .footer-slogan { margin: -0.35rem 0 0.6rem; font-weight: 700; color: var(--primary); }
 
-.header-wa {
-  display: flex;
+.header-wa, .header-bulk {
+  display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  justify-content: center;
+  gap: 0.5rem;
   margin-right: 0.35rem;
-  padding: 0.45rem 0.85rem 0.45rem 0.6rem;
-  border-radius: 12px;
-  background: #effaf3;
-  border: 1px solid #a7e3c1;
-  color: #0f7a40;
+  padding: 0 1.05rem;
+  height: 44px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
-.header-wa:hover { background: #e1f6e9; border-color: #7fd3a4; }
-.header-bulk {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-right: 0.35rem;
-  padding: 0 1rem;
-  height: 100%;
-  min-height: 46px;
-  border-radius: 12px;
-  background: var(--primary);
-  color: #fff;
-  font-size: 0.86rem;
-  font-weight: 800;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
+.header-wa { background: #fff; border: 1px solid #a7e3c1; color: #128c4b; }
+.header-wa:hover { background: #effaf3; border-color: #7fd3a4; }
+.header-wa svg, .header-bulk svg { flex: none; width: 20px; height: 20px; }
+.header-bulk { background: var(--primary); border: 1px solid transparent; color: #fff; }
 .header-bulk:hover { background: color-mix(in srgb, var(--primary) 85%, #000); }
-.header-bulk svg { flex: none; width: 22px; height: 22px; }
-.header-wa svg { flex: none; width: 26px; height: 26px; }
-.header-wa span { display: flex; flex-direction: column; line-height: 1.15; }
-.header-wa small { font-size: 0.72rem; font-weight: 650; color: #276749; }
-.header-wa b { font-size: 0.86rem; font-weight: 800; }
 
 .home-quote {
   display: grid;
@@ -4614,11 +4596,9 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 .home-quote-bulk:hover { filter: brightness(1.08); }
 
 @media (max-width: 1100px) {
-  .header-wa { padding: 0; width: 44px; height: 44px; justify-content: center; margin-right: 0.15rem; border-radius: 50%; }
-  .header-wa span { display: none; }
-  .header-wa svg { width: 24px; height: 24px; }
-  .header-bulk { padding: 0; width: 44px; height: 44px; min-height: 0; justify-content: center; margin-right: 0.15rem; border-radius: 50%; }
-  .header-bulk span { display: none; }
+  .header-wa, .header-bulk { padding: 0; width: 44px; margin-right: 0.15rem; }
+  .header-wa span, .header-bulk span { display: none; }
+  .header-wa svg, .header-bulk svg { width: 24px; height: 24px; }
   .about-trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

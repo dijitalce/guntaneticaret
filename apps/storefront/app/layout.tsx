@@ -205,10 +205,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   href={whatsappHref(tenant.whatsapp, BULK_QUOTE_TEXT)}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label="Toplu Parça Alın: toplu parça teklifi için WhatsApp"
+                  aria-label="Toplu Parça Teklifi Al: toplu parça teklifi için WhatsApp"
                 >
                   <IconBox />
-                  <span>Toplu Parça Alın</span>
+                  <span>Toplu Parça Teklifi Al</span>
                 </a>
               ) : null}
               {tenant.whatsapp ? (
@@ -220,10 +220,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   aria-label="Parçanızı bulamadınız mı? WhatsApp'tan sorun"
                 >
                   <IconWhatsapp />
-                  <span>
-                    <small>Parçanızı bulamadınız mı?</small>
-                    <b>WhatsApp&apos;tan sorun</b>
-                  </span>
+                  <span>Parçanızı bulamadınız mı?</span>
                 </a>
               ) : null}
               <Link className="icon-btn" href="/hesabim">
