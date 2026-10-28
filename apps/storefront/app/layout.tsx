@@ -16,7 +16,7 @@ import { cachedPopularCategories, cachedVisibleBrands, cachedVisibleGenerations,
 import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
-import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
+import { IconBox, IconHeart, IconUser, IconWhatsapp } from "../src/icons";
 import { BULK_QUOTE_TEXT, PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
 import { categoryDisplayName } from "../src/category-seo";
@@ -169,11 +169,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
                 </a>
               ) : <span>{tenant.phone}</span>}
-              {tenant.whatsapp ? (
-                <a className="topbar-bulk" href={whatsappHref(tenant.whatsapp, BULK_QUOTE_TEXT)} target="_blank" rel="noreferrer">
-                  Toplu parça fiyatı <span className="topbar-bulk-extra">alın</span>
-                </a>
-              ) : null}
             </div>
             {/* Kayan yazı varsa aynı mesajlar burada tekrar edilmez. */}
             {hasAnnouncement ? null : <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>}
@@ -204,6 +199,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             <SearchBox quickLinks={navCats.slice(0, 8).map((c) => ({ name: sentenceCaseTr(c.name), slug: c.slug }))} />
             <nav className="header-tools" aria-label="Hesap">
+              {tenant.whatsapp ? (
+                <a
+                  className="header-bulk"
+                  href={whatsappHref(tenant.whatsapp, BULK_QUOTE_TEXT)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Toplu Parça Alın: toplu parça teklifi için WhatsApp"
+                >
+                  <IconBox />
+                  <span>Toplu Parça Alın</span>
+                </a>
+              ) : null}
               {tenant.whatsapp ? (
                 <a
                   className="header-wa"

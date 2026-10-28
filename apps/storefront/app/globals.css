@@ -40,17 +40,6 @@ body {
 }
 .topbar-note { margin: 0; letter-spacing: 0.01em; }
 .topbar-left { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
-.topbar-bulk {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.18rem 0.65rem;
-  border-radius: 999px;
-  background: var(--primary);
-  color: #fff;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.topbar-bulk:hover { background: color-mix(in srgb, var(--primary) 85%, #000); }
 .sales-closed-bar {
   margin: 0;
   padding: 0.55rem 1rem;
@@ -4372,7 +4361,6 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 }
 @media (max-width: 480px) {
   .topbar-wa-extra { display: none; }
-  .topbar-bulk-extra { display: none; }
   .topbar-left { gap: 0.5rem; }
 }
 
@@ -4570,6 +4558,25 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   transition: background 0.15s, border-color 0.15s;
 }
 .header-wa:hover { background: #e1f6e9; border-color: #7fd3a4; }
+.header-bulk {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: 0.35rem;
+  padding: 0 1rem;
+  height: 100%;
+  min-height: 46px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.header-bulk:hover { background: color-mix(in srgb, var(--primary) 85%, #000); }
+.header-bulk svg { flex: none; width: 22px; height: 22px; }
 .header-wa svg { flex: none; width: 26px; height: 26px; }
 .header-wa span { display: flex; flex-direction: column; line-height: 1.15; }
 .header-wa small { font-size: 0.72rem; font-weight: 650; color: #276749; }
@@ -4610,6 +4617,8 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
   .header-wa { padding: 0; width: 44px; height: 44px; justify-content: center; margin-right: 0.15rem; border-radius: 50%; }
   .header-wa span { display: none; }
   .header-wa svg { width: 24px; height: 24px; }
+  .header-bulk { padding: 0; width: 44px; height: 44px; min-height: 0; justify-content: center; margin-right: 0.15rem; border-radius: 50%; }
+  .header-bulk span { display: none; }
   .about-trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
