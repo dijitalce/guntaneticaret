@@ -237,6 +237,16 @@ export async function blogSlugTaken(tenantId: string, slug: string, exceptId?: s
   return Boolean(r);
 }
 
+/** Plan yükleyicisi için: slug'ın kaydı ve henüz iskelet halinde (el değmemiş taslak) olup olmadığı. */
+export async function blogPlanDraftState(tenantId: string, slug: string): Promise<{ id: string; untouchedDraft: boolean } | null> {
+  await ensureExtTables();
+  const r = await first<{ id: string; status: string; body: string | null }>(
+    sql`select id, status, body from blog_articles where tenant_id = ${tenantId} and slug = ${slug} limit 1`,
+  );
+  if (!r) return null;
+  return { id: r.id, untouchedDraft: r.status === "draft" && (r.body ?? "").includes("Taslak bölüm: içerik yazılacak") };
+}
+
 export async function saveBlogPost(input: BlogPostInput, id?: string): Promise<string> {
   await ensureExtTables();
   const body = sanitizeBlogHtml(input.body);

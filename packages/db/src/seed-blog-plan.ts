@@ -7,8 +7,8 @@ import { seedBlogPlan } from "./ext/blog-plan";
 const targetTenants = await db.select({ id: tenants.id, slug: tenants.slug }).from(tenants).where(process.env.TENANT_SLUG ? eq(tenants.slug, process.env.TENANT_SLUG) : undefined);
 
 for (const tenant of targetTenants) {
-  const { created, existing } = await seedBlogPlan(tenant.id);
-  console.log(`${tenant.slug}: ${created} taslak oluşturuldu, ${existing} zaten vardı.`);
+  const { created, updated, existing } = await seedBlogPlan(tenant.id);
+  console.log(`${tenant.slug}: ${created} oluşturuldu, ${updated} güncellendi, ${existing} dokunulmadı.`);
 }
 
 await pool.end();
