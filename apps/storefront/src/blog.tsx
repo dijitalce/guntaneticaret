@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import type { Metadata } from "next";
-import { countPublishedPosts, type BlogPost, type BlogPostSummary } from "@guntan/db";
+import { countPublishedPosts, publishedPostsForCategory, type BlogPost, type BlogPostSummary } from "@guntan/db";
 import type { TenantPublicConfig } from "@guntan/types";
 import { absoluteUrl, tenantNoIndex } from "./seo";
 
@@ -10,6 +10,11 @@ export const BLOG_PER_PAGE = 12;
 /** Header/footer'daki Blog bağlantısı yalnızca yayında yazı varsa gösterilir. */
 export function cachedBlogPostCount(tenantId: string) {
   return unstable_cache(() => countPublishedPosts(tenantId).catch(() => 0), ["blog-count", tenantId], { revalidate: 600 })();
+}
+
+/** Kategori sayfasındaki "rehberler" bölümü: yalnızca yayındaki, bu kategoriyi ilgili gösteren yazılar. */
+export function cachedGuidesForCategory(tenantId: string, categorySlug: string) {
+  return unstable_cache(() => publishedPostsForCategory(tenantId, categorySlug, 4).catch(() => []), ["blog-category-guides", tenantId, categorySlug], { revalidate: 600 })();
 }
 
 export function blogImageUrl(host: string, url: string | null | undefined) {

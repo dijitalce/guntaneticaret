@@ -13,7 +13,8 @@ import {
   cachedModelsForBrand,
 } from "../../../../src/cached-catalog";
 import { CatalogListing } from "../../../../src/catalog-listing";
-import { sentenceCaseTr } from "../../../../src/format";
+import { categoryDisplayName, isFacetedView } from "../../../../src/category-seo";
+import { blogRobots } from "../../../../src/blog";
 import {
   JsonLd,
   absoluteUrl,
@@ -43,14 +44,15 @@ export async function generateMetadata({
   const cat = await cachedCategoryBySlug(category);
   if (!cat) return {};
   const pg = pagination(sp, `/${b.slug}/${m.slug}/${cat.slug}`);
-  const title = pageTitle(tenant, `${b.name} ${m.name} ${sentenceCaseTr(cat.name)} Yedek Parça${pg.suffix}`);
+  const title = pageTitle(tenant, `${b.name} ${m.name} ${categoryDisplayName(cat.slug, cat.name)} Yedek Parça${pg.suffix}`);
   const description =
     cat.seoContent?.slice(0, 160) ??
-    `${b.name} ${m.name} için ${sentenceCaseTr(cat.name).toLocaleLowerCase("tr-TR")} yedek parçaları. KDV dahil fiyat.`;
+    `${b.name} ${m.name} için ${categoryDisplayName(cat.slug, cat.name).toLocaleLowerCase("tr-TR")} yedek parçaları. KDV dahil fiyat.`;
   const path = pg.path;
   return {
     title: { absolute: title },
     description,
+    robots: isFacetedView(sp) ? blogRobots(tenant, true) : undefined,
     alternates: { canonical: absoluteUrl(tenant.tenant.canonicalHost, path) },
     openGraph: { title, description, url: absoluteUrl(tenant.tenant.canonicalHost, path), type: "website" },
   };
@@ -90,7 +92,7 @@ export default async function CategoryListingPage({
   ]);
 
   const host = tenant.tenant.canonicalHost;
-  const title = `${b.name} ${m.name} ${sentenceCaseTr(cat.name)}`;
+  const title = `${b.name} ${m.name} ${categoryDisplayName(cat.slug, cat.name)}`;
   const path = `/${b.slug}/${m.slug}/${cat.slug}`;
 
   return (
@@ -101,7 +103,7 @@ export default async function CategoryListingPage({
             { name: "Ana Sayfa", path: "/" },
             { name: b.name, path: `/${b.slug}` },
             { name: m.name, path: `/${b.slug}/${m.slug}` },
-            { name: sentenceCaseTr(cat.name), path },
+            { name: categoryDisplayName(cat.slug, cat.name), path },
           ]),
           collectionPageJsonLd(
             host,
@@ -117,7 +119,7 @@ export default async function CategoryListingPage({
           { href: "/", label: "Ana Sayfa" },
           { href: `/${b.slug}`, label: b.name },
           { href: `/${b.slug}/${m.slug}`, label: m.name },
-          { label: sentenceCaseTr(cat.name) },
+          { label: categoryDisplayName(cat.slug, cat.name) },
         ]}
         title={`${title} Yedek Parça`}
         navTitle="Modeller"

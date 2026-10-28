@@ -321,3 +321,4 @@ export const TENANT_HOST_CACHE_TTL_SECONDS = 300;
 export const INDEXNOW_KEY = "006d2fa8ce30d901faa7ab569601e3de";
 export const TENANT_CONFIG_CACHE_TTL_SECONDS = 300;
 export const NAV_CACHE_TTL_SECONDS = 600;
+export * from "./seo-map";

@@ -263,6 +263,23 @@ export async function getTenantSalesStatus(tenantId: string): Promise<SalesStatu
   }
 }
 
+/**
+ * Panel anahtarları (ürün besleme bayrakları gibi) için önbelleksiz okuma. Yönetim paneli ayrı süreçte çalıştığı için
+ * vitrindeki bellek önbelleği panelden değişiklik yapıldığında temizlenmez; Merchant gibi tüketiciler eski "kapalı" yanıtı almasın.
+ */
+export async function getTenantSocialFresh(tenantId: string, fallback: Record<string, string>): Promise<Record<string, string>> {
+  try {
+    const [row] = await db
+      .select({ socialJson: tenantSettings.socialJson })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+    return (row?.socialJson ?? fallback) as Record<string, string>;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function invalidateTenantCache(tenantId: string, hostnames: string[]) {
   memCache.clear();
   salesCache.delete(tenantId);

@@ -1,5 +1,5 @@
 import { feedProductsPage, tenantSeesAllCatalog, type FeedProduct } from "@guntan/db";
-import { getTenantSalesStatus } from "@guntan/tenant";
+import { getTenantSalesStatus, getTenantSocialFresh } from "@guntan/tenant";
 import { requestHost, tenantFromRequest } from "./request-tenant";
 
 const PAGE = 2000;
@@ -109,7 +109,7 @@ function itemXml(p: FeedProduct, base: string, siteName: string, availability: A
 export async function productFeedResponse(kind: FeedKind) {
   const tenant = await tenantFromRequest();
   if (!tenant) return new Response("Site bulunamadı", { status: 404 });
-  const social = (tenant.social ?? {}) as Record<string, string>;
+  const social = await getTenantSocialFresh(tenant.tenant.id, (tenant.social ?? {}) as Record<string, string>);
   if (social[FEED_FLAG[kind]] !== "1") return new Response("Bu besleme panelden etkinleştirilmemiş.", { status: 404 });
   const jsonl = kind === "chatgpt";
   const inStockOnly = social.feedAllProducts !== "1";

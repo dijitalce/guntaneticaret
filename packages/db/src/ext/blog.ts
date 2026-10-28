@@ -426,6 +426,15 @@ export async function relatedBlogPosts(post: BlogPost, limit = 3): Promise<BlogP
   return list.map(toSummary);
 }
 
+/** Kategori sayfasından geri bağlantı: ilgili kategorisi olarak bu slug'ı gösteren yayındaki yazılar. */
+export async function publishedPostsForCategory(tenantId: string, categorySlug: string, limit = 4): Promise<BlogPostSummary[]> {
+  await ensureExtTables();
+  const list = await rows<ArticleRow>(sql`select ${SUMMARY_COLS} from blog_articles a left join blog_categories c on c.id = a.category_id
+    where a.tenant_id = ${tenantId} and ${LIVE} and find_in_set(${categorySlug}, a.related_categories) > 0
+    order by a.published_at desc limit ${limit}`);
+  return list.map(toSummary);
+}
+
 export async function publishedBlogCategories(tenantId: string): Promise<BlogCategory[]> {
   return (await listBlogCategories(tenantId)).filter((c) => c.postCount > 0);
 }

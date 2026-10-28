@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { LISTING_SORT, type ListingSort } from "@guntan/types";
+import { LISTING_SORT, seoCategory, type ListingSort } from "@guntan/types";
 import { getTenant } from "../../../src/tenant";
 import {
   cachedBrandBySlug,
@@ -17,7 +17,8 @@ import { ProductCard, cardOems } from "../../../src/product-card";
 import { SortSelect } from "../../../src/sort-select";
 import { CategoryVehicleFinder } from "../../../src/category-vehicle-finder";
 import { CategoryFilters } from "../../../src/category-filters";
-import { sentenceCaseTr } from "../../../src/format";
+import { categoryDescription, categoryDisplayName as displayName, isFacetedView } from "../../../src/category-seo";
+import { BlogGrid, blogRobots, cachedGuidesForCategory } from "../../../src/blog";
 import {
   JsonLd,
   absoluteUrl,
@@ -43,13 +44,14 @@ export async function generateMetadata({
   const cat = await cachedCategoryBySlug(slug);
   if (!cat) return {};
   const pg = pagination(sp, `/kategori/${cat.slug}`);
-  const title = pageTitle(tenant, `${sentenceCaseTr(cat.name)} Yedek Parça${pg.suffix}`);
-  const description =
-    cat.seoContent?.slice(0, 160) ??
-    `${sentenceCaseTr(cat.name)} kategorisinde ${tenant.siteName} stoklarındaki yedek parçaları incele. KDV dahil fiyat, hızlı tedarik.`;
+  const seo = seoCategory(cat.slug);
+  const name = displayName(cat.slug, cat.name);
+  const title = pageTitle(tenant, `${seo?.title ?? `${name} Yedek Parça`}${pg.suffix}`);
+  const description = categoryDescription(tenant.siteName, cat.slug, name, cat.seoContent).slice(0, 160);
   return {
     title: { absolute: title },
     description,
+    robots: isFacetedView(sp) ? blogRobots(tenant, true) : undefined,
     alternates: {
       canonical: absoluteUrl(tenant.tenant.canonicalHost, pg.path),
     },
@@ -103,10 +105,10 @@ export default async function CategoryPage({
   const oemBy = await cardOems(result.items.map((p) => p.id));
   const host = tenant.tenant.canonicalHost;
   const catSlug = cat.slug;
-  const title = `${sentenceCaseTr(cat.name)} Yedek Parça`;
-  const description =
-    cat.seoContent ??
-    `${sentenceCaseTr(cat.name)} için uyumlu oto yedek parçalar. ${tenant.siteName} güvencesiyle KDV dahil fiyat.`;
+  const name = displayName(cat.slug, cat.name);
+  const title = seoCategory(cat.slug) ? name : `${name} Yedek Parça`;
+  const description = categoryDescription(tenant.siteName, cat.slug, name, cat.seoContent);
+  const guides = await cachedGuidesForCategory(tenant.tenant.id, cat.slug);
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
   const activeFilterCount = [manufacturerSlug, brandSlug].filter(Boolean).length;
 
@@ -136,9 +138,9 @@ export default async function CategoryPage({
           breadcrumbJsonLd(host, [
             { name: "Ana Sayfa", path: "/" },
             ...(parent
-              ? [{ name: sentenceCaseTr(parent.name), path: `/kategori/${parent.slug}` }]
+              ? [{ name: displayName(parent.slug, parent.name), path: `/kategori/${parent.slug}` }]
               : []),
-            { name: sentenceCaseTr(cat.name), path: `/kategori/${cat.slug}` },
+            { name, path: `/kategori/${cat.slug}` },
           ]),
           collectionPageJsonLd(host, title, description, `/kategori/${cat.slug}`),
           itemListJsonLd(host, title, result.items),
@@ -149,11 +151,11 @@ export default async function CategoryPage({
         {parent && (
           <>
             {" › "}
-            <Link href={`/kategori/${parent.slug}`}>{sentenceCaseTr(parent.name)}</Link>
+            <Link href={`/kategori/${parent.slug}`}>{displayName(parent.slug, parent.name)}</Link>
           </>
         )}
         {" › "}
-        {sentenceCaseTr(cat.name)}
+        {name}
       </nav>
       <div className="catalog-toolbar">
         <div>
@@ -201,7 +203,7 @@ export default async function CategoryPage({
               </Link>
               {facets.children.map((c) => (
                 <Link key={c.id} href={`/kategori/${c.slug}`}>
-                  {sentenceCaseTr(c.name)}
+                  {displayName(c.slug, c.name)}
                   <em>{c.count}</em>
                 </Link>
               ))}
@@ -238,8 +240,14 @@ export default async function CategoryPage({
           )}
         </section>
       </div>
+      {guides.length > 0 && (
+        <section className="seo-block" aria-labelledby="cat-guides">
+          <h2 id="cat-guides">{name} için rehberler</h2>
+          <BlogGrid posts={guides} host={host} heading="h3" />
+        </section>
+      )}
       <section className="seo-block">
-        <h2>{sentenceCaseTr(cat.name)} yedek parça</h2>
+        <h2>{name} yedek parça</h2>
         <p>{description}</p>
       </section>
     </div>
