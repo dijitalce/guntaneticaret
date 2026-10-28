@@ -17,7 +17,7 @@ import { SearchBox } from "../src/search-box";
 import { CartShell } from "../src/cart-drawer";
 import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
 import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
-import { PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
+import { BULK_QUOTE_TEXT, PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
 import { getSalesStatus } from "../src/sales";
 import { cachedBlogPostCount } from "../src/blog";
@@ -161,12 +161,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <AnnouncementBar social={social} />
         <div className="topbar">
           <div className="container topbar-inner">
-            {tenant.whatsapp ? (
-              <a className="topbar-wa" href={`https://wa.me/${tenant.whatsapp}`} target="_blank" rel="noreferrer">
-                <span className="topbar-dot" aria-hidden="true" />
-                WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
-              </a>
-            ) : <span>{tenant.phone}</span>}
+            <div className="topbar-left">
+              {tenant.whatsapp ? (
+                <a className="topbar-wa" href={`https://wa.me/${tenant.whatsapp}`} target="_blank" rel="noreferrer">
+                  <span className="topbar-dot" aria-hidden="true" />
+                  WhatsApp<span className="topbar-wa-extra"> destek</span> {tenant.phone ? <b>{tenant.phone}</b> : null}
+                </a>
+              ) : <span>{tenant.phone}</span>}
+              {tenant.whatsapp ? (
+                <a className="topbar-bulk" href={whatsappHref(tenant.whatsapp, BULK_QUOTE_TEXT)} target="_blank" rel="noreferrer">
+                  Toplu parça fiyatı <span className="topbar-bulk-extra">alın</span>
+                </a>
+              ) : null}
+            </div>
             {/* Kayan yazı varsa aynı mesajlar burada tekrar edilmez. */}
             {hasAnnouncement ? null : <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>}
             <div className="topbar-links">

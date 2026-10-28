@@ -39,6 +39,18 @@ body {
   box-shadow: 0 0 0 3px rgb(34 197 94 / 25%);
 }
 .topbar-note { margin: 0; letter-spacing: 0.01em; }
+.topbar-left { display: flex; align-items: center; gap: 0.9rem; min-width: 0; }
+.topbar-bulk {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.65rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.topbar-bulk:hover { background: color-mix(in srgb, var(--primary) 85%, #000); }
 .sales-closed-bar {
   margin: 0;
   padding: 0.55rem 1rem;
@@ -4360,6 +4372,8 @@ label.checkout-pay-method input { grid-row: span 2; align-self: start; margin-to
 }
 @media (max-width: 480px) {
   .topbar-wa-extra { display: none; }
+  .topbar-bulk-extra { display: none; }
+  .topbar-left { gap: 0.5rem; }
 }
 
 .home-about {
