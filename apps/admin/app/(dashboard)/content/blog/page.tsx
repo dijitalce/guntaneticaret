@@ -4,6 +4,7 @@ import { blogAdminCounts, db, getTenantContext, listBlogPostsAdmin, tenants } fr
 import { IconPlus } from "@/src/icons";
 import { assetUrl } from "@/src/storefront";
 import { withBase } from "@/src/paths";
+import { ConfirmButton } from "@/src/form-fields";
 import { StatusToggle } from "@/src/status-toggle";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { Pager, TabNav, buildHref, pageNumber } from "@/src/ui-ext";
@@ -16,7 +17,7 @@ const PER = 30;
 export default async function BlogAdmin({
   searchParams,
 }: {
-  searchParams: Promise<{ site?: string; durum?: string; q?: string; sayfa?: string; ok?: string; adet?: string; guncel?: string; hata?: string }>;
+  searchParams: Promise<{ site?: string; durum?: string; q?: string; sayfa?: string; ok?: string; adet?: string; guncel?: string; atlanan?: string; hata?: string }>;
 }) {
   const sp = await searchParams;
   const tenantRows = await db.select({ id: tenants.id, name: tenants.name }).from(tenants).orderBy(asc(tenants.name));
@@ -39,6 +40,12 @@ export default async function BlogAdmin({
         description="Arama motorlarından trafik çekmek için rehber ve bilgi yazıları. /blog altında yayınlanır, site haritasına ve RSS'e otomatik eklenir."
         actions={
           <>
+            <form method="post" action={withBase("/api/content/blog/publish-drafts")}>
+              {tenantId ? <input type="hidden" name="site" value={tenantId} /> : null}
+              <ConfirmButton className="btn btn-secondary" message="Tüm taslak yazılar yayına alınacak (içeriği yazılmamış iskeletler hariç) ve sitede hemen görünecek. Devam edilsin mi?" title="İçeriği yazılmış tüm taslakları yayına alır">
+                Taslakları yayına al
+              </ConfirmButton>
+            </form>
             <form method="post" action={withBase("/api/content/blog/seed-plan")}>
               {tenantId ? <input type="hidden" name="site" value={tenantId} /> : null}
               <button className="btn btn-secondary" type="submit" title="SEO haritasındaki 48 konuyu taslak olarak ekler; var olanlara dokunmaz">
@@ -57,6 +64,7 @@ export default async function BlogAdmin({
       />
       {sp.ok === "silindi" ? <Alert tone="ok">Yazı silindi.</Alert> : null}
       {sp.ok === "plan" ? <Alert tone="ok">SEO planı: {sp.adet ?? "0"} yeni taslak eklendi, {sp.guncel ?? "0"} taslak tam içerikle güncellendi. Düzenlediğiniz ya da yayınladığınız yazılara dokunulmaz.</Alert> : null}
+      {sp.ok === "yayinlandi" ? <Alert tone="ok">{sp.adet ?? "0"} yazı yayına alındı{Number(sp.atlanan) > 0 ? `, ${sp.atlanan} yazı hâlâ iskelet olduğu için atlandı` : ""}.</Alert> : null}
       {sp.ok === "kaydedildi" ? <Alert tone="ok">Yazı güncellendi.</Alert> : null}
       {sp.hata ? <Alert>{sp.hata}</Alert> : null}
 

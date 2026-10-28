@@ -310,6 +310,26 @@ export async function setBlogPostStatus(id: string, status: BlogStatus) {
   }
 }
 
+/** Toplu yayın: yalnızca taslakları yayınlar; hâlâ iskelet (içeriği yazılmamış) olanlar atlanır. */
+export async function publishReadyDrafts(tenantIds: string[]): Promise<{ published: number; skipped: number }> {
+  await ensureExtTables();
+  if (!tenantIds.length) return { published: 0, skipped: 0 };
+  const drafts = await rows<{ id: string; body: string | null }>(
+    sql`select id, body from blog_articles where status = 'draft' and tenant_id in (${sql.join(tenantIds.map((t) => sql`${t}`), sql`, `)})`,
+  );
+  let published = 0;
+  let skipped = 0;
+  for (const d of drafts) {
+    if ((d.body ?? "").includes("Taslak bölüm: içerik yazılacak")) {
+      skipped++;
+      continue;
+    }
+    await setBlogPostStatus(d.id, "published");
+    published++;
+  }
+  return { published, skipped };
+}
+
 export async function deleteBlogPost(id: string) {
   await ensureExtTables();
   await exec(sql`delete from blog_article_tags where article_id = ${id}`);
