@@ -105,16 +105,35 @@ function runScriptOnce(file: string, env: Record<string, string>, args: string[]
   });
 }
 
-/** Süreç hiç başlatılamadıysa (EAGAIN gibi geçici kaynak sınırı) birkaç kez bekleyip tekrar dener; betik hatası tekrar denenmez. */
+/** Betik bu süreden önce çıkış kodu 1 ile düşerse veri işine başlayamamıştır (ör. esbuild "The service was stopped"); tekrar denenir. */
+const EARLY_EXIT_MS = 20_000;
+const EARLY_EXIT_ATTEMPTS = 3;
+const EARLY_EXIT_WAIT_MS = 30_000;
+
+/**
+ * Barındırma süreç/iş parçacığı sınırı yüzünden betik hiç başlayamazsa (spawn EAGAIN ya da tsx'in esbuild hizmetinin
+ * öldürülmesi) bekleyip yeniden dener; tekrarlarda Go ve libuv iş parçacıkları 1'e düşürülür. Başlayıp çalışan betiklerin hatası tekrar denenmez.
+ */
 async function runScript(file: string, env: Record<string, string>, args: string[] = []): Promise<void> {
-  for (let attempt = 1; ; attempt++) {
+  let spawnFailures = 0;
+  let earlyExits = 0;
+  for (;;) {
+    const lowThreads: Record<string, string> = spawnFailures + earlyExits > 0 ? { GOMAXPROCS: "1", UV_THREADPOOL_SIZE: "1" } : {};
+    const startedAt = Date.now();
     try {
-      return await runScriptOnce(file, env, args);
+      return await runScriptOnce(file, { ...env, ...lowThreads }, args);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException)?.code;
-      if (!code || !SPAWN_RETRY_CODES.has(code) || attempt >= SPAWN_RETRY_ATTEMPTS) throw err;
-      log(`${file} başlatılamadı (${code}, barındırma süreç sınırı); ${Math.round(SPAWN_RETRY_WAIT_MS / 1000)} sn sonra tekrar denenecek (${attempt}/${SPAWN_RETRY_ATTEMPTS - 1}).`);
-      await new Promise((r) => setTimeout(r, SPAWN_RETRY_WAIT_MS));
+      if (code && SPAWN_RETRY_CODES.has(code)) {
+        if (++spawnFailures >= SPAWN_RETRY_ATTEMPTS) throw err;
+        log(`${file} başlatılamadı (${code}, barındırma süreç sınırı); ${Math.round(SPAWN_RETRY_WAIT_MS / 1000)} sn sonra tekrar denenecek (${spawnFailures}/${SPAWN_RETRY_ATTEMPTS - 1}).`);
+        await new Promise((r) => setTimeout(r, SPAWN_RETRY_WAIT_MS));
+        continue;
+      }
+      const early = !code && Date.now() - startedAt < EARLY_EXIT_MS && /çıkış kodu 1$/.test(err instanceof Error ? err.message : "");
+      if (!early || ++earlyExits >= EARLY_EXIT_ATTEMPTS) throw err;
+      log(`${file} başlar başlamaz kapandı (${Math.round((Date.now() - startedAt) / 1000)} sn); ${Math.round(EARLY_EXIT_WAIT_MS / 1000)} sn sonra az iş parçacığıyla tekrar denenecek (${earlyExits}/${EARLY_EXIT_ATTEMPTS - 1}).`);
+      await new Promise((r) => setTimeout(r, EARLY_EXIT_WAIT_MS));
     }
   }
 }
