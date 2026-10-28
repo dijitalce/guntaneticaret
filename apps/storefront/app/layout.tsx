@@ -19,6 +19,7 @@ import { MegaNav, type NavBrand, type NavModel } from "../src/mega-nav";
 import { IconHeart, IconUser, IconWhatsapp } from "../src/icons";
 import { BULK_QUOTE_TEXT, PART_REQUEST_TEXT, SLOGAN, whatsappHref } from "../src/assurance";
 import { sentenceCaseTr } from "../src/format";
+import { categoryDisplayName } from "../src/category-seo";
 import { getSalesStatus } from "../src/sales";
 import { cachedBlogPostCount } from "../src/blog";
 import { SEO_SOCIAL_KEYS, TENANT_STATUS, announcementFromSocial } from "@guntan/types";
@@ -232,7 +233,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <nav className="site-nav" aria-label="Ana menü">
             <MegaNav
               brands={navBrands}
-              categories={navCats.map((c) => ({ id: c.id, name: sentenceCaseTr(c.name), slug: c.slug }))}
+              categories={navCats.map((c) => ({ id: c.id, name: categoryDisplayName(c.slug, c.name), slug: c.slug }))}
               allPartsHref={allParts ?? null}
             />
           </nav>

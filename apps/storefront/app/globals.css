@@ -370,7 +370,7 @@ body {
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.mega-brands a { gap: 0.4rem; }
+.mega-brands a { gap: 0.4rem; text-transform: none; letter-spacing: 0; font-size: 0.84rem; }
 .mega-brands a .brand-mark { flex: none; padding: 2px; border-radius: 50%; background: #fff; box-sizing: border-box; }
 .mega-brands a:hover, .mega-more button:hover { background: var(--muted); color: var(--primary); }
 .mega-brands a.is-active, .mega-more button.is-active { background: var(--foreground); color: #fff; }

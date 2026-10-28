@@ -44,7 +44,7 @@ export function MegaNav({
 }) {
   const pathname = usePathname();
   const [active, setActive] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState(brands.length);
+  const [visibleCount, setVisibleCount] = useState(categories.length);
   const rootRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLUListElement>(null);
   const moreRef = useRef<HTMLLIElement>(null);
@@ -67,7 +67,7 @@ export function MegaNav({
     const bar = barRef.current;
     if (!bar) return;
     if (window.matchMedia(MOBILE_QUERY).matches) {
-      setVisibleCount(brands.length);
+      setVisibleCount(categories.length);
       return;
     }
     const gap = parseFloat(getComputedStyle(bar).columnGap) || 0;
@@ -75,7 +75,7 @@ export function MegaNav({
     const widths = itemRefs.current.map((el) => el?.offsetWidth ?? 0);
     const total = widths.reduce((sum, w) => sum + w + gap, 0);
     if (total <= available) {
-      setVisibleCount(brands.length);
+      setVisibleCount(categories.length);
       return;
     }
     const reserve = (moreRef.current?.offsetWidth ?? 56) + gap;
@@ -87,7 +87,7 @@ export function MegaNav({
       count++;
     }
     setVisibleCount(Math.max(1, count));
-  }, [brands.length]);
+  }, [categories.length]);
 
   useIsoLayoutEffect(() => {
     measure();
@@ -161,9 +161,10 @@ export function MegaNav({
     requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>("a, button")?.focus());
   };
 
-  const overflow = brands.slice(visibleCount);
+  // Üst şerit kategori kısayollarıdır; markalar ve modeller "Markalar" panelinden açılır.
+  const hiddenCats = categories.slice(visibleCount);
   const activeBrand = brands.find((b) => b.slug === active) ?? null;
-  const activeInOverflow = activeBrand ? overflow.some((b) => b.id === activeBrand.id) : false;
+  const activeInOverflow = Boolean(activeBrand);
 
   return (
     <div
@@ -186,39 +187,40 @@ export function MegaNav({
         >
           <IconMenu /> Kategoriler
         </button>
-        <ul ref={barRef} className="mega-brands" aria-label="Markalar" lang="en">
-          {brands.map((b, i) => (
+        <button
+          type="button"
+          className={`mega-cats-btn${active === MORE || activeInOverflow ? " is-active" : ""}`}
+          aria-expanded={active === MORE}
+          aria-haspopup="true"
+          onPointerEnter={() => openSoon(MORE)}
+          onClick={onTriggerClick(MORE, false)}
+          onKeyDown={onTriggerKey(MORE)}
+        >
+          Markalar
+        </button>
+        <ul ref={barRef} className="mega-brands" aria-label="Kategori kısayolları">
+          {categories.map((c, i) => (
             <li
-              key={b.id}
+              key={c.id}
               ref={(el) => { itemRefs.current[i] = el; }}
               className={i >= visibleCount ? "is-overflow" : undefined}
               aria-hidden={i >= visibleCount || undefined}
             >
-              <Link
-                href={`/${b.slug}`}
-                className={active === b.slug ? "is-active" : undefined}
-                aria-expanded={active === b.slug}
-                aria-haspopup="true"
-                tabIndex={i >= visibleCount ? -1 : undefined}
-                onPointerEnter={() => openSoon(b.slug)}
-                onClick={onTriggerClick(b.slug, true)}
-                onKeyDown={onTriggerKey(b.slug)}
-              >
-                {b.logoUrl ? <BrandMark name={b.name} logoUrl={b.logoUrl} size={22} /> : null}
-                {b.name}
+              <Link href={`/kategori/${c.slug}`} tabIndex={i >= visibleCount ? -1 : undefined}>
+                {c.name}
               </Link>
             </li>
           ))}
-          <li ref={moreRef} className={`mega-more${overflow.length ? "" : " is-hidden"}`}>
+          <li ref={moreRef} className={`mega-more${hiddenCats.length ? "" : " is-hidden"}`}>
             <button
               type="button"
-              className={active === MORE || activeInOverflow ? "is-active" : undefined}
-              aria-label="Diğer markalar"
-              aria-expanded={active === MORE}
+              className={active === CATS ? "is-active" : undefined}
+              aria-label="Diğer kategoriler"
+              aria-expanded={active === CATS}
               aria-haspopup="true"
-              onPointerEnter={() => openSoon(MORE)}
-              onClick={onTriggerClick(MORE, false)}
-              onKeyDown={onTriggerKey(MORE)}
+              onPointerEnter={() => openSoon(CATS)}
+              onClick={onTriggerClick(CATS, false)}
+              onKeyDown={onTriggerKey(CATS)}
             >
               <span aria-hidden>•••</span>
             </button>
@@ -256,10 +258,10 @@ export function MegaNav({
             ) : active === MORE ? (
               <>
                 <div className="mega-panel-head">
-                  <h3>Diğer markalar</h3>
+                  <h3>Markalar</h3>
                 </div>
                 <div className="mega-brand-grid">
-                  {overflow.map((b) => (
+                  {brands.map((b) => (
                     <Link
                       key={b.id}
                       href={`/${b.slug}`}
@@ -281,7 +283,7 @@ export function MegaNav({
                     {activeBrand.models.length ? <small>{new Set(activeBrand.models.map((m) => m.slug)).size} model</small> : null}
                   </div>
                   {activeInOverflow ? (
-                    <button type="button" className="mega-back" onClick={() => setActive(MORE)}>← Diğer markalar</button>
+                    <button type="button" className="mega-back" onClick={() => setActive(MORE)}>← Markalar</button>
                   ) : null}
                   <Link href={`/${activeBrand.slug}`} onClick={close}>Tüm {activeBrand.name} parçaları →</Link>
                 </div>
