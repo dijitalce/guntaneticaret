@@ -3,6 +3,7 @@ import { asc } from "drizzle-orm";
 import { blogAdminCounts, db, getTenantContext, listBlogPostsAdmin, tenants } from "@guntan/db";
 import { IconPlus } from "@/src/icons";
 import { assetUrl } from "@/src/storefront";
+import { withBase } from "@/src/paths";
 import { StatusToggle } from "@/src/status-toggle";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate } from "@/src/ui";
 import { Pager, TabNav, buildHref, pageNumber } from "@/src/ui-ext";
@@ -38,7 +39,7 @@ export default async function BlogAdmin({
         description="Arama motorlarından trafik çekmek için rehber ve bilgi yazıları. /blog altında yayınlanır, site haritasına ve RSS'e otomatik eklenir."
         actions={
           <>
-            <form method="post" action="/api/content/blog/seed-plan">
+            <form method="post" action={withBase("/api/content/blog/seed-plan")}>
               {tenantId ? <input type="hidden" name="site" value={tenantId} /> : null}
               <button className="btn btn-secondary" type="submit" title="SEO haritasındaki 48 konuyu taslak olarak ekler; var olanlara dokunmaz">
                 SEO planını yükle
