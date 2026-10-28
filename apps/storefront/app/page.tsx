@@ -4,6 +4,7 @@ import { cachedBanners, cachedFeaturedProducts, cachedPopularCategories, cachedV
 import { getTenant } from "../src/tenant";
 import { ProductCard, cardOems } from "../src/product-card";
 import { HomeSlider } from "../src/home-slider";
+import { VehicleNav } from "../src/vehicle-nav";
 import { HomeRail } from "../src/home-rail";
 import { PartIcon, partKind } from "../src/part-icons";
 import { HomeAbout, autoPartsStoreJsonLd } from "../src/about";
@@ -86,16 +87,23 @@ export default async function HomePage() {
           itemListJsonLd(host, "Çok satanlar", featured),
         ]}
       />
-      <div className="home-banner-hero">
-        <HomeSlider
-          slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
-            {
-              alt: "Sitemizde gözükmeyen 2.000.000+ ürün — kredi kartına 12 taksit, 20.000+ üründe vade farksız 3 taksit, 30.000+ üründe kargo bizden.",
-              href: "/arama",
-              image: "/slider/sitemizde-gozukmeyen-2-milyon-urun.webp",
-            },
-          ]}
+      <div className="home-ia">
+        <VehicleNav
+          title="Markalar"
+          searchable
+          items={brands.map((b) => ({ name: b.name, slug: b.slug, href: `/${b.slug}`, logoUrl: b.logoUrl }))}
         />
+        <div className="home-ia-main">
+          <HomeSlider
+            slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
+              {
+                alt: "Sitemizde gözükmeyen 2.000.000+ ürün — kredi kartına 12 taksit, 20.000+ üründe vade farksız 3 taksit, 30.000+ üründe kargo bizden.",
+                href: "/arama",
+                image: "/slider/sitemizde-gozukmeyen-2-milyon-urun.webp",
+              },
+            ]}
+          />
+        </div>
       </div>
       <AssuranceGrid variant="strip" items={homeAssuranceItems()} />
       <HomeQuoteBand whatsapp={tenant.whatsapp} phone={tenant.phone} />

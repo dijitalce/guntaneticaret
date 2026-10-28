@@ -542,7 +542,7 @@ body {
 }
 .home-ia .vehicle-nav {
   max-height: min(
-    calc((100cqi - 250px - 1.1rem) * 438 / 1024 + 10rem),
+    calc((100cqi - 250px - 1.1rem) * 438 / 1024),
     calc(100dvh - 11.25rem)
   );
   height: auto;
