@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, count, desc, inArray, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sum } from "drizzle-orm";
 import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
 import { ConfirmButton } from "@/src/form-fields";
