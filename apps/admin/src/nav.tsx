@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemeToggle } from "./theme-toggle";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
@@ -253,6 +254,7 @@ export function AdminShellClient({
           <GlobalSearch pages={SEARCH_PAGES} inputRef={searchRef} />
 
           <div className="admin-topbar-right">
+            <ThemeToggle />
             <a className="admin-topbar-link" href={storefrontUrl} target="_blank" rel="noreferrer">
               <IconExternal />
               <span>Site</span>

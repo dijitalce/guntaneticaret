@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { THEME_INIT_SCRIPT } from "@/src/theme-init";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,10 @@ const font = Inter({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={font.variable}>
+    <html lang="tr" className={font.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className={`admin-body ${font.className}`}>{children}</body>
     </html>
   );
