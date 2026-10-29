@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { and, asc, count, desc, eq, gte, inArray, like, or, sum, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, inArray, sum } from "drizzle-orm";
 import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
 import { ConfirmButton } from "@/src/form-fields";
-import { IconBank, IconCard, IconCart, IconSearch, IconWallet } from "@/src/icons";
+import { IconBank, IconCard, IconCart, IconDownload, IconSearch, IconWallet } from "@/src/icons";
 import { BulkLabelButton, SelectAllOrders } from "@/src/order-bulk";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
+import { PAYMENTS, PERIODS, orderBaseFilters } from "@/src/order-filters";
 import { Pager } from "@/src/ui-ext";
 
 export const metadata = { title: "Siparişler" };
@@ -23,29 +24,17 @@ const TABS = [
   { value: "refunded", label: "İade" },
 ];
 
-const PERIODS = [
-  { value: "", label: "Tüm zamanlar", days: 0 },
-  { value: "bugun", label: "Bugün", days: 1 },
-  { value: "7g", label: "Son 7 gün", days: 7 },
-  { value: "30g", label: "Son 30 gün", days: 30 },
-];
 const SORTS: Record<string, { col: typeof orders.createdAt | typeof orders.grandTotal | typeof orders.orderNo; label: string }> = {
   tarih: { col: orders.createdAt, label: "Tarih" },
   tutar: { col: orders.grandTotal, label: "Tutar" },
   no: { col: orders.orderNo, label: "Sipariş" },
 };
 const REVENUE_STATUSES = ["paid", "preparing", "shipped", "completed"];
-const TR_OFFSET = "+03:00";
-
-function periodStart(days: number) {
-  const trDay = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
-  return new Date(new Date(`${trDay}T00:00:00${TR_OFFSET}`).getTime() - (days - 1) * 86400_000);
-}
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tenant?: string; status?: string; q?: string; sayfa?: string; donem?: string; sirala?: string; yon?: string; ok?: string; hata?: string; mesaj?: string }>;
+  searchParams: Promise<{ tenant?: string; status?: string; q?: string; sayfa?: string; donem?: string; sirala?: string; yon?: string; odeme?: string; ok?: string; hata?: string; mesaj?: string }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
@@ -56,13 +45,7 @@ export default async function OrdersPage({
   const dir = sp.yon === "asc" ? "asc" : "desc";
   const orderBy = dir === "asc" ? asc(SORTS[sortKey]!.col) : desc(SORTS[sortKey]!.col);
 
-  const base: SQL[] = [];
-  if (period.days) base.push(gte(orders.createdAt, periodStart(period.days)));
-  if (sp.tenant) base.push(eq(orders.tenantId, sp.tenant));
-  if (q) {
-    const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-    base.push(or(like(orders.orderNo, pattern), like(orders.email, pattern), like(orders.fullName, pattern), like(orders.phone, pattern))!);
-  }
+  const base = orderBaseFilters({ ...sp, q });
   const where = [...base, ...(sp.status ? [eq(orders.status, sp.status)] : [])];
 
   const [tenantRows, statusCounts, totalRows, revenueRows, rows] = await Promise.all([
@@ -96,7 +79,7 @@ export default async function OrdersPage({
   const actionable = (countBy.pending_payment ?? 0) + (countBy.paid ?? 0) + (countBy.preparing ?? 0);
   const href = (patch: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
-    const merged = { tenant: sp.tenant, status: sp.status, q: q || undefined, donem: sp.donem, sirala: sp.sirala, yon: sp.yon, ...patch };
+    const merged = { tenant: sp.tenant, status: sp.status, q: q || undefined, donem: sp.donem, odeme: sp.odeme, sirala: sp.sirala, yon: sp.yon, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
     const s = params.toString();
     return s ? `/orders?${s}` : "/orders";
@@ -108,9 +91,15 @@ export default async function OrdersPage({
         title="Siparişler"
         description="Ödeme, hazırlık, kargo ve teslim adımlarını sipariş detayından yönetin."
         actions={
-          <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank">
-            <BulkLabelButton form="bulk-labels" />
-          </form>
+          <>
+            <a className="btn btn-secondary" href={withBase(href({ sayfa: undefined }).replace("/orders", "/api/orders/export"))}>
+              <IconDownload />
+              CSV indir
+            </a>
+            <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank">
+              <BulkLabelButton form="bulk-labels" />
+            </form>
+          </>
         }
       />
       {sp.ok === "1" ? <Alert tone="ok">Ödeme alındı olarak işaretlendi; müşteriye bilgi gönderildi.</Alert> : null}
@@ -153,11 +142,19 @@ export default async function OrdersPage({
               ))}
             </select>
           ) : null}
+          <select className="select" name="odeme" defaultValue={sp.odeme ?? ""} aria-label="Ödeme yöntemi" style={{ width: "auto" }}>
+            {PAYMENTS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          {sp.donem ? <input type="hidden" name="donem" value={sp.donem} /> : null}
           <button className="btn btn-secondary" type="submit">
             Ara
           </button>
-          {q || sp.tenant ? (
-            <Link className="btn btn-ghost" href={href({ q: undefined, tenant: undefined, sayfa: undefined })}>
+          {q || sp.tenant || sp.odeme ? (
+            <Link className="btn btn-ghost" href={href({ q: undefined, tenant: undefined, odeme: undefined, sayfa: undefined })}>
               Temizle
             </Link>
           ) : null}
@@ -267,7 +264,7 @@ export default async function OrdersPage({
           </div>
         )}
 
-        <Pager base="/orders" page={page} total={total} perPage={PAGE_SIZE} params={{ tenant: sp.tenant, status: sp.status, q: q || undefined }} />
+        <Pager base="/orders" page={page} total={total} perPage={PAGE_SIZE} params={{ tenant: sp.tenant, status: sp.status, q: q || undefined, donem: sp.donem, odeme: sp.odeme, sirala: sp.sirala, yon: sp.yon }} />
       </Panel>
     </>
   );

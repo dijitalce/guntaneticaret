@@ -2256,3 +2256,18 @@ form > .integration-grid + .form-actions { margin-top: 1rem; }
 }
 .chip-filters a:hover { background: var(--a-hover); }
 .chip-filters a.is-active { background: var(--a-brand-50); border-color: var(--a-brand-100); color: var(--a-brand); }
+
+/* ——— Yükleniyor iskeleti ——— */
+.skeleton {
+  border-radius: var(--a-radius);
+  background: linear-gradient(90deg, var(--a-hover) 25%, var(--a-surface-2) 50%, var(--a-hover) 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.3s ease-in-out infinite;
+}
+.skeleton-page { display: grid; gap: 1rem; }
+.skeleton-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+.sk-title { height: 34px; width: 240px; }
+.sk-kpi { height: 96px; }
+.sk-panel { height: 380px; }
+@keyframes sk-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
