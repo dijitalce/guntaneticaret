@@ -13,8 +13,15 @@ export function cachedBlogPostCount(tenantId: string) {
 }
 
 /** Kategori sayfasındaki "rehberler" bölümü: yalnızca yayındaki, bu kategoriyi ilgili gösteren yazılar. */
-export function cachedGuidesForCategory(tenantId: string, categorySlug: string) {
-  return unstable_cache(() => publishedPostsForCategory(tenantId, categorySlug, 4).catch(() => []), ["blog-category-guides", tenantId, categorySlug], { revalidate: 600 })();
+export async function cachedGuidesForCategory(tenantId: string, categorySlug: string) {
+  const posts = await unstable_cache(() => publishedPostsForCategory(tenantId, categorySlug, 4).catch(() => []), ["blog-category-guides", tenantId, categorySlug], { revalidate: 600 })();
+  // unstable_cache sonucu JSON'a çevirir; tarihler önbellekten metin döner, BlogCard Date bekliyor.
+  return posts.map((p) => ({
+    ...p,
+    publishedAt: p.publishedAt ? new Date(p.publishedAt) : null,
+    updatedAt: new Date(p.updatedAt),
+    createdAt: new Date(p.createdAt),
+  }));
 }
 
 export function blogImageUrl(host: string, url: string | null | undefined) {
