@@ -117,8 +117,6 @@ export default async function CartPage({
     (m, o) => (o.count > (m?.count ?? 1) ? o : m),
     null,
   );
-  const freeThreshold = shipping?.freeShippingThreshold ?? 0;
-  const freeRemaining = freeThreshold > 0 ? Math.max(0, freeThreshold - view.subtotal) : 0;
   const firstVehicle = view.items
     .map((i) => extras.byProduct.get(i.productId)?.fitments[0]?.label)
     .find(Boolean);
@@ -178,19 +176,6 @@ export default async function CartPage({
 
       <div className="cart-layout">
         <div className="cart-lines" aria-label="Sepet ürünleri">
-          {freeThreshold > 0 && (
-            <div className={`free-ship${freeRemaining === 0 ? " is-done" : ""}`}>
-              <p>
-                {freeRemaining === 0
-                  ? "Kargo bedava! Siparişin ücretsiz gönderilecek."
-                  : `${money(freeRemaining)} daha ekle, kargo bedava olsun.`}
-              </p>
-              <span className="free-ship-bar" aria-hidden>
-                <span style={{ width: `${Math.min(100, (view.subtotal / freeThreshold) * 100)}%` }} />
-              </span>
-            </div>
-          )}
-
           {view.items.map((i) => {
             const unit = Number(i.price);
             const line = unit * i.qty;
@@ -316,10 +301,12 @@ export default async function CartPage({
               <dt>Ürün ({itemCount})</dt>
               <dd>{money(view.subtotal)}</dd>
             </div>
-            <div>
-              <dt>Kargo (Aras Kargo)</dt>
-              <dd>{view.shippingAmount === 0 ? "Ücretsiz" : money(view.shippingAmount)}</dd>
-            </div>
+            {view.shippingAmount > 0 && (
+              <div>
+                <dt>Kargo (Aras Kargo)</dt>
+                <dd>{money(view.shippingAmount)}</dd>
+              </div>
+            )}
             <div className="is-vat">
               <dt>KDV hariç tutar</dt>
               <dd>{money(vatBreakdown(grand).net)}</dd>

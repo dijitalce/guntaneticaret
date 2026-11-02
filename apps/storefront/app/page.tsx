@@ -97,7 +97,7 @@ export default async function HomePage() {
           <HomeSlider
             slides={sliderBanners.length ? sliderBanners.map((b) => ({ alt: b.title, href: b.href || "/arama", image: b.imageUrl })) : [
               {
-                alt: "Sitemizde gözükmeyen 2.000.000+ ürün — kredi kartına 12 taksit, 20.000+ üründe vade farksız 3 taksit, 30.000+ üründe kargo bizden.",
+                alt: "Sitemizde gözükmeyen 2.000.000+ ürün — kredi kartına 12 taksit, 20.000+ üründe vade farksız 3 taksit.",
                 href: "/arama",
                 image: "/slider/sitemizde-gozukmeyen-2-milyon-urun.webp",
               },

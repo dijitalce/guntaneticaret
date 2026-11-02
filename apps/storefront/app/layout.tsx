@@ -162,7 +162,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               ) : <span>{tenant.phone}</span>}
             </div>
             {/* Kayan yazı varsa aynı mesajlar burada tekrar edilmez. */}
-            {hasAnnouncement ? null : <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit · 30.000+ üründe kargo bizden!</p>}
+            {hasAnnouncement ? null : <p className="topbar-note">{SLOGAN} · Kredi kartına 12 taksit</p>}
             <div className="topbar-links">
               {sahibinden ? (
                 <a className="topbar-sahibinden" href={sahibinden.href} target="_blank" rel="noreferrer">

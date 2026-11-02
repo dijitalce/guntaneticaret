@@ -29,7 +29,6 @@ export function homeAssuranceItems(): Assurance[] {
   return [
     { key: "installments", icon: <IconCard />, title: "Kredi kartına 12 taksit", text: "Taksit seçenekleri ödeme adımında" },
     { key: "interest-free", icon: <IconTag />, title: "20.000+ üründe vade farksız 3 taksit", text: "Seçili ürünlerde ek ücret ödemeden" },
-    { key: "free-ship", icon: <IconTruck />, title: "30.000+ üründe kargo bizden!", text: "Seçili ürünlerde kargo ücretsiz" },
     { key: "same-day", icon: <IconBolt />, title: "Aynı gün kargo", text: "Stoktaki ürünler aynı gün kargoda" },
     { key: "return", icon: <IconReturn />, title: "14 gün iade hakkı", text: "Teslimattan itibaren 14 gün içinde" },
     { key: "secure", icon: <IconLock />, title: "%100 güvenli ödeme", text: "256-bit SSL ve 3D Secure" },
