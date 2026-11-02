@@ -161,12 +161,10 @@ export function CheckoutForm({
                 <b>-{money(discount)}</b>
               </li>
             )}
-            {shippingFee > 0 && (
-              <li>
-                <span>Kargo</span>
-                <b>{money(shippingFee)}</b>
-              </li>
-            )}
+            <li>
+              <span>Kargo</span>
+              <b>Alıcıya aittir</b>
+            </li>
           </ul>
         </details>
         <form
@@ -468,12 +466,10 @@ export function CheckoutForm({
               <dd>-{money(discount)}</dd>
             </div>
           ) : null}
-          {shippingFee > 0 && (
-            <div>
-              <dt>Kargo</dt>
-              <dd>{money(shippingFee)}</dd>
-            </div>
-          )}
+          <div>
+            <dt>Kargo</dt>
+            <dd>Alıcıya aittir</dd>
+          </div>
           {installmentFee > 0 && (
             <div>
               <dt>Vade farkı ({installments} taksit)</dt>

@@ -38,7 +38,7 @@ export function homeAssuranceItems(): Assurance[] {
 export function assuranceItems(opts: { card?: boolean; maxInstallments?: number } = {}): Assurance[] {
   const items: Assurance[] = [
     { key: "same-day", icon: <IconBolt />, title: "Aynı gün kargo", text: "Stoktaki tüm ürünler aynı gün kargoya verilir" },
-    { key: "aras", icon: <IconTruck />, title: "Aras Kargo ile uygun fiyatlı kargo", text: "Takip numarası SMS ve e-posta ile iletilir" },
+    { key: "aras", icon: <IconTruck />, title: "Aras Kargo ile alıcı ödemeli gönderim", text: "Takip numarası SMS ve e-posta ile iletilir" },
     { key: "return", icon: <IconReturn />, title: "14 gün iade hakkı", text: "Teslimattan itibaren 14 gün içinde iade" },
     { key: "fit", icon: <IconCheckBadge />, title: "%100 uyumluluk garantisi", text: "Şasi numaranızla uyumu teyit ediyoruz; uymazsa iade" },
     {

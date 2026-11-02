@@ -104,7 +104,7 @@ export type ShippingSettings = {
 
 export const DEFAULT_SHIPPING: ShippingSettings = {
   defaultCarrier: "aras",
-  flatFee: 99.9,
+  flatFee: 0,
   freeShippingThreshold: 0,
   defaultWeightKg: 1,
   defaultPieces: 1,

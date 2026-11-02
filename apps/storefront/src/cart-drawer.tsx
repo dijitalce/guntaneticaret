@@ -234,7 +234,7 @@ export function CartShell({ placeholder }: { placeholder: string }) {
                     </div>
                     <div>
                       <dt>Kargo</dt>
-                      <dd>{money(cart.shippingAmount)}</dd>
+                      <dd>Alıcıya aittir</dd>
                     </div>
                     <div className="is-vat">
                       <dt>KDV (%{VAT_RATE})</dt>

@@ -301,12 +301,10 @@ export default async function CartPage({
               <dt>Ürün ({itemCount})</dt>
               <dd>{money(view.subtotal)}</dd>
             </div>
-            {view.shippingAmount > 0 && (
-              <div>
-                <dt>Kargo (Aras Kargo)</dt>
-                <dd>{money(view.shippingAmount)}</dd>
-              </div>
-            )}
+            <div>
+              <dt>Kargo (Aras Kargo)</dt>
+              <dd>Alıcıya aittir</dd>
+            </div>
             <div className="is-vat">
               <dt>KDV hariç tutar</dt>
               <dd>{money(vatBreakdown(grand).net)}</dd>
@@ -356,7 +354,7 @@ export default async function CartPage({
           <div className="return-terms">
             <ul>
               <li>Stoktaki tüm ürünler <strong>aynı gün</strong> kargoya verilir.</li>
-              <li>Gönderiler Aras Kargo ile uygun fiyatla yapılır{shipping?.estimatedDays ? `; tahmini teslimat ${shipping.estimatedDays}` : ""}.</li>
+              <li>Gönderiler Aras Kargo ile alıcı ödemeli yapılır, kargo ücreti teslimatta alıcıya aittir{shipping?.estimatedDays ? `; tahmini teslimat ${shipping.estimatedDays}` : ""}.</li>
               <li>Kargo takip numarası SMS ve e-posta ile iletilir.</li>
               <li>Parçalar orijinal ambalajında, faturalı olarak gönderilir.</li>
             </ul>

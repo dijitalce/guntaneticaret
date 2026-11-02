@@ -18,7 +18,6 @@ import {
   evaluateCoupon,
   getCustomerMeta,
   getPaymentSettings,
-  getShippingSettings,
   markCouponUsed,
   notifyOrder,
   notifyOrderInBackground,
@@ -215,13 +214,9 @@ export async function cartQty(tenantId: string, sessionId?: string | null, custo
   return Number(row?.n ?? 0);
 }
 
-/** Kargo ayarlarındaki sabit ücret ve ücretsiz kargo eşiğine göre tutar. */
-export async function shippingFeeFor(subtotal: number, opts: { freeShipping?: boolean } = {}): Promise<number> {
-  if (opts.freeShipping) return 0;
-  const s = await getShippingSettings().catch(() => null);
-  if (!s) return shippingAmountForSubtotal(subtotal);
-  if (s.freeShippingThreshold > 0 && subtotal >= s.freeShippingThreshold) return 0;
-  return Math.max(0, Number(s.flatFee) || 0);
+/** Kargo alıcı ödemeli gönderilir; siparişe kargo ücreti eklenmez. */
+export async function shippingFeeFor(_subtotal: number, _opts: { freeShipping?: boolean } = {}): Promise<number> {
+  return 0;
 }
 
 /**

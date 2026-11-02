@@ -9,8 +9,8 @@ export interface ShippingProvider {
   quote(input: { subtotal: number; city?: string }): Promise<ShippingQuote[]>;
 }
 
-/** Standart kargo ücreti; ücretsiz kargo eşiği yok. */
-export const STANDARD_SHIPPING_FEE = 99.9;
+/** Kargo alıcıya aittir (alıcı ödemeli gönderim); siparişe kargo ücreti eklenmez. */
+export const STANDARD_SHIPPING_FEE = 0;
 
 export function shippingAmountForSubtotal(_subtotal: number): number {
   return STANDARD_SHIPPING_FEE;
