@@ -3,12 +3,12 @@ import { and, asc, count, desc, eq, inArray, sum } from "drizzle-orm";
 import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
 import { ConfirmButton } from "@/src/form-fields";
-import { IconBank, IconCard, IconCart, IconDownload, IconSearch, IconWallet } from "@/src/icons";
+import { IconBank, IconCard, IconCart, IconCheck, IconDownload, IconSearch, IconTruck, IconWallet } from "@/src/icons";
 import { BulkLabelButton, SelectAllOrders } from "@/src/order-bulk";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 import { PAYMENTS, PERIODS, orderBaseFilters } from "@/src/order-filters";
-import { Pager } from "@/src/ui-ext";
+import { Pager, relativeTime } from "@/src/ui-ext";
 
 export const metadata = { title: "Siparişler" };
 
@@ -30,6 +30,12 @@ const SORTS: Record<string, { col: typeof orders.createdAt | typeof orders.grand
   no: { col: orders.orderNo, label: "Sipariş" },
 };
 const REVENUE_STATUSES = ["paid", "preparing", "shipped", "completed"];
+const OK_MESSAGES: Record<string, string> = {
+  "1": "Ödeme alındı olarak işaretlendi; müşteriye bilgi gönderildi.",
+  prepare: "Sipariş hazırlığa alındı.",
+  complete: "Sipariş teslim edildi olarak tamamlandı.",
+};
+const STALE_MS = 24 * 3600 * 1000;
 
 export default async function OrdersPage({
   searchParams,
@@ -48,7 +54,7 @@ export default async function OrdersPage({
   const base = orderBaseFilters({ ...sp, q });
   const where = [...base, ...(sp.status ? [eq(orders.status, sp.status)] : [])];
 
-  const [tenantRows, statusCounts, totalRows, revenueRows, rows] = await Promise.all([
+  const [tenantRows, statusCounts, totalRows, revenueRows, pendingRows, rows] = await Promise.all([
     db.select().from(tenants),
     db
       .select({ status: orders.status, n: count() })
@@ -60,6 +66,10 @@ export default async function OrdersPage({
       .select({ total: sum(orders.grandTotal), n: count() })
       .from(orders)
       .where(and(inArray(orders.status, REVENUE_STATUSES), ...base)),
+    db
+      .select({ total: sum(orders.grandTotal) })
+      .from(orders)
+      .where(and(eq(orders.status, "pending_payment"), ...base)),
     db
       .select()
       .from(orders)
@@ -76,7 +86,8 @@ export default async function OrdersPage({
   const allCount = statusCounts.reduce((a, r) => a + r.n, 0);
   const revenue = Number(revenueRows[0]?.total ?? 0);
   const paidCount = revenueRows[0]?.n ?? 0;
-  const actionable = (countBy.pending_payment ?? 0) + (countBy.paid ?? 0) + (countBy.preparing ?? 0);
+  const pendingAmount = Number(pendingRows[0]?.total ?? 0);
+  const toShip = (countBy.paid ?? 0) + (countBy.preparing ?? 0);
   const href = (patch: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
     const merged = { tenant: sp.tenant, status: sp.status, q: q || undefined, donem: sp.donem, odeme: sp.odeme, sirala: sp.sirala, yon: sp.yon, ...patch };
@@ -89,7 +100,7 @@ export default async function OrdersPage({
     <>
       <PageHeader
         title="Siparişler"
-        description="Ödeme, hazırlık, kargo ve teslim adımlarını sipariş detayından yönetin."
+        description="Her satırdaki buton siparişi bir sonraki adıma taşır; ayrıntı ve iade işlemleri sipariş detayındadır."
         actions={
           <>
             <a className="btn btn-secondary" href={withBase(href({ sayfa: undefined }).replace("/orders", "/api/orders/export"))}>
@@ -102,14 +113,15 @@ export default async function OrdersPage({
           </>
         }
       />
-      {sp.ok === "1" ? <Alert tone="ok">Ödeme alındı olarak işaretlendi; müşteriye bilgi gönderildi.</Alert> : null}
+      {sp.ok && OK_MESSAGES[sp.ok] ? <Alert tone="ok">{OK_MESSAGES[sp.ok]}</Alert> : null}
       {sp.hata ? <Alert>{sp.mesaj || "İşlem yapılamadı."}</Alert> : null}
 
       <div className="kpis order-kpis">
         <Kpi label="Sipariş" value={allCount.toLocaleString("tr-TR")} hint={period.value ? period.label : "Toplam kayıt"} icon={IconCart} tone="info" />
         <Kpi label="Ciro" value={formatTry(revenue)} hint="Ödenen, hazırlanan, kargodaki ve tamamlanan" icon={IconWallet} tone="ok" />
         <Kpi label="Ort. sepet" value={formatTry(paidCount ? revenue / paidCount : 0)} hint={`${paidCount.toLocaleString("tr-TR")} ödenmiş sipariş`} icon={IconCard} tone="violet" />
-        <Kpi label="İşlem bekleyen" value={actionable.toLocaleString("tr-TR")} hint="Ödeme, hazırlık veya kargo" icon={IconBank} tone="warn" href="/orders?status=paid" />
+        <Kpi label="Tahsilat bekleyen" value={formatTry(pendingAmount)} hint={`${(countBy.pending_payment ?? 0).toLocaleString("tr-TR")} sipariş ödeme bekliyor`} icon={IconBank} tone="warn" href="/orders?status=pending_payment" />
+        <Kpi label="Gönderilecek" value={toShip.toLocaleString("tr-TR")} hint={`${(countBy.shipped ?? 0).toLocaleString("tr-TR")} sipariş kargoda`} icon={IconTruck} tone="violet" href="/orders?status=paid" />
       </div>
 
       <Panel>
@@ -236,6 +248,9 @@ export default async function OrdersPage({
                       </td>
                       <td>
                         <StatusBadge tone={statusTone(o.status)}>{orderStatusLabel(o.status)}</StatusBadge>
+                        {o.status === "pending_payment" ? (
+                          <span className={`sub${Date.now() - new Date(o.createdAt).getTime() > STALE_MS ? " text-warn" : ""}`}>{relativeTime(o.createdAt)} oluşturuldu</span>
+                        ) : null}
                       </td>
                       <td className="num">{formatTry(o.grandTotal)}</td>
                       <td>
@@ -247,7 +262,31 @@ export default async function OrdersPage({
                                 className="btn btn-primary btn-sm"
                                 message={`${o.orderNo} numaralı siparişin havale ödemesi alındı olarak işaretlensin mi? Müşteriye bilgi e-postası gider.`}
                               >
+                                <IconCheck />
                                 Ödeme alındı
+                              </ConfirmButton>
+                            </form>
+                          ) : null}
+                          {o.status === "paid" ? (
+                            <form action={withBase(`/api/orders/${o.id}/prepare`)} method="post">
+                              <input type="hidden" name="next" value={href({})} />
+                              <button className="btn btn-primary btn-sm" type="submit">
+                                Hazırlığa al
+                              </button>
+                            </form>
+                          ) : null}
+                          {o.status === "preparing" ? (
+                            <Link className="btn btn-primary btn-sm" href={`/orders/${o.id}`}>
+                              <IconTruck />
+                              Kargoya ver
+                            </Link>
+                          ) : null}
+                          {o.status === "shipped" ? (
+                            <form action={withBase(`/api/orders/${o.id}/complete`)} method="post">
+                              <input type="hidden" name="next" value={href({})} />
+                              <ConfirmButton className="btn btn-secondary btn-sm" message={`${o.orderNo} teslim edildi olarak tamamlansın mı?`}>
+                                <IconCheck />
+                                Teslim edildi
                               </ConfirmButton>
                             </form>
                           ) : null}

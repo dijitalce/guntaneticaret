@@ -15,12 +15,12 @@ import {
   tenants,
 } from "@guntan/db";
 import { arasConfigFromEnv, arasTrackingUrl, getAdminOrder, orderStatusLabel } from "@guntan/ecommerce";
-import { IconArrowLeft, IconCheck, IconExternal, IconPrinter, IconTruck } from "@/src/icons";
+import { IconArrowLeft, IconBank, IconCard, IconCart, IconCheck, IconExternal, IconPrinter, IconTruck, IconWallet } from "@/src/icons";
 import { ConfirmButton } from "@/src/form-fields";
 import { OrderTimeline } from "@/src/order-timeline";
 import { durationText, initials, relativeTime } from "@/src/ui-ext";
 import { withBase } from "@/src/paths";
-import { Alert, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
+import { Alert, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 
 export const metadata = { title: "Sipariş detayı" };
 export const dynamic = "force-dynamic";
@@ -154,6 +154,19 @@ export default async function OrderDetailPage({
 
       {sp.ok === "1" && <Alert tone="ok">İşlem kaydedildi.</Alert>}
       {sp.hata === "1" && <Alert>{sp.mesaj || "Bu işlem mevcut sipariş durumunda yapılamaz."}</Alert>}
+
+      <div className="kpis order-kpis">
+        <Kpi label="Genel toplam" value={formatTry(order.grandTotal)} hint={`${items.reduce((a, i) => a + i.qty, 0)} adet · ${items.length} kalem`} icon={IconCart} tone="info" />
+        <Kpi
+          label="Ödeme"
+          value={isCard ? (installments > 1 ? `Kart · ${installments} taksit` : "Kredi kartı") : "Havale / EFT"}
+          hint={payments[0] ? PAYMENT_STATUS_LABELS[payments[0].status] ?? payments[0].status : "Ödeme kaydı yok"}
+          icon={isCard ? IconCard : IconBank}
+          tone={payments[0]?.status === "confirmed" ? "ok" : "warn"}
+        />
+        <Kpi label="Teslimat" value={address.city || "—"} hint={address.district || "İlçe belirtilmemiş"} icon={IconTruck} tone="violet" />
+        <Kpi label="Sipariş yaşı" value={relativeTime(order.createdAt)} hint={formatDate(order.createdAt)} icon={IconWallet} tone="brand" />
+      </div>
 
       <Panel>
         <div className="stepper" aria-label="Sipariş akışı">
@@ -333,7 +346,7 @@ export default async function OrderDetailPage({
                 </div>
                 <div>
                   <dt>Kargo</dt>
-                  <dd>{formatTry(order.shippingTotal)}</dd>
+                  <dd>{Number(order.shippingTotal) > 0 ? formatTry(order.shippingTotal) : "Alıcıya aittir"}</dd>
                 </div>
                 {Number(order.discountTotal) > 0 ? (
                   <div>
@@ -475,6 +488,118 @@ export default async function OrderDetailPage({
             </dl>
           </Panel>
 
+          <Panel title="Teslimat" padded>
+            <dl className="dl">
+              <div>
+                <dt>Alıcı</dt>
+                <dd>
+                  {address.shipFullName || order.fullName} · {address.shipPhone || order.phone}
+                </dd>
+              </div>
+              <div>
+                <dt>Adres</dt>
+                <dd>{shippingAddress}</dd>
+              </div>
+              {address.shipDifferent === "1" ? <span className="badge badge-info">Fatura adresinden farklı</span> : null}
+            </dl>
+          </Panel>
+
+          <Panel title="Fatura" padded>
+            <dl className="dl">
+              <div>
+                <dt>Tür</dt>
+                <dd>{address.invoiceType === "corporate" ? "Kurumsal" : "Bireysel"}</dd>
+              </div>
+              {address.companyName ? (
+                <div>
+                  <dt>Firma</dt>
+                  <dd>{address.companyName}</dd>
+                </div>
+              ) : null}
+              {address.taxOffice || address.taxNumber ? (
+                <div>
+                  <dt>Vergi dairesi / no</dt>
+                  <dd>{[address.taxOffice, address.taxNumber].filter(Boolean).join(" · ")}</dd>
+                </div>
+              ) : null}
+              {address.nationalId ? (
+                <div>
+                  <dt>TC kimlik no</dt>
+                  <dd>{address.nationalId}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Adres</dt>
+                <dd>{billingAddress}</dd>
+              </div>
+            </dl>
+          </Panel>
+
+          <Panel title="Ödeme" padded>
+            {payments.length === 0 ? (
+              <p className="muted text-sm" style={{ margin: 0 }}>
+                Ödeme kaydı yok.
+              </p>
+            ) : (
+              <dl className="dl">
+                {payments.map((p) => (
+                  <div key={p.id}>
+                    <dt>{PAYMENT_LABELS[p.method] ?? p.method}</dt>
+                    <dd style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <span>{formatTry(p.amount)}</span>
+                      <StatusBadge tone={statusTone(p.status)}>{PAYMENT_STATUS_LABELS[p.status] ?? p.status}</StatusBadge>
+                    </dd>
+                  </div>
+                ))}
+                {installments > 1 ? (
+                  <div>
+                    <dt>Taksit</dt>
+                    <dd>{installments} taksit</dd>
+                  </div>
+                ) : null}
+                {bankRef ? (
+                  <div>
+                    <dt>Banka referansı</dt>
+                    <dd>
+                      <code>{bankRef}</code>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            )}
+          </Panel>
+
+          <Panel title="Kargo" padded>
+            {shipments.length === 0 ? (
+              <p className="muted text-sm" style={{ margin: 0 }}>
+                Henüz kargo kaydı yok.
+              </p>
+            ) : (
+              <dl className="dl">
+                {shipments.map((s) => (
+                  <div key={s.id}>
+                    <dt>{s.carrier ?? "Firma belirtilmedi"}</dt>
+                    <dd style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <span>{s.trackingNo ?? "Takip no bekleniyor"}</span>
+                      <StatusBadge tone={statusTone(s.status)}>{SHIPMENT_STATUS[s.status] ?? s.status}</StatusBadge>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {arasShipment ? (
+              <a
+                className="btn btn-secondary btn-sm"
+                href={arasTrackingUrl(arasShipment.trackingNo!)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ marginTop: "0.8rem", width: "100%" }}
+              >
+                <IconExternal />
+                Aras takip sayfası
+              </a>
+            ) : null}
+          </Panel>
           <Panel title="Etiketler" padded>
             <form action={withBase(`/api/orders/${order.id}/tags`)} method="post" className="form-stack">
               {tags.length ? (
@@ -592,118 +717,6 @@ export default async function OrderDetailPage({
             </Panel>
           ) : null}
 
-          <Panel title="Teslimat" padded>
-            <dl className="dl">
-              <div>
-                <dt>Alıcı</dt>
-                <dd>
-                  {address.shipFullName || order.fullName} · {address.shipPhone || order.phone}
-                </dd>
-              </div>
-              <div>
-                <dt>Adres</dt>
-                <dd>{shippingAddress}</dd>
-              </div>
-              {address.shipDifferent === "1" ? <span className="badge badge-info">Fatura adresinden farklı</span> : null}
-            </dl>
-          </Panel>
-
-          <Panel title="Fatura" padded>
-            <dl className="dl">
-              <div>
-                <dt>Tür</dt>
-                <dd>{address.invoiceType === "corporate" ? "Kurumsal" : "Bireysel"}</dd>
-              </div>
-              {address.companyName ? (
-                <div>
-                  <dt>Firma</dt>
-                  <dd>{address.companyName}</dd>
-                </div>
-              ) : null}
-              {address.taxOffice || address.taxNumber ? (
-                <div>
-                  <dt>Vergi dairesi / no</dt>
-                  <dd>{[address.taxOffice, address.taxNumber].filter(Boolean).join(" · ")}</dd>
-                </div>
-              ) : null}
-              {address.nationalId ? (
-                <div>
-                  <dt>TC kimlik no</dt>
-                  <dd>{address.nationalId}</dd>
-                </div>
-              ) : null}
-              <div>
-                <dt>Adres</dt>
-                <dd>{billingAddress}</dd>
-              </div>
-            </dl>
-          </Panel>
-
-          <Panel title="Ödeme" padded>
-            {payments.length === 0 ? (
-              <p className="muted text-sm" style={{ margin: 0 }}>
-                Ödeme kaydı yok.
-              </p>
-            ) : (
-              <dl className="dl">
-                {payments.map((p) => (
-                  <div key={p.id}>
-                    <dt>{PAYMENT_LABELS[p.method] ?? p.method}</dt>
-                    <dd style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-                      <span>{formatTry(p.amount)}</span>
-                      <StatusBadge tone={statusTone(p.status)}>{PAYMENT_STATUS_LABELS[p.status] ?? p.status}</StatusBadge>
-                    </dd>
-                  </div>
-                ))}
-                {installments > 1 ? (
-                  <div>
-                    <dt>Taksit</dt>
-                    <dd>{installments} taksit</dd>
-                  </div>
-                ) : null}
-                {bankRef ? (
-                  <div>
-                    <dt>Banka referansı</dt>
-                    <dd>
-                      <code>{bankRef}</code>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            )}
-          </Panel>
-
-          <Panel title="Kargo" padded>
-            {shipments.length === 0 ? (
-              <p className="muted text-sm" style={{ margin: 0 }}>
-                Henüz kargo kaydı yok.
-              </p>
-            ) : (
-              <dl className="dl">
-                {shipments.map((s) => (
-                  <div key={s.id}>
-                    <dt>{s.carrier ?? "Firma belirtilmedi"}</dt>
-                    <dd style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-                      <span>{s.trackingNo ?? "Takip no bekleniyor"}</span>
-                      <StatusBadge tone={statusTone(s.status)}>{SHIPMENT_STATUS[s.status] ?? s.status}</StatusBadge>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {arasShipment ? (
-              <a
-                className="btn btn-secondary btn-sm"
-                href={arasTrackingUrl(arasShipment.trackingNo!)}
-                target="_blank"
-                rel="noreferrer"
-                style={{ marginTop: "0.8rem", width: "100%" }}
-              >
-                <IconExternal />
-                Aras takip sayfası
-              </a>
-            ) : null}
-          </Panel>
         </div>
       </div>
     </>

@@ -12,7 +12,8 @@ import { withBase } from "@/src/paths";
 import { loadSites } from "@/src/site-picker";
 import { storefrontUrl } from "@/src/storefront";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, type Tone } from "@/src/ui";
-import { TabNav } from "@/src/ui-ext";
+import { IconSearch } from "@/src/icons";
+import { TabNav, relativeTime } from "@/src/ui-ext";
 
 export const metadata = { title: "Tahsilatlar" };
 export const dynamic = "force-dynamic";
@@ -57,21 +58,40 @@ const OK_MESSAGE: Record<string, string> = {
 export default async function PaymentLinksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ durum?: string; ok?: string; hata?: string; yeni?: string }>;
+  searchParams: Promise<{ durum?: string; q?: string; ok?: string; hata?: string; yeni?: string }>;
 }) {
   const sp = await searchParams;
   const filter: Filter = FILTERS.includes(sp.durum as Filter) ? (sp.durum as Filter) : "all";
-  const [links, stats, sites, created] = await Promise.all([
+  const q = (sp.q ?? "").trim().toLocaleLowerCase("tr-TR");
+  const [allLinks, stats, sites, created] = await Promise.all([
     listPaymentLinks(filter),
     paymentLinkStats(),
     loadSites(),
     sp.yeni ? getPaymentLink(sp.yeni) : Promise.resolve(null),
   ]);
+  const links = q
+    ? allLinks.filter((l) =>
+        [l.title, l.code, l.customer_name, l.customer_email, l.customer_phone, l.payer_name, l.payer_email, l.payer_phone, l.bank_ref]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("tr-TR")
+          .includes(q),
+      )
+    : allLinks;
   const fallback = storefrontUrl();
   const siteUrl = new Map(sites.map((s) => [s.id, s.host.includes(".") ? `https://${s.host}` : fallback]));
   const siteName = new Map(sites.map((s) => [s.id, s.name]));
   const linkUrl = (tenantId: string, code: string) => `${siteUrl.get(tenantId) ?? fallback}/tahsilat/${code}`;
-  const back = `/payment-links?durum=${filter}`;
+  const back = `/payment-links?durum=${filter}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ""}`;
+  const tab = (key: string) => `/payment-links?durum=${key}${sp.q ? `&q=${encodeURIComponent(sp.q)}` : ""}`;
+  const decided = stats.paid + stats.cancelled;
+  const waLink = (phone: string | null, title: string, amount: string, url: string) => {
+    const digits = (phone ?? "").replace(/\D/g, "");
+    if (!digits) return null;
+    const intl = digits.startsWith("90") ? digits : digits.startsWith("0") ? `9${digits}` : `90${digits}`;
+    const text = `Merhaba, ${title} için ${formatTry(amount)} tutarındaki ödemenizi bu bağlantıdan güvenle yapabilirsiniz: ${url}`;
+    return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+  };
 
   return (
     <>
@@ -94,7 +114,7 @@ export default async function PaymentLinksPage({
       <div className="kpis">
         <Kpi label="Ödeme bekleyen" value={stats.pending} hint={formatTry(stats.pendingAmount)} tone="warn" />
         <Kpi label="Ödenen" value={stats.paid} hint={formatTry(stats.paidAmount)} tone="ok" />
-        <Kpi label="İptal" value={stats.cancelled} />
+        <Kpi label="Tahsil oranı" value={decided ? `%${Math.round((stats.paid / decided) * 100)}` : "—"} hint={`${stats.paid} ödenen · ${stats.cancelled} iptal`} tone="info" />
       </div>
 
       <Panel title="Yeni tahsilat" padded>
@@ -153,15 +173,30 @@ export default async function PaymentLinksPage({
         label="Tahsilat durumları"
         active={filter}
         items={[
-          { key: "all", label: "Tümü", href: "/payment-links?durum=all", count: stats.all },
-          { key: "pending", label: "Ödeme bekleyen", href: "/payment-links?durum=pending", count: stats.pending },
-          { key: "paid", label: "Ödenen", href: "/payment-links?durum=paid", count: stats.paid },
-          { key: "cancelled", label: "İptal", href: "/payment-links?durum=cancelled", count: stats.cancelled },
+          { key: "all", label: "Tümü", href: tab("all"), count: stats.all },
+          { key: "pending", label: "Ödeme bekleyen", href: tab("pending"), count: stats.pending },
+          { key: "paid", label: "Ödenen", href: tab("paid"), count: stats.paid },
+          { key: "cancelled", label: "İptal", href: tab("cancelled"), count: stats.cancelled },
         ]}
       />
       <Panel>
+        <form className="toolbar" method="get">
+          <input type="hidden" name="durum" value={filter} />
+          <div className="search-field">
+            <IconSearch />
+            <input className="input" name="q" defaultValue={sp.q ?? ""} placeholder="Başlık, müşteri, ödeyen, telefon veya banka referansı" aria-label="Tahsilat ara" />
+          </div>
+          <button className="btn btn-secondary" type="submit">
+            Ara
+          </button>
+          {sp.q ? (
+            <a className="btn btn-ghost" href={withBase(`/payment-links?durum=${filter}`)}>
+              Temizle
+            </a>
+          ) : null}
+        </form>
         {links.length === 0 ? (
-          <EmptyState title="Tahsilat yok" description="Oluşturduğunuz ödeme bağlantıları burada listelenir." />
+          <EmptyState title="Tahsilat yok" description={sp.q ? `“${sp.q}” için eşleşen tahsilat yok.` : "Oluşturduğunuz ödeme bağlantıları burada listelenir."} />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -209,6 +244,7 @@ export default async function PaymentLinksPage({
                         ) : Number(l.attempts) > 0 ? (
                           <div className="muted text-sm">{l.attempts} deneme</div>
                         ) : null}
+                        {l.status === "pending" ? <div className="muted text-sm">{relativeTime(l.created_at)} gönderildi</div> : null}
                       </td>
                       <td className="text-sm">
                         {l.payer_name ? <div>{l.payer_name}</div> : "—"}
@@ -224,6 +260,11 @@ export default async function PaymentLinksPage({
                       <td>
                         <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                           {l.status === "pending" ? <CopyButton value={url} label="Bağlantıyı kopyala" /> : null}
+                          {l.status === "pending" && waLink(l.customer_phone, l.title, l.amount, url) ? (
+                            <a className="btn btn-secondary btn-xs" href={waLink(l.customer_phone, l.title, l.amount, url)!} target="_blank" rel="noreferrer">
+                              WhatsApp
+                            </a>
+                          ) : null}
                           <a className="btn btn-ghost btn-xs" href={url} target="_blank" rel="noreferrer">
                             Aç
                           </a>
