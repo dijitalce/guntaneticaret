@@ -53,6 +53,7 @@ const OK_MESSAGE: Record<string, string> = {
   cancelled: "Bağlantı iptal edildi; müşteri artık ödeme yapamaz.",
   reopened: "Bağlantı yeniden ödemeye açıldı.",
   deleted: "Tahsilat silindi.",
+  markpaid: "Tahsilat elle ödendi olarak işaretlendi; ödeme bildirimi gönderildi.",
 };
 
 export default async function PaymentLinksPage({
@@ -287,6 +288,36 @@ export default async function PaymentLinksPage({
                             ) : null}
                           </form>
                         </div>
+                        {l.status !== "paid" ? (
+                          <details style={{ marginTop: "0.4rem", textAlign: "left" }}>
+                            <summary className="muted text-sm" style={{ cursor: "pointer", textAlign: "right" }}>
+                              Elle ödendi işaretle
+                            </summary>
+                            <form action={withBase(`/api/payment-links/${l.id}`)} method="post" className="form-stack" style={{ marginTop: "0.5rem", minWidth: 220 }}>
+                              <input type="hidden" name="back" value={back} />
+                              <input type="hidden" name="_action" value="markpaid" />
+                              <div className="field">
+                                <label htmlFor={`mp-method-${l.id}`}>Ödeme şekli</label>
+                                <select className="select" id={`mp-method-${l.id}`} name="method" defaultValue="Havale / EFT">
+                                  <option>Havale / EFT</option>
+                                  <option>Nakit</option>
+                                  <option>Diğer</option>
+                                </select>
+                              </div>
+                              <div className="field">
+                                <label htmlFor={`mp-amount-${l.id}`}>Alınan tutar (₺)</label>
+                                <input className="input" id={`mp-amount-${l.id}`} name="amount" inputMode="decimal" placeholder={formatTry(l.amount)} />
+                              </div>
+                              <div className="field">
+                                <label htmlFor={`mp-note-${l.id}`}>Not (isteğe bağlı)</label>
+                                <input className="input" id={`mp-note-${l.id}`} name="note" maxLength={120} placeholder="Dekont no, açıklama…" />
+                              </div>
+                              <ConfirmButton className="btn btn-primary btn-sm" message="Bu tahsilat ödendi olarak işaretlensin mi? Ödeme müşteriden alınmış olmalı.">
+                                Ödendi olarak işaretle
+                              </ConfirmButton>
+                            </form>
+                          </details>
+                        ) : null}
                       </td>
                     </tr>
                   );

@@ -758,7 +758,8 @@ export async function syncArasShipments(log: (msg: string) => void = () => undef
 
 export async function completeOrder(orderId: string, actor?: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  if (!order || order.status !== ORDER_STATUS.SHIPPED) throw new Error("Sipariş tamamlanamaz.");
+  const completable: string[] = [ORDER_STATUS.PAID, ORDER_STATUS.PREPARING, ORDER_STATUS.SHIPPED];
+  if (!order || !completable.includes(order.status)) throw new Error("Sipariş tamamlanamaz.");
   await db.update(orders).set({ status: ORDER_STATUS.COMPLETED, updatedAt: new Date() }).where(eq(orders.id, orderId));
   await db
     .update(shipments)
@@ -767,6 +768,29 @@ export async function completeOrder(orderId: string, actor?: string) {
   await addOrderEventSafe({ orderId, kind: "shipment", title: "Teslim edildi", actor });
   await notifyOrder(orderId, "order_delivered");
   return order;
+}
+
+/** Yanlışlıkla ilerletilen siparişi bir adım geri alır (tamamlandı → kargoda → hazırlanıyor → ödendi). Stok etkilenmez. */
+export async function revertOrderStatus(orderId: string, actor?: string) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  const back: Record<string, string> = {
+    [ORDER_STATUS.COMPLETED]: ORDER_STATUS.SHIPPED,
+    [ORDER_STATUS.SHIPPED]: ORDER_STATUS.PREPARING,
+    [ORDER_STATUS.PREPARING]: ORDER_STATUS.PAID,
+  };
+  const target = order ? back[order.status] : undefined;
+  if (!order || !target) throw new Error("Sipariş geri alınamaz.");
+  await db.update(orders).set({ status: target, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  if (order.status === ORDER_STATUS.COMPLETED) {
+    await db.update(shipments).set({ status: "shipped", updatedAt: new Date() }).where(eq(shipments.orderId, orderId));
+  }
+  await addOrderEventSafe({
+    orderId,
+    kind: "status",
+    title: `Durum geri alındı: ${orderStatusLabel(order.status)} → ${orderStatusLabel(target)}`,
+    actor,
+  });
+  return target;
 }
 
 export async function getAdminOrder(orderId: string) {

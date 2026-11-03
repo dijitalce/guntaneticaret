@@ -206,6 +206,22 @@ export async function confirmPaymentLink(
   return { link: updated, alreadyPaid };
 }
 
+/** Havale, nakit gibi bankadan geçmeyen tahsilatı elle ödendi yapar; iptal edilmiş bağlantıda da çalışır. */
+export async function markPaymentLinkPaidManually(id: string, input: { method: string; note?: string; amount?: number; actor?: string | null }) {
+  await ensureExtTables();
+  const link = await getPaymentLink(id);
+  if (!link || link.status === PAYMENT_LINK_STATUS.PAID) return null;
+  const amount = input.amount && input.amount > 0 ? input.amount : Number(link.amount);
+  const ref = [`Elle: ${input.method}`, input.note?.trim(), input.actor ? `(${input.actor})` : ""].filter(Boolean).join(" ").slice(0, 191);
+  const res = await exec(sql`update payment_links set status = 'paid', paid_amount = ${amount.toFixed(2)}, paid_installment = null,
+      bank_ref = ${ref}, paid_at = current_timestamp, last_error = null
+    where id = ${id} and status <> 'paid'`);
+  if (res.affectedRows !== 1) return null;
+  const updated = (await getPaymentLink(id))!;
+  notifyPaymentLinkPaid(updated);
+  return updated;
+}
+
 function notifyPaymentLinkPaid(link: PaymentLink) {
   const adminBase = `${(process.env.STOREFRONT_URL ?? "https://guntanotoyedekparca.com").replace(/\/$/, "")}${process.env.ADMIN_BASE_PATH ?? "/yonetim"}`;
   void sendAdminTemplate(

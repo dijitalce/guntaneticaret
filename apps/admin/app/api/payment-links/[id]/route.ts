@@ -1,4 +1,4 @@
-import { cancelPaymentLink, deletePaymentLink, getPaymentLink, reopenPaymentLink } from "@guntan/db";
+import { cancelPaymentLink, deletePaymentLink, getPaymentLink, markPaymentLinkPaidManually, reopenPaymentLink } from "@guntan/db";
 import { writeAudit } from "@guntan/observability";
 import { apiAdminSession, redirectTo, safeNext, text } from "../../../../src/api-helpers";
 
@@ -21,6 +21,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (action === "reopen" && (await reopenPaymentLink(id))) {
     await audit("reopen");
     return redirectTo(request, back, { ok: "reopened" });
+  }
+  if (action === "markpaid") {
+    const methods = ["Havale / EFT", "Nakit", "Diğer"];
+    const method = methods.includes(text(form, "method")) ? text(form, "method") : "Diğer";
+    const raw = text(form, "amount").replace(/\./g, "").replace(",", ".");
+    const amount = raw ? Number(raw) : undefined;
+    if (amount !== undefined && !(amount > 0)) return redirectTo(request, back, { hata: "Geçerli bir tutar girin." });
+    const updated = await markPaymentLinkPaidManually(id, { method, note: text(form, "note").slice(0, 120), amount, actor: session.user.name || session.user.email });
+    if (!updated) return redirectTo(request, back, { hata: "Tahsilat ödendi olarak işaretlenemedi." });
+    await audit("mark_paid");
+    return redirectTo(request, back, { ok: "markpaid" });
   }
   if (action === "delete" && (await deletePaymentLink(id))) {
     await audit("delete");

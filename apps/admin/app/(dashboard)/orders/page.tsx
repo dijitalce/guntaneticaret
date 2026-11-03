@@ -4,7 +4,7 @@ import { db, orders, tagsForOrders, tenants } from "@guntan/db";
 import { orderStatusLabel } from "@guntan/ecommerce";
 import { ConfirmButton } from "@/src/form-fields";
 import { IconBank, IconCard, IconCart, IconCheck, IconDownload, IconSearch, IconTruck, IconWallet } from "@/src/icons";
-import { BulkLabelButton, SelectAllOrders } from "@/src/order-bulk";
+import { BulkLabelButton, BulkStatusButtons, SelectAllOrders } from "@/src/order-bulk";
 import { withBase } from "@/src/paths";
 import { Alert, EmptyState, Kpi, PageHeader, Panel, StatusBadge, formatDate, formatTry, statusTone } from "@/src/ui";
 import { PAYMENTS, PERIODS, orderBaseFilters } from "@/src/order-filters";
@@ -34,6 +34,7 @@ const OK_MESSAGES: Record<string, string> = {
   "1": "Ödeme alındı olarak işaretlendi; müşteriye bilgi gönderildi.",
   prepare: "Sipariş hazırlığa alındı.",
   complete: "Sipariş teslim edildi olarak tamamlandı.",
+  revert: "Sipariş bir önceki duruma alındı.",
 };
 const STALE_MS = 24 * 3600 * 1000;
 
@@ -107,13 +108,14 @@ export default async function OrdersPage({
               <IconDownload />
               CSV indir
             </a>
-            <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank">
+            <form id="bulk-labels" action={withBase("/api/orders/labels")} method="get" target="_blank" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <BulkLabelButton form="bulk-labels" />
+              <BulkStatusButtons form="bulk-labels" next={href({})} />
             </form>
           </>
         }
       />
-      {sp.ok && OK_MESSAGES[sp.ok] ? <Alert tone="ok">{OK_MESSAGES[sp.ok]}</Alert> : null}
+      {sp.ok === "bulk" ? <Alert tone="ok">{sp.mesaj || "Toplu işlem tamamlandı."}</Alert> : sp.ok && OK_MESSAGES[sp.ok] ? <Alert tone="ok">{OK_MESSAGES[sp.ok]}</Alert> : null}
       {sp.hata ? <Alert>{sp.mesaj || "İşlem yapılamadı."}</Alert> : null}
 
       <div className="kpis order-kpis">

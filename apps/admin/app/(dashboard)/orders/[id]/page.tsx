@@ -53,6 +53,7 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   expired: "Süresi doldu",
   cancelled: "İptal",
 };
+const PREVIOUS_STATUS: Record<string, string> = { completed: "shipped", shipped: "preparing", preparing: "paid" };
 const STEPS = [
   { status: "pending_payment", label: "Ödeme bekliyor" },
   { status: "paid", label: "Ödendi" },
@@ -152,7 +153,7 @@ export default async function OrderDetailPage({
         }
       />
 
-      {sp.ok === "1" && <Alert tone="ok">İşlem kaydedildi.</Alert>}
+      {sp.ok === "revert" ? <Alert tone="ok">Sipariş bir önceki duruma alındı.</Alert> : sp.ok === "1" ? <Alert tone="ok">İşlem kaydedildi.</Alert> : null}
       {sp.hata === "1" && <Alert>{sp.mesaj || "Bu işlem mevcut sipariş durumunda yapılamaz."}</Alert>}
 
       <div className="kpis order-kpis">
@@ -212,6 +213,18 @@ export default async function OrderDetailPage({
                     </form>
                   )}
                 </div>
+                {isCard && (
+                  <details className="op-collapse" style={{ marginTop: "0.75rem" }}>
+                    <summary>Ödemeyi elle onayla</summary>
+                    <p>Banka onayı sisteme düşmediği halde tahsilatı sanal POS panelinden doğruladıysanız siparişi elle ödendi yapabilirsiniz.</p>
+                    <form action={withBase(`/api/orders/${order.id}/confirm`)} method="post">
+                      <ConfirmButton className="btn btn-secondary" message="Banka tahsilatını doğruladınız mı? Sipariş ödendi olarak işaretlenir ve stok düşer.">
+                        <IconCheck />
+                        Ödendi olarak işaretle
+                      </ConfirmButton>
+                    </form>
+                  </details>
+                )}
               </div>
             )}
 
@@ -302,9 +315,39 @@ export default async function OrderDetailPage({
               </details>
             )}
 
-            {["completed", "cancelled", "refunded"].includes(order.status) && (
+            {["paid", "preparing"].includes(order.status) && (
+              <details className="op-block op-collapse">
+                <summary>Kargosuz / elden teslim</summary>
+                <p>Ürün müşteriye kargo kaydı açılmadan teslim edildiyse siparişi doğrudan tamamlayabilirsiniz.</p>
+                <form action={withBase(`/api/orders/${order.id}/complete`)} method="post">
+                  <ConfirmButton className="btn btn-secondary" message="Sipariş kargo kaydı olmadan teslim edildi olarak tamamlansın mı? Müşteriye teslim bildirimi gider.">
+                    <IconCheck />
+                    Teslim edildi olarak tamamla
+                  </ConfirmButton>
+                </form>
+              </details>
+            )}
+
+            {["preparing", "shipped", "completed"].includes(order.status) && (
+              <details className="op-block op-collapse">
+                <summary>Yanlışlıkla ilerlettiniz mi?</summary>
+                <p>Sipariş bir önceki duruma alınır ({orderStatusLabel(PREVIOUS_STATUS[order.status] ?? "")}). Stok ve ödeme kaydı değişmez.</p>
+                <form action={withBase(`/api/orders/${order.id}/revert`)} method="post">
+                  <ConfirmButton className="btn btn-secondary" message="Sipariş bir önceki duruma alınsın mı?">
+                    Bir adım geri al
+                  </ConfirmButton>
+                </form>
+              </details>
+            )}
+
+            {["cancelled", "refunded"].includes(order.status) && (
               <div className="op-block">
                 <p style={{ margin: 0 }}>Bu sipariş için yapılacak bir adım yok.</p>
+              </div>
+            )}
+            {order.status === "completed" && (
+              <div className="op-block">
+                <p style={{ margin: 0 }}>Sipariş tamamlandı. İade gerekirse aşağıdaki “İadeler” bölümünden kayıt açın.</p>
               </div>
             )}
           </Panel>
