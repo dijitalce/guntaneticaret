@@ -95,6 +95,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
     ...(server.basbugReady ? ["Başbuğ API çek"] : []),
     "Altay import",
     ...customFeeds.filter((f) => f.isActive).map((f) => `${f.name} (XML kaynağı)`),
+    ...(server.otoIsmail.ready ? ["Oto İsmail senkron"] : []),
     "Başbuğ import",
   ];
   const stateTone = server.running ? "info" : server.interrupted ? "bad" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";

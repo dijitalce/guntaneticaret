@@ -219,6 +219,10 @@ async function main() {
 
     if (altayReady) altayImported = await step("Altay import", () => runScript("cli.ts", { ALTAY_XML_PATH: altayPath }));
     const customImported = await runCustomFeeds();
+    // Oto İsmail marka marka çalışır, süre dolunca durur ve kaldığı yerden devam eder; kendi kilidi ve dedupe'ı vardır.
+    if (!SKIP_FETCH && process.env.OTOISMAIL_USERNAME && process.env.OTOISMAIL_PASSWORD) {
+      await step("Oto İsmail senkron", () => runScript("otoismail-cli.ts", {}));
+    }
     if (basbugReady) {
       // basbug-cli sonunda dedupe + görünürlük derlemesini de yapar.
       basbugImported = await step("Başbuğ import", () => runScript("basbug-cli.ts", { BASBUG_JSON_PATH: basbugPath }));

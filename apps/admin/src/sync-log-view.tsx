@@ -8,6 +8,7 @@ const STAGE_INFO: Record<string, { label: string; hint: string }> = {
   "Altay XML indir": { label: "Altay XML indirme", hint: "Eryaz servisinden güncel ürün, fiyat ve stok dosyası indirilir." },
   "Başbuğ API çek": { label: "Başbuğ verisi çekme", hint: "Başbuğ API'sinden ürün grupları, net fiyat, stok ve döviz kuru çekilir." },
   "Altay import": { label: "Altay ürünlerini içe aktarma", hint: "Değişen ürünler veritabanına yazılır, fiyat dilimleri uygulanır." },
+  "Oto İsmail senkron": { label: "Oto İsmail senkronu", hint: "Markalar sırayla çekilip yazılır; süre dolarsa kaldığı yerden bir sonraki çalışmada devam eder." },
   "Başbuğ import": { label: "Başbuğ ürünlerini içe aktarma", hint: "Değişen ürünler yazılır; ardından en ucuz eşleşme ve görünürlük derlenir." },
   "Dedupe + görünürlük": { label: "Eşleştirme ve görünürlük", hint: "Aynı parçanın en uygun tedarikçisi seçilir, sitelerdeki görünürlük güncellenir." },
 };
