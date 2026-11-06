@@ -28,7 +28,7 @@
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "saxes": "^6.0.0",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "tsx": "^4.19.3"
