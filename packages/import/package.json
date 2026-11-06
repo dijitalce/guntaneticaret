@@ -15,6 +15,8 @@
     "dedupe-cheapest": "tsx src/dedupe-cli.ts",
     "price-tiers": "tsx src/apply-price-tiers-cli.ts",
     "supplier-sync": "tsx src/sync-cli.ts",
+    "otoismail-sync": "tsx src/otoismail-cli.ts",
+    "otoismail-images": "tsx src/otoismail-cli.ts --images",
     "shipment-sync": "tsx src/shipment-sync-cli.ts",
     "altay-image-report": "tsx src/altay-image-report.ts",
     "otoparcasan-images": "tsx src/otoparcasan-images-cli.ts",
