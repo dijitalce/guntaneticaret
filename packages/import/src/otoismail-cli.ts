@@ -60,7 +60,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const SYNC_HOME = syncHomeDir(loadSyncEnv(root));
 const DIR = process.env.OTOISMAIL_DIR || join(SYNC_HOME, "guntan-otoismail");
 const STATE_FILE = join(DIR, "state.json");
-const LOCK_FILE = join(DIR, "run.lock");
 const IMAGE_STATE_DIR = join(SYNC_HOME, "guntan-images");
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_DIR || join(IMAGE_STATE_DIR, "files");
 const IMAGE_BASE = `${(process.env.STOREFRONT_URL || "https://guntanotoyedekparca.com").replace(/\/$/, "")}/urun-gorsel`;
@@ -70,6 +69,8 @@ const UA = "Mozilla/5.0 (compatible; GuntanImageSync/1.0; +https://guntanotoyede
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const flag = (name: string) => process.argv.includes(`--${name}`);
 const MODE_IMAGES = flag("images");
+// Senkron ve görsel çalışması birbirini engellemesin diye ayrı kilit dosyaları.
+const LOCK_FILE = join(DIR, MODE_IMAGES ? "images.lock" : "sync.lock");
 const MAX_MS = Number(process.env.OTOISMAIL_MAX_MINUTES || 14) * 60_000;
 const CYCLE_MS = Number(process.env.OTOISMAIL_CYCLE_HOURS || 24) * 3600_000;
 const IMPORT_OOS = process.env.OTOISMAIL_IMPORT_OUT_OF_STOCK === "1";
