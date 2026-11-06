@@ -29,10 +29,12 @@ const RUN_LABEL: Record<string, string> = {
 const FEED_SOURCE: Record<string, string> = {
   altay: "Eryaz (Altay) servisinden XML olarak indirilir",
   basbug: "Başbuğ API'sinden JSON olarak çekilir",
+  otoismail: "Oto İsmail web servisinden marka marka çekilir (ayrı zamanlanmış görev; görseli olmayan ürünlere görsel de tamamlar)",
 };
 
 function feedSource(name: string, mapping: unknown) {
   if (isCustomFeed(mapping)) return "Panelden eklenen XML adresinden indirilir";
+  if (name.toLowerCase().includes("oto ismail")) return FEED_SOURCE.otoismail;
   const key = name.toLowerCase().includes("başbuğ") || name.toLowerCase().includes("basbug") ? "basbug" : "altay";
   return FEED_SOURCE[key];
 }
@@ -216,6 +218,24 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                     <td>{server.basbugReady ? <StatusBadge tone="ok">Ayarlı</StatusBadge> : <StatusBadge tone="warn">Bilgi yok</StatusBadge>}</td>
                     <td className="mono text-sm">{server.basbug?.exists ? formatBytes(server.basbug.size) : "Henüz indirilmedi"}</td>
                     <td>{server.basbug?.mtime ? formatDate(server.basbug.mtime) : "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Oto İsmail</strong>
+                    </td>
+                    <td>
+                      {server.otoIsmail.ready ? (
+                        <StatusBadge tone="ok">Ayarlı</StatusBadge>
+                      ) : (
+                        <StatusBadge tone="warn">Bilgi yok</StatusBadge>
+                      )}
+                    </td>
+                    <td className="mono text-sm">
+                      {server.otoIsmail.files
+                        ? `${server.otoIsmail.files} marka · ${formatBytes(server.otoIsmail.size)}`
+                        : "Henüz indirilmedi"}
+                    </td>
+                    <td>{server.otoIsmail.lastDoneAt ? formatDate(server.otoIsmail.lastDoneAt) : "—"}</td>
                   </tr>
                   {customFeeds.map((f) => {
                     const file = feedFileInfo(customFeedPath(f.id));

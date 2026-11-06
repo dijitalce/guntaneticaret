@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { chmodSync, existsSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, existsSync, openSync, readdirSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { clearDeadSyncLock, readSyncLock } from "@guntan/import/sync-lock";
 import { dirname, join, resolve } from "node:path";
@@ -53,6 +53,36 @@ export type SyncStatus = {
   pid?: number;
 };
 
+/** Oto İsmail marka marka çalışır; ilerleme state.json ve marka dosyalarından okunur. */
+function readOtoIsmail(keys: string[]) {
+  const dir = process.env.OTOISMAIL_DIR || join(dirname(ENV_FILE), "guntan-otoismail");
+  const ready = ["OTOISMAIL_USERNAME", "OTOISMAIL_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k]));
+  let doneBrands = 0;
+  let cycleStartedAt: number | null = null;
+  let lastDoneAt: Date | null = null;
+  try {
+    const st = JSON.parse(readFileSync(join(dir, "state.json"), "utf8")) as { cycleStartedAt?: number; done?: Record<string, number> };
+    cycleStartedAt = st.cycleStartedAt || null;
+    const times = Object.values(st.done ?? {});
+    doneBrands = times.length;
+    if (times.length) lastDoneAt = new Date(Math.max(...times));
+  } catch {
+    /* henüz çalışmadı */
+  }
+  let files = 0;
+  let size = 0;
+  try {
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".ndjson")) continue;
+      files += 1;
+      size += statSync(join(dir, f)).size;
+    }
+  } catch {
+    /* klasör yok */
+  }
+  return { ready, doneBrands, cycleStartedAt, lastDoneAt, files, size };
+}
+
 export function readServerSync() {
   try {
     persistSyncEnv();
@@ -92,6 +122,7 @@ export function readServerSync() {
     processEnvReady: Object.keys(process.env).some((k) => (k.startsWith("ERYAZ_") || k.startsWith("BASBUG_")) && Boolean(process.env[k])),
     eryazReady: ["ERYAZ_USERNAME", "ERYAZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])) || keys.some((k) => k.startsWith("ERYAZ_")),
     basbugReady: keys.some((k) => k.startsWith("BASBUG_")) || Object.keys(process.env).some((k) => k.startsWith("BASBUG_")),
+    otoIsmail: readOtoIsmail(keys),
     altay: altayPath ? fileInfo(altayPath) : null,
     basbug: basbugPath ? fileInfo(basbugPath) : null,
   };
@@ -149,7 +180,7 @@ export function feedFileInfo(path: string) {
   return fileInfo(path);
 }
 
-const SYNC_ENV_PREFIXES = ["DATABASE_", "ERYAZ_", "BASBUG_", "ARAS_", "ALTAY_", "MEILI_"];
+const SYNC_ENV_PREFIXES = ["DATABASE_", "ERYAZ_", "BASBUG_", "OTOISMAIL_", "ARAS_", "ALTAY_", "MEILI_"];
 const SYNC_ENV_KEYS = ["REDIS_URL", "STOREFRONT_URL", "APP_SECRET", "AUTH_SECRET", "SESSION_SECRET"];
 
 function isSyncEnvKey(key: string) {
@@ -172,7 +203,7 @@ function envLine(key: string, value: string): string | null {
 export function persistSyncEnv(): { written: boolean; path: string } {
   if (process.env.NODE_ENV !== "production" || process.platform !== "linux") return { written: false, path: ENV_FILE };
   const keys = Object.keys(process.env).filter((k) => isSyncEnvKey(k) && process.env[k]);
-  if (!keys.some((k) => k.startsWith("ERYAZ_") || k.startsWith("BASBUG_"))) return { written: false, path: ENV_FILE };
+  if (!keys.some((k) => k.startsWith("ERYAZ_") || k.startsWith("BASBUG_") || k.startsWith("OTOISMAIL_"))) return { written: false, path: ENV_FILE };
   let existing = "";
   try {
     existing = readFileSync(ENV_FILE, "utf8");
