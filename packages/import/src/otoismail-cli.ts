@@ -138,7 +138,11 @@ async function getSupplier() {
 async function getFeedId(supplierId: string) {
   const name = "Oto Ismail web servisi";
   const [feed] = await db.select().from(xmlFeeds).where(eq(xmlFeeds.name, name)).limit(1);
-  if (feed) return feed.id;
+  if (feed) {
+    // Pano "Ürün güncelliği" kartı yalnızca aktif kaynakları listeler.
+    if (!feed.isActive) await db.update(xmlFeeds).set({ isActive: 1 }).where(eq(xmlFeeds.id, feed.id));
+    return feed.id;
+  }
   const id = newId();
   await db.insert(xmlFeeds).values({
     id,
@@ -146,7 +150,7 @@ async function getFeedId(supplierId: string) {
     name,
     url: "http://ws.otoismail.com.tr/api/OISML/GetProducts",
     mapping: { externalId: "NetsisStokId", sku: "Kod", name: "Ad", manufacturer: "Marka", price: "Fiyat1", stock: "StokSayisi" },
-    isActive: 0, // panelin özel XML kaynağı döngüsü bunu çalıştırmasın; bu betik kendi cron'uyla çalışır
+    isActive: 1, // özel XML döngüsü yalnızca "custom" işaretli kaynakları çalıştırır; bu kayıt ona girmez
   });
   return id;
 }
