@@ -19,11 +19,13 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  categories,
   compileVisibility,
   db,
   manufacturers,
   newId,
   pool,
+  productCategories,
   productFitments,
   productImages,
   productOems,
@@ -78,7 +80,9 @@ const timeLeft = () => MAX_MS - (Date.now() - started);
 const log = (m: string) => console.log(`[${new Date().toISOString()}] ${m}`);
 const fileFor = (brand: string) => join(DIR, `${slugify(brand) || "brand"}.ndjson`);
 
-type State = { cycleStartedAt: number; done: Record<string, number> };
+/** Eşleme mantığı (marka/kategori) değişince artırılır; mevcut ürünlerin yeniden yazılması için döngü baştan başlar. */
+const MAPPING_VERSION = 2;
+type State = { cycleStartedAt: number; done: Record<string, number>; mappingVersion?: number };
 function readState(): State {
   try {
     return JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;
@@ -162,6 +166,7 @@ type Ctx = {
   rates: Awaited<ReturnType<typeof resolveFxRates>>;
   existing: Awaited<ReturnType<typeof loadExistingProducts>>;
   mfrCache: Map<string, string>;
+  catCache: Map<string, string>;
   brandCache: Map<string, string>;
   modelCache: Map<string, string>;
   usedSlugs: Set<string>;
@@ -176,6 +181,16 @@ async function ensureMfr(ctx: Ctx, name: string): Promise<string> {
   if (!ex) await db.insert(manufacturers).ignore().values({ id, name, slug });
   const [row] = await db.select({ id: manufacturers.id }).from(manufacturers).where(eq(manufacturers.slug, slug)).limit(1);
   ctx.mfrCache.set(slug, row!.id);
+  return row!.id;
+}
+
+async function ensureCat(ctx: Ctx, name: string): Promise<string> {
+  const path = `otoismail/${slugify(name)}`;
+  const hit = ctx.catCache.get(path);
+  if (hit) return hit;
+  await db.insert(categories).ignore().values({ id: newId(), name, slug: slugify(name), path, sortOrder: 60 });
+  const [row] = await db.select({ id: categories.id }).from(categories).where(eq(categories.path, path)).limit(1);
+  ctx.catCache.set(path, row!.id);
   return row!.id;
 }
 
@@ -257,20 +272,24 @@ async function importBrand(ctx: Ctx, brand: string, path: string) {
       const ids = rows.map((r) => r.id);
       if (ids.length) {
         await db.delete(productOems).where(inArray(productOems.productId, ids));
+        await db.delete(productCategories).where(inArray(productCategories.productId, ids));
         await db.delete(productFitments).where(inArray(productFitments.productId, ids));
       }
       const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
+      const cats: Array<{ productId: string; categoryId: string }> = [];
       const fits = new Map<string, { productId: string; vehicleBrandId: string; vehicleModelId: string }>();
       for (const { raw, mapped } of items) {
         const productId = idByExt.get(mapped.externalId);
         if (!productId) continue;
         for (const n of otoIsmailNumbers(raw)) oems.push({ productId, ...n });
+        if (mapped.category) cats.push({ productId, categoryId: await ensureCat(ctx, mapped.category) });
         for (const f of inferFitments(mapped.name, 8)) {
           const ids2 = await ensureFit(ctx, f.brand, f.model);
           fits.set(`${productId}:${ids2.modelId}`, { productId, vehicleBrandId: ids2.brandId, vehicleModelId: ids2.modelId });
         }
       }
       if (oems.length) await db.insert(productOems).ignore().values(oems);
+      if (cats.length) await db.insert(productCategories).ignore().values(cats);
       if (fits.size) await db.insert(productFitments).ignore().values([...fits.values()]);
       stats.imported += items.length;
     } catch (err) {
@@ -304,9 +323,10 @@ async function runSync() {
   mkdirSync(DIR, { recursive: true });
 
   const state = readState();
-  if (flag("fresh") || !state.cycleStartedAt) {
+  if (flag("fresh") || !state.cycleStartedAt || state.mappingVersion !== MAPPING_VERSION) {
     state.cycleStartedAt = Date.now();
     state.done = {};
+    state.mappingVersion = MAPPING_VERSION;
   }
 
   let brandCodes: string[];
@@ -339,6 +359,7 @@ async function runSync() {
     rates,
     existing: await loadExistingProducts(supplier.id),
     mfrCache: new Map(),
+    catCache: new Map(),
     brandCache: new Map(),
     modelCache: new Map(),
     usedSlugs: new Set(),

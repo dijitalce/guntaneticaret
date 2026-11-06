@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   imageMatchKeys,
   mapOtoIsmailRow,
+  otoIsmailBrand,
+  otoIsmailCategory,
   otoIsmailCost,
   otoIsmailImageUrl,
   otoIsmailPartNumber,
@@ -51,6 +53,14 @@ describe("Oto İsmail eşleme", () => {
     expect(m.stock).toBe(50);
     expect(Number(m.price)).toBeGreaterThan(55.78 * 40 * 1.2);
     expect(mapOtoIsmailRow({ ...row, Fiyat1: { Deger: 0 } })).toBeNull();
+  });
+
+  it("markayı stok kodu önekinden alır, ürün grubunu kategori yapar", () => {
+    const r = { ...row, Marka: "GVA", MarkaFull: "GVA SİLİNDİR KAPAKLARI" };
+    expect(otoIsmailBrand(r)).toBe("GVA");
+    expect(otoIsmailCategory(r)).toBe("SİLİNDİR KAPAKLARI");
+    expect(otoIsmailCategory(row)).toBeUndefined();
+    expect(mapOtoIsmailRow(r, { EUR: 50, USD: 40 }, 20)!.manufacturer).toBe("GVA");
   });
 
   it("görsel adresini kodlar ve eşleme anahtarlarını üretir", () => {

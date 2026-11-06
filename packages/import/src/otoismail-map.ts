@@ -61,8 +61,31 @@ export function otoIsmailStock(row: OtoIsmailRaw): number {
   return Math.max(0, Math.floor(num(row.Plaza) + num(row.Gebze)));
 }
 
+/**
+ * Gerçek marka: stok kodunun marka öneki ("GVA 3511003" → "GVA"). MarkaFull çoğu satırda
+ * "GVA SİLİNDİR KAPAKLARI" gibi marka + ürün grubu geldiği için marka olarak kullanılmaz.
+ */
 export function otoIsmailBrand(row: OtoIsmailRaw): string | undefined {
-  return (row.MarkaFull || row.Marka || "").trim() || undefined;
+  const kod = (row.Kod ?? "").trim();
+  const i = kod.indexOf(" ");
+  const prefix = i > 0 ? kod.slice(0, i).trim() : "";
+  return prefix || (row.Marka ?? "").trim() || (row.MarkaFull ?? "").trim() || undefined;
+}
+
+/** "GVA SİLİNDİR KAPAKLARI" → "SİLİNDİR KAPAKLARI" (marka öneki atılmış ürün grubu). */
+export function otoIsmailCategory(row: OtoIsmailRaw): string | undefined {
+  const brand = otoIsmailBrand(row);
+  let name = (row.MarkaFull ?? "").trim();
+  if (!name) return undefined;
+  for (const prefix of [row.Marka, brand]) {
+    const p = (prefix ?? "").trim();
+    if (p && name.toUpperCase().startsWith(`${p.toUpperCase()} `)) {
+      name = name.slice(p.length + 1).trim();
+      break;
+    }
+  }
+  if (!name || (brand && name.toUpperCase() === brand.toUpperCase())) return undefined;
+  return name;
 }
 
 /** "GVA 3443210" → "3443210" (marka öneki atılır). */
@@ -126,6 +149,7 @@ export function mapOtoIsmailRow(
     sku,
     name: row.Ad?.trim() || sku,
     manufacturer: otoIsmailBrand(row),
+    category: otoIsmailCategory(row),
     price: sellTry.toFixed(2),
     stock: otoIsmailStock(row),
     oem: otoIsmailNumbers(row)[0]?.raw,
@@ -150,7 +174,7 @@ export function brandKey(name: string | undefined): string {
 
 /** Görsel eşleme anahtarı: marka slug + normalize numara. */
 export function imageMatchKeys(row: OtoIsmailRaw): string[] {
-  const brand = brandKey(otoIsmailBrand(row));
-  if (!brand) return [];
-  return otoIsmailNumbers(row).map((n) => `${brand}::${n.normalized}`);
+  const brands = [...new Set([otoIsmailBrand(row), row.Marka?.trim()].map((b) => brandKey(b)).filter(Boolean))];
+  const numbers = otoIsmailNumbers(row);
+  return brands.flatMap((brand) => numbers.map((n) => `${brand}::${n.normalized}`));
 }
