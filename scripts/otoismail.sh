@@ -29,4 +29,17 @@ fi
 export GOMAXPROCS="${GOMAXPROCS:-2}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2}"
 
 cd "$ROOT/packages/import"
-"$NODE" --v8-pool-size=2 --import tsx src/otoismail-cli.ts "$@" >> "$LOG" 2>&1
+# Barındırma süreç/iş parçacığı sınırı Node'u "Aborted (core dumped)" ile düşürebilir (çıkış kodu 134/139);
+# bu durumda bekleyip tek iş parçacığıyla yeniden denenir. Betiğin kendi hataları (çıkış kodu 1) tekrar denenmez.
+for attempt in 1 2 3; do
+  if (( attempt > 1 )); then
+    echo "[$(date -Is)] otoismail çöktü (kod $CODE); ${attempt}. deneme, tek iş parçacığıyla" >> "$LOG"
+    sleep 30
+    export GOMAXPROCS=1 UV_THREADPOOL_SIZE=1
+    POOL=1
+  fi
+  "$NODE" --v8-pool-size="${POOL:-2}" --import tsx src/otoismail-cli.ts "$@" >> "$LOG" 2>&1
+  CODE=$?
+  [[ $CODE -ne 134 && $CODE -ne 139 && $CODE -ne 137 ]] && break
+done
+exit $CODE

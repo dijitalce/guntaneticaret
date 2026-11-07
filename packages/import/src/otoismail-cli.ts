@@ -388,7 +388,8 @@ async function runSync() {
         const t0 = Date.now();
         const rows = await client.products(brand);
         // Boş/şüpheli kısa yanıt mevcut dosyayı ezmesin.
-        if (rows.length === 0 && existsSync(path)) throw new Error("boş yanıt geldi; mevcut dosya korunuyor");
+        // Gerçekten ürünü olmayan (daha önce de boş gelmiş) marka hata sayılmaz.
+        if (rows.length === 0 && existsSync(path) && statSync(path).size > 0) throw new Error("boş yanıt geldi; mevcut dosya korunuyor");
         await writeNdjson(path, rows);
         log(`${brand}: ${rows.length} ürün indirildi (${Math.round((Date.now() - t0) / 1000)} sn)`);
       }

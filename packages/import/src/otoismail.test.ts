@@ -28,8 +28,8 @@ const row = {
 
 describe("Oto İsmail eşleme", () => {
   it("Fiyat3 doluysa kampanyalı fiyatı, değilse Fiyat1'i alır", () => {
-    expect(otoIsmailCost(row)).toEqual({ amount: 55.78, currency: "USD" });
-    expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } })).toEqual({ amount: 40, currency: "USD" });
+    expect(otoIsmailCost(row, 0)).toEqual({ amount: 55.78, currency: "USD" });
+    expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } }, 0)).toEqual({ amount: 40, currency: "USD" });
     expect(otoIsmailCost({ Fiyat1: { Deger: 0 } })).toBeNull();
     expect(otoIsmailCost(row, 25)).toEqual({ amount: 55.78 * 0.75, currency: "USD" });
     // kampanya iskontolu listeden ucuzsa kampanya, değilse iskontolu liste
@@ -40,6 +40,11 @@ describe("Oto İsmail eşleme", () => {
     expect(otoIsmailCost(antifriz, 0)!.amount).toBe(185.71);
     expect(otoIsmailCost(antifriz, 55.8)!.amount).toBeCloseTo(119.66, 1);
     expect(otoIsmailBrandDiscounts("GVA:55.8, TOTAL:59.5").get("GVA")).toBe(55.8);
+    // varsayılan: %50 iskonto
+    expect(otoIsmailCost(antifriz)!.amount).toBe(135.36);
+    process.env.OTOISMAIL_DISCOUNT_PERCENT = "0";
+    expect(otoIsmailCost(antifriz)!.amount).toBe(185.71);
+    delete process.env.OTOISMAIL_DISCOUNT_PERCENT;
   });
 
   it("marka önekini atıp parça no verir", () => {
@@ -69,7 +74,9 @@ describe("Oto İsmail eşleme", () => {
     expect(m.externalId).toBe("84060");
     expect(m.sku).toBe("GVA 3443210");
     expect(m.stock).toBe(50);
-    expect(Number(m.price)).toBeGreaterThan(55.78 * 40 * 1.2);
+    // varsayılan %50 iskonto: 55,78 $ × 0,5 × 40 × 1,2 üstüne marj
+    expect(Number(m.price)).toBeGreaterThan(55.78 * 0.5 * 40 * 1.2);
+    expect(Number(m.price)).toBeLessThan(55.78 * 40 * 1.2);
     expect(mapOtoIsmailRow({ ...row, Fiyat1: { Deger: 0 } })).toBeNull();
   });
 

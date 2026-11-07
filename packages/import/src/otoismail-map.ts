@@ -47,10 +47,15 @@ function currencyCode(symbol: string | null | undefined): string {
   return "TL";
 }
 
-/** Liste fiyatından (Fiyat1) düşülen bayi iskontosu, % (OTOISMAIL_DISCOUNT_PERCENT; varsayılan 0). */
+/** Oto İsmail ile anlaşılan bayi iskontosu (%50). OTOISMAIL_DISCOUNT_PERCENT ile değiştirilir, 0 yazılırsa iskonto uygulanmaz. */
+export const OTOISMAIL_DEFAULT_DISCOUNT = 50;
+
+/** Liste fiyatından (Fiyat1) düşülen bayi iskontosu, %. */
 export function otoIsmailDiscountPercent(): number {
-  const n = Number(process.env.OTOISMAIL_DISCOUNT_PERCENT || 0);
-  return Number.isFinite(n) && n > 0 && n < 100 ? n : 0;
+  const raw = process.env.OTOISMAIL_DISCOUNT_PERCENT;
+  if (raw == null || raw.trim() === "") return OTOISMAIL_DEFAULT_DISCOUNT;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 && n < 100 ? n : OTOISMAIL_DEFAULT_DISCOUNT;
 }
 
 /** Marka bazlı iskonto: OTOISMAIL_BRAND_DISCOUNTS="GVA:55.8,TOTAL:59.5" (genel orandan önceliklidir). */
