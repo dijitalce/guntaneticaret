@@ -30,6 +30,8 @@ describe("Oto İsmail eşleme", () => {
     expect(otoIsmailCost(row)).toEqual({ amount: 55.78, currency: "USD" });
     expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } })).toEqual({ amount: 40, currency: "USD" });
     expect(otoIsmailCost({ Fiyat1: { Deger: 0 } })).toBeNull();
+    expect(otoIsmailCost(row, 25)).toEqual({ amount: 55.78 * 0.75, currency: "USD" });
+    expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } }, 25)).toEqual({ amount: 40, currency: "USD" });
   });
 
   it("marka önekini atıp parça no verir", () => {

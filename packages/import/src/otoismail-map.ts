@@ -47,12 +47,21 @@ function currencyCode(symbol: string | null | undefined): string {
   return "TL";
 }
 
-/** Fiyat3 (kampanyalı) doluysa o, yoksa Fiyat1 (liste). Dönen tutar KDV hariç, para birimi sembolüyle. */
-export function otoIsmailCost(row: OtoIsmailRaw): { amount: number; currency: string } | null {
-  for (const price of [row.Fiyat3, row.Fiyat1]) {
-    const amount = num(price?.Deger);
-    if (amount > 0) return { amount, currency: currencyCode(price?.ParaBirimi) };
-  }
+/** Liste fiyatından (Fiyat1) düşülen bayi iskontosu, % (OTOISMAIL_DISCOUNT_PERCENT; varsayılan 0). */
+export function otoIsmailDiscountPercent(): number {
+  const n = Number(process.env.OTOISMAIL_DISCOUNT_PERCENT || 0);
+  return Number.isFinite(n) && n > 0 && n < 100 ? n : 0;
+}
+
+/**
+ * Fiyat3 (kampanyalı) doluysa o aynen, yoksa Fiyat1 (liste) üzerinden bayi iskontosu düşülür.
+ * Dönen tutar KDV hariç, para birimi sembolüyle.
+ */
+export function otoIsmailCost(row: OtoIsmailRaw, discountPercent = otoIsmailDiscountPercent()): { amount: number; currency: string } | null {
+  const campaign = num(row.Fiyat3?.Deger);
+  if (campaign > 0) return { amount: campaign, currency: currencyCode(row.Fiyat3?.ParaBirimi) };
+  const list = num(row.Fiyat1?.Deger);
+  if (list > 0) return { amount: list * (1 - discountPercent / 100), currency: currencyCode(row.Fiyat1?.ParaBirimi) };
   return null;
 }
 
