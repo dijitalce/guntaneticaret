@@ -83,8 +83,8 @@ const log = (m: string) => console.log(`[${new Date().toISOString()}] ${m}`);
 const fileFor = (brand: string) => join(DIR, `${slugify(brand) || "brand"}.ndjson`);
 
 /** Eşleme mantığı (marka/kategori) değişince artırılır; mevcut ürünlerin yeniden yazılması için döngü baştan başlar. */
-const MAPPING_VERSION = 3;
-type State = { cycleStartedAt: number; done: Record<string, number>; mappingVersion?: number };
+const MAPPING_VERSION = `3|${process.env.OTOISMAIL_DISCOUNT_PERCENT ?? ""}|${process.env.OTOISMAIL_BRAND_DISCOUNTS ?? ""}|${process.env.OTOISMAIL_VAT_RATE ?? ""}|${process.env.OTOISMAIL_ASSUME_IN_STOCK ?? ""}`;
+type State = { cycleStartedAt: number; done: Record<string, number>; mappingVersion?: string | number };
 function readState(): State {
   try {
     return JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;

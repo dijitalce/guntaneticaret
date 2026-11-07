@@ -53,16 +53,33 @@ export function otoIsmailDiscountPercent(): number {
   return Number.isFinite(n) && n > 0 && n < 100 ? n : 0;
 }
 
+/** Marka bazlı iskonto: OTOISMAIL_BRAND_DISCOUNTS="GVA:55.8,TOTAL:59.5" (genel orandan önceliklidir). */
+export function otoIsmailBrandDiscounts(raw = process.env.OTOISMAIL_BRAND_DISCOUNTS): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const part of (raw ?? "").split(",")) {
+    const [brand, pct] = part.split(":").map((s) => s.trim());
+    const n = Number(pct);
+    if (brand && Number.isFinite(n) && n >= 0 && n < 100) map.set(brand.toUpperCase(), n);
+  }
+  return map;
+}
+
 /**
- * Fiyat3 (kampanyalı) doluysa o aynen, yoksa Fiyat1 (liste) üzerinden bayi iskontosu düşülür.
- * Dönen tutar KDV hariç, para birimi sembolüyle.
+ * Maliyet = liste fiyatı (Fiyat1) eksi bayi iskontosu; kampanya fiyatı (Fiyat3) daha düşükse o.
+ * B2B'deki "Net fiyat" API'de gelmediği için iskonto ayardan verilir. Tutar KDV hariç, para birimi sembolüyle.
  */
-export function otoIsmailCost(row: OtoIsmailRaw, discountPercent = otoIsmailDiscountPercent()): { amount: number; currency: string } | null {
-  const campaign = num(row.Fiyat3?.Deger);
-  if (campaign > 0) return { amount: campaign, currency: currencyCode(row.Fiyat3?.ParaBirimi) };
+export function otoIsmailCost(
+  row: OtoIsmailRaw,
+  discountPercent?: number,
+): { amount: number; currency: string } | null {
+  const pct = discountPercent ?? otoIsmailBrandDiscounts().get((otoIsmailBrand(row) ?? "").toUpperCase()) ?? otoIsmailDiscountPercent();
+  const candidates: Array<{ amount: number; currency: string }> = [];
   const list = num(row.Fiyat1?.Deger);
-  if (list > 0) return { amount: list * (1 - discountPercent / 100), currency: currencyCode(row.Fiyat1?.ParaBirimi) };
-  return null;
+  if (list > 0) candidates.push({ amount: list * (1 - pct / 100), currency: currencyCode(row.Fiyat1?.ParaBirimi) });
+  const campaign = num(row.Fiyat3?.Deger);
+  if (campaign > 0) candidates.push({ amount: campaign, currency: currencyCode(row.Fiyat3?.ParaBirimi) });
+  if (!candidates.length) return null;
+  return candidates.reduce((best, c) => (c.amount < best.amount ? c : best));
 }
 
 export function otoIsmailStock(row: OtoIsmailRaw): number {

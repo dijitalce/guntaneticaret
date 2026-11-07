@@ -3,6 +3,7 @@ import {
   imageMatchKeys,
   mapOtoIsmailRow,
   otoIsmailBrand,
+  otoIsmailBrandDiscounts,
   otoIsmailCategory,
   otoIsmailCost,
   otoIsmailImageUrl,
@@ -31,7 +32,14 @@ describe("Oto İsmail eşleme", () => {
     expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } })).toEqual({ amount: 40, currency: "USD" });
     expect(otoIsmailCost({ Fiyat1: { Deger: 0 } })).toBeNull();
     expect(otoIsmailCost(row, 25)).toEqual({ amount: 55.78 * 0.75, currency: "USD" });
+    // kampanya iskontolu listeden ucuzsa kampanya, değilse iskontolu liste
     expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 40 } }, 25)).toEqual({ amount: 40, currency: "USD" });
+    expect(otoIsmailCost({ ...row, Fiyat3: { ParaBirimi: "$", Deger: 50 } }, 25)).toEqual({ amount: 55.78 * 0.75, currency: "USD" });
+    // GVA 9930122: liste 270,72, kampanya 185,71, B2B net 119,69 (≈ %55,8 iskonto)
+    const antifriz = { Kod: "GVA 9930122", Fiyat1: { ParaBirimi: "TL", Deger: 270.72 }, Fiyat3: { ParaBirimi: "TL", Deger: 185.71 } };
+    expect(otoIsmailCost(antifriz, 0)!.amount).toBe(185.71);
+    expect(otoIsmailCost(antifriz, 55.8)!.amount).toBeCloseTo(119.66, 1);
+    expect(otoIsmailBrandDiscounts("GVA:55.8, TOTAL:59.5").get("GVA")).toBe(55.8);
   });
 
   it("marka önekini atıp parça no verir", () => {
