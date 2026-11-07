@@ -12,7 +12,7 @@
  *   OTOISMAIL_VAT_RATE (20), OTOISMAIL_IMAGE_DELAY_MS (200)
  */
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { rm, writeFile, open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -73,7 +73,8 @@ const MODE_IMAGES = flag("images");
 const LOCK_FILE = join(DIR, MODE_IMAGES ? "images.lock" : "sync.lock");
 const MAX_MS = Number(process.env.OTOISMAIL_MAX_MINUTES || 14) * 60_000;
 const CYCLE_MS = Number(process.env.OTOISMAIL_CYCLE_HOURS || 24) * 3600_000;
-const IMPORT_OOS = process.env.OTOISMAIL_IMPORT_OUT_OF_STOCK === "1";
+// Stoğu 0 olanlar da varsayılan olarak stokta gösterilip alınır; OTOISMAIL_ASSUME_IN_STOCK=0 ise stoksuz yeni ürünler atlanır.
+const IMPORT_OOS = process.env.OTOISMAIL_IMPORT_OUT_OF_STOCK === "1" || process.env.OTOISMAIL_ASSUME_IN_STOCK !== "0";
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
 const started = Date.now();
 const timeLeft = () => MAX_MS - (Date.now() - started);
@@ -82,7 +83,7 @@ const log = (m: string) => console.log(`[${new Date().toISOString()}] ${m}`);
 const fileFor = (brand: string) => join(DIR, `${slugify(brand) || "brand"}.ndjson`);
 
 /** Eşleme mantığı (marka/kategori) değişince artırılır; mevcut ürünlerin yeniden yazılması için döngü baştan başlar. */
-const MAPPING_VERSION = 2;
+const MAPPING_VERSION = 3;
 type State = { cycleStartedAt: number; done: Record<string, number>; mappingVersion?: number };
 function readState(): State {
   try {
@@ -221,7 +222,7 @@ async function ensureFit(ctx: Ctx, brand: string, model: string): Promise<{ bran
 }
 
 async function importBrand(ctx: Ctx, brand: string, path: string) {
-  const stats = { total: 0, changed: 0, skippedNew: 0, imported: 0, failed: 0 };
+  const stats = { total: 0, changed: 0, skippedNew: 0, imported: 0, failed: 0, partial: false };
   let batch: Array<{ raw: OtoIsmailRaw; mapped: NonNullable<ReturnType<typeof mapOtoIsmailRow>>; hash: string }> = [];
 
   const flush = async () => {
@@ -300,6 +301,11 @@ async function importBrand(ctx: Ctx, brand: string, path: string) {
   };
 
   for await (const raw of readRows(path)) {
+    // Süre bitmeden bırak; yazılanlar kalır, marka tamamlanmış sayılmaz ve sonraki çalışma kaldığı yerden sürer.
+    if (stats.total % 500 === 0 && timeLeft() < 45_000) {
+      stats.partial = true;
+      break;
+    }
     stats.total += 1;
     const mapped = mapOtoIsmailRow(raw, ctx.rates);
     if (!mapped) continue;
@@ -376,7 +382,9 @@ async function runSync() {
     }
     const path = fileFor(brand);
     try {
-      if (client && !flag("skip-fetch")) {
+      // Yarım kalan marka bu döngüde zaten indirildiyse dosya yeniden indirilmez.
+      const freshFile = existsSync(path) && statSync(path).mtimeMs >= state.cycleStartedAt && !flag("fresh");
+      if (client && !flag("skip-fetch") && !freshFile) {
         const t0 = Date.now();
         const rows = await client.products(brand);
         // Boş/şüpheli kısa yanıt mevcut dosyayı ezmesin.
@@ -394,7 +402,8 @@ async function runSync() {
       totals.imported += s.imported;
       totals.failed += s.failed;
       totals.skippedNew += s.skippedNew;
-      if (s.failed === 0) {
+      if (s.partial) log(`${brand}: süre doldu, bir sonraki çalışmada devam edecek.`);
+      if (s.failed === 0 && !s.partial) {
         state.done[brand] = Date.now();
         writeState(state);
       }

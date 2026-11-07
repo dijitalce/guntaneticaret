@@ -71,6 +71,16 @@ export function otoIsmailStock(row: OtoIsmailRaw): number {
 }
 
 /**
+ * Tedarikçide stoğu 0 olan ürünler de stokta gösterilir (varsayılan 4 adet, Başbuğ ile aynı).
+ * Kapatmak için OTOISMAIL_ASSUME_IN_STOCK=0; adet için OTOISMAIL_ASSUMED_STOCK.
+ */
+export function otoIsmailAssumedStock(): number {
+  if (process.env.OTOISMAIL_ASSUME_IN_STOCK === "0") return 0;
+  const n = Math.floor(Number(process.env.OTOISMAIL_ASSUMED_STOCK || 4));
+  return Number.isFinite(n) && n > 0 ? n : 4;
+}
+
+/**
  * Gerçek marka: stok kodunun marka öneki ("GVA 3511003" → "GVA"). MarkaFull çoğu satırda
  * "GVA SİLİNDİR KAPAKLARI" gibi marka + ürün grubu geldiği için marka olarak kullanılmaz.
  */
@@ -160,7 +170,7 @@ export function mapOtoIsmailRow(
     manufacturer: otoIsmailBrand(row),
     category: otoIsmailCategory(row),
     price: sellTry.toFixed(2),
-    stock: otoIsmailStock(row),
+    stock: otoIsmailStock(row) || otoIsmailAssumedStock(),
     oem: otoIsmailNumbers(row)[0]?.raw,
     barcode: row.Barkod1?.trim() || undefined,
   };

@@ -48,6 +48,14 @@ describe("Oto İsmail eşleme", () => {
     expect(otoIsmailStock({ StokSayisi: 7 })).toBe(7);
   });
 
+  it("stoğu 0 olan ürünü varsayılan stokla gösterir, kapatılabilir", () => {
+    const zero = { ...row, StokSayisi: 0, Plaza: 0, Gebze: 0 };
+    expect(mapOtoIsmailRow(zero, { EUR: 50, USD: 40 }, 20)!.stock).toBe(4);
+    process.env.OTOISMAIL_ASSUME_IN_STOCK = "0";
+    expect(mapOtoIsmailRow(zero, { EUR: 50, USD: 40 }, 20)!.stock).toBe(0);
+    delete process.env.OTOISMAIL_ASSUME_IN_STOCK;
+  });
+
   it("ürünü fiyat ve stokla eşler", () => {
     const m = mapOtoIsmailRow(row, { EUR: 50, USD: 40 }, 20)!;
     expect(m.externalId).toBe("84060");
