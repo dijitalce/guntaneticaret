@@ -38,21 +38,39 @@ async function revenueSince(from: Date) {
 }
 
 const PRODUCT_STATS_TTL_MS = 5 * 60_000;
-let productStatsCache: { at: number; rows: { total: number; active: number; oos: number; fresh24: number }[] } | null = null;
+type ProductCounts = { total: number; active: number; oos: number; fresh24: number };
+type ProductStats = { all: ProductCounts; bySupplier: Map<string, ProductCounts> };
+let productStatsCache: { at: number; stats: ProductStats } | null = null;
 
-/** Tüm ürün tablosunu tarar; özet her açıldığında tekrar saymamak için 5 dk saklanır. */
-async function cachedProductStats() {
-  if (productStatsCache && Date.now() - productStatsCache.at < PRODUCT_STATS_TTL_MS) return productStatsCache.rows;
+/**
+ * Tüm ürün tablosunu tek geçişte tedarikçi bazında sayar (genel toplam bunların toplamıdır);
+ * özet her açıldığında tekrar saymamak için 5 dk saklanır.
+ */
+async function cachedProductStats(): Promise<ProductStats> {
+  if (productStatsCache && Date.now() - productStatsCache.at < PRODUCT_STATS_TTL_MS) return productStatsCache.stats;
   const rows = await db
     .select({
+      supplierId: products.supplierId,
       total: count(),
       active: sql<number>`sum(${products.status} = 'active')`,
       oos: sql<number>`sum(${products.stockStatus} = 'out_of_stock')`,
       fresh24: sql<number>`sum(${products.updatedAt} >= now() - interval 24 hour)`,
     })
-    .from(products);
-  productStatsCache = { at: Date.now(), rows };
-  return rows;
+    .from(products)
+    .groupBy(products.supplierId);
+  const all: ProductCounts = { total: 0, active: 0, oos: 0, fresh24: 0 };
+  const bySupplier = new Map<string, ProductCounts>();
+  for (const r of rows) {
+    const c = { total: Number(r.total ?? 0), active: Number(r.active ?? 0), oos: Number(r.oos ?? 0), fresh24: Number(r.fresh24 ?? 0) };
+    bySupplier.set(r.supplierId, c);
+    all.total += c.total;
+    all.active += c.active;
+    all.oos += c.oos;
+    all.fresh24 += c.fresh24;
+  }
+  const stats = { all, bySupplier };
+  productStatsCache = { at: Date.now(), stats };
+  return stats;
 }
 
 export default async function DashboardPage() {
@@ -76,7 +94,7 @@ export default async function DashboardPage() {
     db.select().from(orders).orderBy(desc(orders.createdAt)).limit(8),
     cachedProductStats(),
     db.select({ n: count() }).from(tenants),
-    db.select({ id: xmlFeeds.id, name: xmlFeeds.name, isActive: xmlFeeds.isActive }).from(xmlFeeds),
+    db.select({ id: xmlFeeds.id, name: xmlFeeds.name, isActive: xmlFeeds.isActive, supplierId: xmlFeeds.supplierId }).from(xmlFeeds),
     db.select().from(xmlImportRuns).orderBy(desc(xmlImportRuns.createdAt)).limit(40),
   ]);
 
@@ -85,7 +103,7 @@ export default async function DashboardPage() {
   const toPrepare = byStatus.paid ?? 0;
   const toShip = byStatus.preparing ?? 0;
   const inTransit = byStatus.shipped ?? 0;
-  const p = productStats[0];
+  const p = productStats.all;
 
   const isSuccess = (s: string) => s === "completed" || s === "completed_with_warnings";
   const feedStatus = feeds
@@ -213,7 +231,7 @@ export default async function DashboardPage() {
                   <tr>
                     <th>Tedarikçi</th>
                     <th>Son başarılı</th>
-                    <th className="num">Ürün</th>
+                    <th className="num">Aktif / toplam</th>
                     <th className="num">Değişen</th>
                     <th className="num">Kaldırılan</th>
                     <th>Durum</th>
@@ -223,6 +241,8 @@ export default async function DashboardPage() {
                   {feedStatus.map(({ feed, latest, lastOk, running, durationMs }) => {
                     const run = lastOk ?? latest!;
                     const failedNow = latest!.status === "failed" && !running;
+                    // Katalogdaki gerçek sayı; son çalışmanın satır sayısı (Oto İsmail'de tek tur) yalnızca alt bilgi.
+                    const counts = productStats.bySupplier.get(feed.supplierId);
                     return (
                       <tr key={feed.id}>
                         <td>
@@ -235,7 +255,12 @@ export default async function DashboardPage() {
                             <span className="sub">{formatDuration(now.getTime() - Date.parse(lastOk.finishedAt))} önce</span>
                           ) : null}
                         </td>
-                        <td className="num">{run.total.toLocaleString("tr-TR")}</td>
+                        <td className="num">
+                          {counts
+                            ? `${counts.active.toLocaleString("tr-TR")} / ${counts.total.toLocaleString("tr-TR")}`
+                            : "—"}
+                          <span className="sub">Son çalışma {run.total.toLocaleString("tr-TR")} satır</span>
+                        </td>
                         <td className="num">
                           {(run.createdCount + run.updatedCount).toLocaleString("tr-TR")}
                           {run.failedCount ? (

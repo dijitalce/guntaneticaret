@@ -147,13 +147,15 @@ export const products = mysqlTable("products", {
 }, (t) => [
   uniqueIndex("products_supplier_external_uidx").on(t.supplierId, t.externalId),
   uniqueIndex("products_slug_uidx").on(t.slug),
-  index("products_status_idx").on(t.status),
+  // products_status_idx ve products_sku_prefix_idx kaldırıldı: status zaten aşağıdaki
+  // bileşik indekslerin başında, sku_prefix ise products_sku_idx'in kopyasıydı (disk tasarrufu).
   index("products_sku_idx").on(t.sku),
   index("products_active_stock_idx").on(t.status, desc(t.stockQty), desc(t.updatedAt)),
   index("products_manufacturer_active_idx").on(t.status, t.manufacturerId),
+  // manufacturer_id FK'si için küçük, tek sütunlu indeks (MySQL FK'yi başka indekse bağlamasın).
+  index("products_manufacturer_id_idx").on(t.manufacturerId),
   index("products_price_active_idx").on(t.status, t.price),
   index("products_name_prefix_idx").on(t.name),
-  index("products_sku_prefix_idx").on(t.sku),
 ]);
 
 export const productImages = mysqlTable("product_images", {
@@ -205,7 +207,7 @@ export const productFitments = mysqlTable("product_fitments", {
     t.vehicleGenerationId,
     t.vehicleEngineId,
   ),
-  index("product_fitments_brand_model_idx").on(t.vehicleBrandId, t.vehicleModelId),
+  // product_fitments_brand_model_idx kaldırıldı: model_product_idx ve brand_product_idx kapsıyor (disk tasarrufu).
   index("product_fitments_brand_product_idx").on(t.vehicleBrandId, t.productId),
   index("product_fitments_model_product_idx").on(t.vehicleModelId, t.productId),
   index("product_fitments_engine_idx").on(t.vehicleEngineId),
