@@ -100,7 +100,9 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
   ];
   const stateTone = server.running ? "info" : server.interrupted ? "bad" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
   const stateLabel = server.running
-    ? "Çalışıyor"
+    ? server.queued
+      ? "Sırada, bir dakika içinde başlayacak"
+      : "Çalışıyor"
     : server.interrupted
       ? "Yarıda kesildi"
       : status?.state === "ok"
@@ -176,7 +178,7 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                   <strong>{stateLabel}</strong>
                   <span className="muted text-sm">
                     {server.running && server.lockSince
-                      ? `${relativeTime(server.lockSince)} başladı`
+                      ? `${relativeTime(server.lockSince)} ${server.queued ? "istendi" : "başladı"}`
                       : status?.finishedAt
                         ? `Son bitiş: ${formatDate(status.finishedAt)} · ${status.trigger?.startsWith("panel") ? "panelden" : "zamanlanmış görev"}`
                         : "Kayıt yok"}

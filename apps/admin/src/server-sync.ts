@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { chmodSync, existsSync, openSync, readdirSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, existsSync, openSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { clearDeadSyncLock, readSyncLock } from "@guntan/import/sync-lock";
 import { dirname, join, resolve } from "node:path";
@@ -8,6 +8,52 @@ const LOG_FILE = process.env.SYNC_LOG_FILE || join(homedir(), "guntan-sync.log")
 const STATUS_FILE = process.env.SYNC_STATUS_FILE || join(homedir(), "guntan-sync-status.json");
 const ENV_FILE = process.env.SYNC_ENV_FILE || join(homedir(), "guntan-sync.env");
 const CLI_REL = "packages/import/src/sync-cli.ts";
+
+/*
+ * Panelden başlatılan senkron web sürecinin altında çalışınca, barındırma site sürecini yeniden
+ * başlattığında (bellek sınırı, boşta kalma, dağıtım) onunla birlikte öldürülüyordu. Bu yüzden panel
+ * senkronu kendisi başlatmaz; ayar dosyasının yanına bir istek bırakır ve dakikada bir çalışan
+ * scripts/sync-queue.sh cron'u isteği alıp senkronu web sürecinden bağımsız başlatır. Aynı cron,
+ * panelde ayarlanan saatlerde zamanlanmış senkronu da çalıştırır (saatler SYNC_HOURS_FILE'a yazılır).
+ */
+const SYNC_DIR = dirname(ENV_FILE);
+const REQUEST_FILE = join(SYNC_DIR, "guntan-sync-request");
+const QUEUE_SEEN_FILE = join(SYNC_DIR, "guntan-sync-queue.seen");
+export const SYNC_HOURS_FILE = join(SYNC_DIR, "guntan-sync-hours");
+/** Kuyruk cron'u bu süre içinde görülmediyse kurulmamış sayılır ve panel senkronu eskisi gibi doğrudan başlatır. */
+const QUEUE_ALIVE_MS = 3 * 60_000;
+/** Bu süreden eski istek, cron durmuş demektir; yok sayılır. */
+const REQUEST_STALE_MS = 10 * 60_000;
+
+function mtimeMs(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+function queueRunnerAlive(): boolean {
+  const seen = mtimeMs(QUEUE_SEEN_FILE);
+  return seen !== null && Date.now() - seen < QUEUE_ALIVE_MS;
+}
+
+function pendingRequestSince(): Date | null {
+  const at = mtimeMs(REQUEST_FILE);
+  return at !== null && Date.now() - at < REQUEST_STALE_MS ? new Date(at) : null;
+}
+
+/** Zamanlanmış senkron saatlerini (Türkiye saati) kuyruk cron'unun okuyacağı dosyaya yazar. */
+export function writeSyncHoursFile(hours: number[]) {
+  if (process.env.NODE_ENV !== "production" || process.platform !== "linux") return;
+  const next = `${hours.join(",")}\n`;
+  try {
+    if (existsSync(SYNC_HOURS_FILE) && readFileSync(SYNC_HOURS_FILE, "utf8") === next) return;
+    writeFileSync(SYNC_HOURS_FILE, next);
+  } catch {
+    /* yazılamazsa cron varsayılan saatleri kullanır */
+  }
+}
 
 export function findRepoRoot(): string | null {
   const starts = [process.cwd(), resolve(process.cwd(), ".."), resolve(process.cwd(), "../..")];
@@ -104,7 +150,10 @@ export function readServerSync() {
     logTail = [];
   }
   const lock = readSyncLock();
-  const running = lock.exists && lock.alive;
+  const queuedSince = pendingRequestSince();
+  const locked = lock.exists && lock.alive;
+  // Sıradaki istek de "çalışıyor" sayılır: buton kapanır, sayfa kendini yeniler.
+  const running = locked || queuedSince !== null;
   // Kilit ölü ama durum dosyası "çalışıyor" diyorsa senkron yarıda kesilmiştir.
   const interrupted = !running && status?.state === "running";
   const keys = envKeys(ENV_FILE);
@@ -116,8 +165,14 @@ export function readServerSync() {
     logTail,
     logFile: LOG_FILE,
     running,
+    queued: !locked && queuedSince !== null,
+    queueRunner: queueRunnerAlive(),
     interrupted,
-    lockSince: running ? (status?.state === "running" && status.startedAt ? new Date(status.startedAt) : lock.since) : null,
+    lockSince: locked
+      ? status?.state === "running" && status.startedAt
+        ? new Date(status.startedAt)
+        : lock.since
+      : queuedSince,
     envFile: { path: ENV_FILE, exists: existsSync(ENV_FILE) },
     processEnvReady: Object.keys(process.env).some((k) => (k.startsWith("ERYAZ_") || k.startsWith("BASBUG_")) && Boolean(process.env[k])),
     eryazReady: ["ERYAZ_USERNAME", "ERYAZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])) || keys.some((k) => k.startsWith("ERYAZ_")),
@@ -142,14 +197,30 @@ function ensureEsbuild(root: string, logFd: number): string {
 // Barındırma süreç sınırı iş parçacıklarını da sayar; esbuild (Go) varsayılan olarak çekirdek sayısı kadar açar.
 const LOW_THREAD_ENV = { GOMAXPROCS: "2", UV_THREADPOOL_SIZE: "2" };
 
-/** Senkronu sunucuda ayrı bir süreç olarak başlatır; panel isteği beklemez. */
+/**
+ * Senkronu sunucuda başlatır; panel isteği beklemez. Kuyruk cron'u çalışıyorsa yalnızca istek bırakır
+ * (senkron en geç bir dakika içinde web sürecinden bağımsız başlar); yoksa eskisi gibi doğrudan başlatır.
+ */
 export function startServerSync(opts: { trigger: string; skipFetch?: boolean; feedId?: string }): { ok: true } | { ok: false; error: string } {
   const root = findRepoRoot();
   if (!root) return { ok: false, error: "Senkron betiği sunucuda bulunamadı." };
   const state = readServerSync();
   if (state.running) return { ok: false, error: "Şu anda çalışan bir senkron var." };
+  if (opts.feedId && !/^[\w-]+$/.test(opts.feedId)) return { ok: false, error: "Geçersiz XML kaynağı." };
   clearDeadSyncLock();
-  const args = [join(root, CLI_REL), ...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
+  const flags = [...(opts.skipFetch ? ["--skip-fetch"] : []), ...(opts.feedId ? [`--feed=${opts.feedId}`] : [])];
+  if (queueRunnerAlive()) {
+    try {
+      // Satır 1: tetikleyen, satır 2: sync-cli bayrakları. Cron dosyayı alırken siler.
+      const trigger = opts.trigger.replace(/[\r\n]/g, " ");
+      writeFileSync(`${REQUEST_FILE}.tmp`, `${trigger}\n${flags.join(" ")}\n`);
+      renameSync(`${REQUEST_FILE}.tmp`, REQUEST_FILE);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  const args = [join(root, CLI_REL), ...flags];
   try {
     const out = openSync(LOG_FILE, "a");
     const env: NodeJS.ProcessEnv = { ...process.env, SYNC_TRIGGER: opts.trigger, NODE_ENV: "production", SYNC_STDOUT_IS_LOG: "1", SYNC_LOG_FILE: LOG_FILE, SYNC_STATUS_FILE: STATUS_FILE, ...LOW_THREAD_ENV };
