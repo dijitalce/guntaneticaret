@@ -1080,15 +1080,19 @@ export type CatalogSearchHit = {
 };
 
 /*
- * Yedek SQL araması (Meilisearch yokken) 1,4 milyon üründe LIKE taraması yapar; tek sorgu 20 sn'yi
- * bulabiliyor ve canlı aramada her tuş yeni bir sorgu başlatıyordu (tarayıcının iptali sunucudaki
- * sorguyu durdurmaz). Veritabanını korumak için: sonuçlar önbelleğe alınır, aynı arama aynı anda bir kez
- * çalışır, aynı anda en fazla SEARCH_MAX_CONCURRENT arama çalışır ve her sorgu en fazla
- * SEARCH_TIMEOUT_S saniye sürer (MariaDB sorguyu kendisi durdurur; sonuç boş döner).
+ * Site araması (Meilisearch yokken). Önce product_search tablosundaki tam metin indeksiyle birkaç yüz
+ * aday ürün bulunur, sonra yalnızca bunlar sıralanır (ensure-product-search.ts). Tablo/indeks yoksa
+ * (ör. yerel ortam) eski LIKE taramasına düşülür; o tarama 1,4 milyon üründe 10-25 sn sürebildiği için
+ * daha uzun süre sınırı alır. Her durumda: sonuçlar önbelleğe alınır, aynı arama aynı anda bir kez
+ * çalışır, aynı anda en fazla SEARCH_MAX_CONCURRENT arama çalışır ve sorgular süre sınırını aşarsa
+ * MariaDB onları durdurur (sonuç boş döner). Canlı aramada tarayıcının iptali sunucudaki sorguyu durdurmaz.
  */
-// Geçici: LIKE taraması 4 sn'ye sığmayıp boş sonuç dönüyordu; tam metin indeksine geçilene kadar 20 sn.
-const SEARCH_TIMEOUT_S = 20;
+const SEARCH_TIMEOUT_S = 4;
+const LEGACY_SEARCH_TIMEOUT_S = 20;
+const SEARCH_CANDIDATES = 300;
 const SEARCH_MAX_CONCURRENT = 2;
+/** Tam metin tablosu yoksa her aramada yeniden denenmez. */
+let fulltextUnavailableUntil = 0;
 const SEARCH_CACHE_TTL_MS = 10 * 60_000;
 const SEARCH_CACHE_MAX = 500;
 const searchCache = new Map<string, { at: number; hits: CatalogSearchHit[] }>();
@@ -1118,23 +1122,27 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8): Pro
   const pending = searchInFlight.get(key);
   if (pending) return pending;
   const run = withSearchSlot(async () => {
+    if (Date.now() >= fulltextUnavailableUntil) {
+      try {
+        return await searchCatalogFulltext(tenantId, query, limit);
+      } catch (err) {
+        const errno = (err as { errno?: number }).errno;
+        // 1969: süre doldu. 1146: tablo yok, 1191: tam metin indeksi yok → eski taramaya düş.
+        if (errno === 1969) return [];
+        if (errno !== 1146 && errno !== 1191) throw err;
+        fulltextUnavailableUntil = Date.now() + 10 * 60_000;
+      }
+    }
     const built = await buildCatalogSearch(tenantId, query, limit);
     if (!built) return [];
     const { sql: text, params } = built.select.toSQL();
-    let rows: unknown[][];
     try {
-      const [result] = await pool.query({
-        sql: `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_S} FOR ${text}`,
-        values: params,
-        rowsAsArray: true,
-      });
-      rows = result as unknown[][];
+      return mapSearchRows(await timedRows(text, params, LEGACY_SEARCH_TIMEOUT_S));
     } catch (err) {
-      // 1969: ER_STATEMENT_TIMEOUT. Süre dolan arama boş döner; önbelleğe yazılır ki aynı arama tekrar yüklenmesin.
+      // Süre dolan arama boş döner; önbelleğe yazılır ki aynı arama tekrar yüklenmesin.
       if ((err as { errno?: number }).errno !== 1969) throw err;
-      rows = [];
+      return [];
     }
-    return rows.map((r) => Object.fromEntries(SEARCH_FIELDS.map((f, i) => [f, r[i] ?? null])) as CatalogSearchHit);
   })
     .then((hits) => {
       if (searchCache.size >= SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value!);
@@ -1144,6 +1152,133 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8): Pro
     .finally(() => searchInFlight.delete(key));
   searchInFlight.set(key, run);
   return run;
+}
+
+/** Sorguyu süre sınırıyla çalıştırır (MariaDB süre dolunca durdurur, errno 1969); satırlar dizi olarak döner. */
+async function timedRows(text: string, params: unknown[], seconds: number): Promise<unknown[][]> {
+  const [rows] = await pool.query({ sql: `SET STATEMENT max_statement_time=${seconds} FOR ${text}`, values: params, rowsAsArray: true });
+  return rows as unknown[][];
+}
+
+function mapSearchRows(rows: unknown[][]): CatalogSearchHit[] {
+  return rows.map((r) => Object.fromEntries(SEARCH_FIELDS.map((f, i) => [f, r[i] ?? null])) as CatalogSearchHit);
+}
+
+/** Tam metin araması için kelime: yalnızca harf/rakam (boolean mod işleçleri temizlenir). */
+function fulltextTerm(token: string): string {
+  return stemToken(token).replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/** "+fren* +balata*": tüm kelimeler kelime başında geçmeli. InnoDB 3 harften kısa kelimeleri indekslemez. */
+function fulltextExpr(terms: string[]): string {
+  return terms
+    .filter((t) => t.length >= 3)
+    .map((t) => `+${t}*`)
+    .join(" ");
+}
+
+async function searchCatalogFulltext(tenantId: string, query: string, limit: number): Promise<CatalogSearchHit[]> {
+  const tokens = searchTokens(query);
+  if (tokens.length === 0) return [];
+  const terms = tokens.map(fulltextTerm);
+  const [seesAll, entityIds] = await Promise.all([tenantSeesAllCatalog(tenantId), Promise.all(tokens.map((t) => entityIdsForToken(t)))]);
+  const ids = new Set<string>();
+  const collect = async (text: string, params: unknown[]) => {
+    for (const [id] of await timedRows(text, params, SEARCH_TIMEOUT_S)) ids.add(String(id));
+  };
+  const jobs: Promise<void>[] = [];
+
+  // 1. Ad/stok kodunda tüm kelimeler.
+  const all = fulltextExpr(terms);
+  if (all) {
+    jobs.push(
+      collect(
+        `select product_id from product_search where match(name, sku) against(? in boolean mode) limit ${SEARCH_CANDIDATES}`,
+        [all],
+      ),
+    );
+  }
+
+  // 2. Araç modeli/markası geçiyorsa ("octavia amortisör"): o araca uyumlu ürünlerde kalan kelimeler.
+  //    Başbuğ adlarında model, Altay adlarında marka yazmadığı için ad tek başına yetmiyor.
+  const vehicleTokens = new Set(entityIds.flatMap((e, i) => (e.modelIds.length || e.brandIds.length ? [i] : [])));
+  const vehicleIdx = entityIds.findIndex((e) => e.modelIds.length > 0);
+  const pick = vehicleIdx >= 0 ? vehicleIdx : entityIds.findIndex((e) => e.brandIds.length > 0);
+  if (pick >= 0) {
+    const e = entityIds[pick]!;
+    const byModel = e.modelIds.length > 0;
+    const vehicleIds = byModel ? e.modelIds : e.brandIds;
+    const rest = fulltextExpr(terms.filter((_, i) => !vehicleTokens.has(i)));
+    jobs.push(
+      collect(
+        `select pf.product_id from product_fitments pf
+           ${rest ? "join product_search ps on ps.product_id = pf.product_id" : ""}
+          where pf.${byModel ? "vehicle_model_id" : "vehicle_brand_id"} in (${vehicleIds.map(() => "?").join(", ")})
+            ${rest ? "and match(ps.name, ps.sku) against(? in boolean mode)" : ""}
+          limit ${SEARCH_CANDIDATES}`,
+        rest ? [...vehicleIds, rest] : vehicleIds,
+      ),
+    );
+  }
+
+  // 3. Üretici geçiyorsa ("bosch filtre"): o üreticinin ürünlerinde kalan kelimeler.
+  const mfrIdx = entityIds.findIndex((e) => e.mfrIds.length > 0);
+  if (mfrIdx >= 0) {
+    const mfrIds = entityIds[mfrIdx]!.mfrIds;
+    const rest = fulltextExpr(terms.filter((_, i) => i !== mfrIdx && !vehicleTokens.has(i)));
+    jobs.push(
+      collect(
+        `select p.id from products p
+           ${rest ? "join product_search ps on ps.product_id = p.id" : ""}
+          where p.status = 'active' and p.manufacturer_id in (${mfrIds.map(() => "?").join(", ")})
+            ${rest ? "and match(ps.name, ps.sku) against(? in boolean mode)" : ""}
+          limit ${SEARCH_CANDIDATES}`,
+        rest ? [...mfrIds, rest] : mfrIds,
+      ),
+    );
+  }
+
+  // 4. Stok kodu (tam veya başı) ve OEM numarası.
+  if (!query.includes(" ") && query.length >= 3) {
+    jobs.push(collect(`select id from products where sku = ? or sku like ? limit 50`, [query, `${escapeLike(query)}%`]));
+  }
+  const oemNorm = query.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  if (oemNorm.length >= 5) {
+    jobs.push(collect(`select product_id from product_oems where normalized = ? limit 50`, [oemNorm]));
+  }
+
+  await Promise.all(jobs);
+  if (ids.size === 0) return [];
+
+  // Adaylar eskisi gibi sıralanır: adla eşleşen kelime sayısı, fiyat, stok, ad.
+  const namePatterns = tokens.map((t) => `%${stemToken(t)}%`);
+  const nameHits = sql.join(
+    namePatterns.map((p) => sql`(case when ${products.name} like ${p} then 1 else 0 end)`),
+    sql` + `,
+  );
+  // Tam metin indeksinin almadığı kısa kelimeler (ör. "on", "12") aday kümesinde süzülür.
+  const shortConds = tokens
+    .filter((_, i) => terms[i]!.length < 3)
+    .map((t) => or(sql`${products.name} like ${`%${t}%`}`, sql`${products.sku} like ${`%${t}%`}`)!);
+  const select = db
+    .select({
+      id: products.id,
+      title: products.name,
+      slug: products.slug,
+      sku: products.sku,
+      price: products.price,
+      manufacturer: manufacturers.name,
+      manufacturerLogo: manufacturerLogoSql,
+      stockStatus: products.stockStatus,
+      thumbnail: sql<string | null>`(select pi.url from product_images pi where pi.product_id = ${products.id} order by pi.sort_order limit 1)`,
+    })
+    .from(products)
+    .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+    .where(and(inArray(products.id, [...ids]), sellableSql(), tenantVisibleSql(tenantId, seesAll), ...shortConds))
+    .orderBy(sql`(${nameHits}) desc`, asc(products.price), desc(products.stockQty), asc(products.name))
+    .limit(limit);
+  const { sql: text, params } = select.toSQL();
+  return mapSearchRows(await timedRows(text, params, SEARCH_TIMEOUT_S));
 }
 
 async function buildCatalogSearch(tenantId: string, query: string, limit: number) {
