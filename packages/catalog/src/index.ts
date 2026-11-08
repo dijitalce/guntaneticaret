@@ -1086,7 +1086,8 @@ export type CatalogSearchHit = {
  * çalışır, aynı anda en fazla SEARCH_MAX_CONCURRENT arama çalışır ve her sorgu en fazla
  * SEARCH_TIMEOUT_S saniye sürer (MariaDB sorguyu kendisi durdurur; sonuç boş döner).
  */
-const SEARCH_TIMEOUT_S = 4;
+// Geçici: LIKE taraması 4 sn'ye sığmayıp boş sonuç dönüyordu; tam metin indeksine geçilene kadar 20 sn.
+const SEARCH_TIMEOUT_S = 20;
 const SEARCH_MAX_CONCURRENT = 2;
 const SEARCH_CACHE_TTL_MS = 10 * 60_000;
 const SEARCH_CACHE_MAX = 500;
