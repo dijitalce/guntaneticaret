@@ -22,6 +22,7 @@ import { open, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSyncEnv, syncHomeDir } from "./sync-env";
+import { nextImageChunk, writeImageCursor } from "./image-cursor";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const SYNC_HOME = syncHomeDir(loadSyncEnv(root));
@@ -43,6 +44,9 @@ const CRAWL_FILE = join(STATE_DIR, "parcatedarik-crawl.json");
 const DONE_FILE = join(STATE_DIR, "parcatedarik-done.tsv");
 const GENERIC_FILE = join(STATE_DIR, "parcatedarik-generic.txt");
 const LOCK_FILE = join(STATE_DIR, "parcatedarik.lock");
+const CURSOR_FILE = join(STATE_DIR, "parcatedarik-cursor");
+/** Tarama bitmemişken eşleşme az olur; bir çalışmanın tüm kataloğu boşuna dolaşmaması için parça sayısı sınırlı. */
+const MAX_CHUNKS_PER_RUN = 10;
 const LOG_FILE = join(STATE_DIR, "parcatedarik.log");
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_DIR || join(STATE_DIR, "files");
 const IMAGE_BASE = `${(process.env.STOREFRONT_URL || "https://guntanotoyedekparca.com").replace(/\/$/, "")}/urun-gorsel`;
@@ -171,7 +175,8 @@ function assertNotThrottled(res: Response) {
 
 type Candidate = { id: string; sku: string; name: string; manufacturer: string | null };
 
-async function loadProductsWithoutImage(): Promise<Candidate[]> {
+/** Görseli olmayan ürünlerden id'si `afterId`'den büyük sonraki parça (bkz. image-cursor.ts). */
+async function loadProductsWithoutImage(afterId: string, limit: number): Promise<Candidate[]> {
   const { pool } = await import("@guntan/db");
   const [rows] = await pool.query(
     `select p.id, p.sku, p.name, m.name manufacturer
@@ -179,10 +184,27 @@ async function loadProductsWithoutImage(): Promise<Candidate[]> {
        left join manufacturers m on m.id = p.manufacturer_id
       where p.status = 'active'
         and p.manufacturer_id is not null
+        and p.id > ?
         and not exists (select 1 from product_images pi where pi.product_id = p.id)
-      order by p.stock_qty desc`,
+      order by p.id
+      limit ?`,
+    [afterId, limit],
   );
   return rows as Candidate[];
+}
+
+/** Tarama planı için üretici başına görselsiz ürün sayısı (tüm ürünleri belleğe almadan). */
+async function loadManufacturerWeights(): Promise<{ manufacturer: string; n: number }[]> {
+  const { pool } = await import("@guntan/db");
+  const [rows] = await pool.query(
+    `select m.name manufacturer, count(*) n
+       from products p
+       join manufacturers m on m.id = p.manufacturer_id
+      where p.status = 'active'
+        and not exists (select 1 from product_images pi where pi.product_id = p.id)
+      group by m.name`,
+  );
+  return (rows as { manufacturer: string; n: number | string }[]).map((r) => ({ manufacturer: r.manufacturer, n: Number(r.n) }));
 }
 
 function readTsv(file: string): string[][] {
@@ -212,16 +234,16 @@ function writeCrawlState(state: CrawlState) {
 }
 
 /** Görselsiz ürünü en çok olan üreticilerin marka sayfaları önce taranır. */
-async function planCrawl(products: Candidate[]): Promise<CrawlState> {
+async function planCrawl(weights: { manufacturer: string; n: number }[]): Promise<CrawlState> {
   const res = await siteFetch(`${SITE}/sitemap-1.xml`);
   assertNotThrottled(res);
   const known = new Set(
     [...(await res.text()).matchAll(/<loc>https:\/\/parcatedarik\.com\/([^<\/]+)<\/loc>/g)].map((m) => m[1]!),
   );
   const weight = new Map<string, number>();
-  for (const p of products) {
-    for (const slug of brandSlugs(p.manufacturer!)) {
-      if (known.has(slug)) weight.set(slug, (weight.get(slug) ?? 0) + 1);
+  for (const { manufacturer, n } of weights) {
+    for (const slug of brandSlugs(manufacturer)) {
+      if (known.has(slug)) weight.set(slug, (weight.get(slug) ?? 0) + n);
     }
   }
   const slugs = [...weight].sort((a, b) => b[1] - a[1]).map(([s]) => s);
@@ -466,11 +488,9 @@ async function main() {
     return;
   }
   try {
-    const products = (await loadProductsWithoutImage()).filter((p) => p.manufacturer);
-
     let state = readCrawlState();
     if (RECRAWL || !state || (state.finishedAt && Date.now() - state.finishedAt > RECRAWL_AFTER_MS)) {
-      state = await planCrawl(products);
+      state = await planCrawl(await loadManufacturerWeights());
       writeFileSync(INDEX_FILE, "");
       writeCrawlState(state);
     }
@@ -479,51 +499,67 @@ async function main() {
     const ledger = readLedger(doneRows);
     const done = new Map<string, { status: string; at: number }>();
     for (const [id, status, at] of doneRows) done.set(id!, { status: status!, at: Number(at) });
-    const pending = (matches: Map<string, unknown>) =>
-      products.filter((p) => {
-        if (!matches.has(p.id)) return false;
-        const prev = done.get(p.id);
-        if (!prev) return true;
-        return prev.status === "error" && Date.now() - prev.at > ERROR_RETRY_MS;
-      });
+    const isPending = (id: string) => {
+      const prev = done.get(id);
+      if (!prev) return true;
+      return prev.status === "error" && Date.now() - prev.at > ERROR_RETRY_MS;
+    };
 
-    let matches = buildMatches(products);
-    if (REPORT) {
-      report(products, matches);
-      return;
-    }
-    let queue = pending(matches);
-
-    // Tarama bitmediyse sıradaki indirmeler çalışmanın yarısını, tarama kalan yarısını kullanır.
-    if (!state.finishedAt) {
-      const crawlBudget = queue.length > 0 ? Math.floor(timeLeft() / 2) : timeLeft();
-      const finished = await crawl(state, crawlBudget);
+    // Tarama bitmediyse çalışmanın yarısı taramaya, kalan yarısı indirmeye ayrılır.
+    if (!state.finishedAt && !REPORT) {
+      const finished = await crawl(state, Math.floor(timeLeft() / 2));
       const pagesDone = Object.values(state.progress).reduce((s, p) => s + Math.max(0, p.next - 1), 0);
       const pagesTotal = Object.values(state.progress).reduce((s, p) => s + p.pages, 0);
       log(
         `Tarama: ${finished ? "tamamlandı" : "sürüyor"}, ${Object.keys(state.progress).length}/${state.slugs.length} marka, ${pagesDone}/${pagesTotal}+ sayfa.`,
       );
-      matches = buildMatches(products);
-      queue = pending(matches);
     }
-    log(`Sırada ${queue.length} ürün (eşleşen ${matches.size}, işlenmiş ${done.size}).`);
 
+    // Görselsiz ürünler parça parça (id sırasıyla) işlenir; bellekte yalnızca bir parça tutulur.
     const stats = { ok: 0, noimage: 0, generic: 0, error: 0 };
-    for (const p of queue) {
-      if (stats.ok + stats.noimage + stats.generic + stats.error >= LIMIT || timeLeft() < 60_000) break;
-      let result: { status: "ok" | "noimage" | "generic" | "error"; hash?: string };
-      try {
-        result = await processProduct(p, matches.get(p.id)!.image, ledger);
-      } catch (err) {
-        if (err instanceof StopRun) {
-          log(err.message);
+    let stopped = false;
+    let wraps = 0;
+    for (let chunkNo = 0; chunkNo < MAX_CHUNKS_PER_RUN && !stopped && timeLeft() > 2 * 60_000; chunkNo++) {
+      if (stats.ok + stats.noimage + stats.generic + stats.error >= LIMIT) break;
+      const { rows, wrapped } = await nextImageChunk(CURSOR_FILE, loadProductsWithoutImage);
+      if ((wrapped && ++wraps > 1) || rows.length === 0) break;
+      const chunkEnd = rows[rows.length - 1]!.id;
+      const products = rows.filter((p) => p.manufacturer);
+      const matches = buildMatches(products);
+      if (REPORT) {
+        report(products, matches);
+        return;
+      }
+      const queue = products.filter((p) => matches.has(p.id) && isPending(p.id));
+      log(`Parça (${rows.length} ürün): eşleşen ${matches.size}, sırada ${queue.length}.`);
+
+      let lastHandled: string | null = null;
+      let finishedChunk = true;
+      for (const p of queue) {
+        if (stats.ok + stats.noimage + stats.generic + stats.error >= LIMIT || timeLeft() < 60_000) {
+          finishedChunk = false;
           break;
         }
-        result = { status: "error" };
-        log(`${p.sku}: ${err instanceof Error ? err.message : err}`);
+        let result: { status: "ok" | "noimage" | "generic" | "error"; hash?: string };
+        try {
+          result = await processProduct(p, matches.get(p.id)!.image, ledger);
+        } catch (err) {
+          if (err instanceof StopRun) {
+            log(err.message);
+            stopped = true;
+            finishedChunk = false;
+            break;
+          }
+          result = { status: "error" };
+          log(`${p.sku}: ${err instanceof Error ? err.message : err}`);
+        }
+        stats[result.status] += 1;
+        appendFileSync(DONE_FILE, `${p.id}\t${result.status}\t${Date.now()}\t${result.hash ?? ""}\n`);
+        lastHandled = p.id;
       }
-      stats[result.status] += 1;
-      appendFileSync(DONE_FILE, `${p.id}\t${result.status}\t${Date.now()}\t${result.hash ?? ""}\n`);
+      // Parça bittiyse sonuna, yarıda kaldıysa son işlenen ürüne ilerlenir.
+      if (finishedChunk) writeImageCursor(CURSOR_FILE, chunkEnd);
+      else if (lastHandled) writeImageCursor(CURSOR_FILE, lastHandled);
     }
     log(
       `Bitti: ${stats.ok} görsel eklendi, ${stats.generic} afiş görseli atlandı, ${stats.noimage} üründe görsel yok, ${stats.error} hata.`,

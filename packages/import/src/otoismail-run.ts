@@ -47,6 +47,7 @@ import { runDedupeCheapest } from "./dedupe-cheapest";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { loadSyncEnv, syncHomeDir } from "./sync-env";
 import { OtoIsmailClient, otoIsmailConfigFromEnv, writeNdjson } from "./otoismail-fetch";
+import { nextImageChunk, writeImageCursor } from "./image-cursor";
 import {
   OTOISMAIL_SUPPLIER_CODE,
   imageMatchKeys,
@@ -64,6 +65,7 @@ const IMAGE_STATE_DIR = join(SYNC_HOME, "guntan-images");
 const IMAGE_DIR = process.env.PRODUCT_IMAGE_DIR || join(IMAGE_STATE_DIR, "files");
 const IMAGE_BASE = `${(process.env.STOREFRONT_URL || "https://guntanotoyedekparca.com").replace(/\/$/, "")}/urun-gorsel`;
 const IMAGE_DONE_FILE = join(IMAGE_STATE_DIR, "otoismail-done.tsv");
+const IMAGE_CURSOR_FILE = join(IMAGE_STATE_DIR, "otoismail-cursor");
 const UA = "Mozilla/5.0 (compatible; GuntanImageSync/1.0; +https://guntanotoyedekparca.com)";
 
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -477,87 +479,120 @@ async function runImages() {
     }
   }
 
-  // Görseli olmayan aktif ürünler: anahtar = üretici slug + normalize numara (OEM'ler + sku parçaları)
-  const [rows] = await pool.query(
-    `select p.id, p.sku, p.name, m.slug mslug,
-            (select group_concat(o.normalized separator ',') from product_oems o where o.product_id = p.id) oems
-       from products p
-       join manufacturers m on m.id = p.manufacturer_id
-      where p.status = 'active'
-        and not exists (select 1 from product_images pi where pi.product_id = p.id)
-      order by p.stock_qty desc`,
-  );
+  // Görseli olmayan aktif ürünler parça parça (id sırasıyla) işlenir; bkz. image-cursor.ts.
+  // Anahtar = üretici slug + normalize numara (OEM'ler + sku parçaları).
   type Cand = { id: string; sku: string; name: string; mslug: string; oems: string | null };
-  const index = new Map<string, Cand[]>();
-  let candidateCount = 0;
-  for (const c of rows as Cand[]) {
-    if (done.has(c.id)) continue;
-    candidateCount += 1;
-    const keys = new Set([...skuPartCandidates(c.sku), ...(c.oems ? c.oems.split(",").filter((s) => s.length >= 5) : [])]);
-    for (const k of keys) {
-      const key = `${c.mslug}::${k}`;
-      const list = index.get(key);
-      if (list) list.push(c);
-      else index.set(key, [c]);
-    }
-  }
-  log(`Görseli olmayan ${candidateCount} ürün aranıyor (anahtar: ${index.size}).`);
-  if (candidateCount === 0) return;
-
-  // Oto İsmail dosyalarını tara; eşleşen ürün başına ilk görsel adresi alınır.
-  const matches = new Map<string, { cand: Cand; url: string }>();
-  for (const file of existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".ndjson")) : []) {
-    for await (const raw of readRows(join(DIR, file))) {
-      const url = otoIsmailImageUrl(raw);
-      if (!url) continue;
-      for (const key of imageMatchKeys(raw)) {
-        const hit = index.get(key);
-        if (!hit) continue;
-        for (const cand of hit) if (!matches.has(cand.id)) matches.set(cand.id, { cand, url });
-      }
-    }
-  }
-  log(`${matches.size} üründe Oto İsmail görseli bulundu.`);
-  if (matches.size === 0) {
-    log("Hiç eşleşme yok. Dosyalar indirilmemiş olabilir (önce senkron çalıştırın).");
+  const loadChunk = async (afterId: string, chunk: number) => {
+    const [rows] = await pool.query(
+      `select p.id, p.sku, p.name, m.slug mslug,
+              (select group_concat(o.normalized separator ',') from product_oems o where o.product_id = p.id) oems
+         from products p
+         join manufacturers m on m.id = p.manufacturer_id
+        where p.status = 'active'
+          and p.id > ?
+          and not exists (select 1 from product_images pi where pi.product_id = p.id)
+        order by p.id
+        limit ?`,
+      [afterId, chunk],
+    );
+    return rows as Cand[];
+  };
+  const files = existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".ndjson")) : [];
+  if (files.length === 0) {
+    log("Oto İsmail dosyaları yok (önce senkron çalıştırın).");
+    return;
   }
 
   const stats = { ok: 0, noimage: 0, error: 0 };
   let handled = 0;
-  for (const { cand, url } of matches.values()) {
-    if (handled >= limit || timeLeft() < 60_000) break;
-    handled += 1;
-    let status: "ok" | "noimage" | "error" = "noimage";
-    try {
-      const res = await fetch(url, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(30_000) });
-      if (res.ok) {
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (isImage(buf)) {
-          const shard = createHash("md5").update(cand.id).digest("hex").slice(0, 2);
-          const file = `${slugify(cand.sku) || cand.id}.webp`;
-          mkdirSync(join(IMAGE_DIR, shard), { recursive: true });
-          await writeFile(join(IMAGE_DIR, shard, file), await toWebp(buf));
-          await db.insert(productImages).values({
-            id: newId(),
-            productId: cand.id,
-            s3Key: `urun-gorsel/${shard}/${file}`,
-            url: `${IMAGE_BASE}/${shard}/${file}`,
-            alt: cand.name.slice(0, 255),
-            sortOrder: 0,
-          });
-          status = "ok";
+  let stopped = false;
+  let wraps = 0;
+  // Her parça Oto İsmail dosyalarını (~500 MB) bir kez tarar; tek çalışma tüm kataloğu dolaşmasın.
+  for (let chunkNo = 0; chunkNo < 10 && !stopped && handled < limit && timeLeft() > 3 * 60_000; chunkNo++) {
+    const { rows, wrapped } = await nextImageChunk(IMAGE_CURSOR_FILE, loadChunk);
+    if (wrapped && ++wraps > 1) break;
+    if (rows.length === 0) break;
+    const chunkEnd = rows[rows.length - 1]!.id;
+
+    const index = new Map<string, Cand[]>();
+    for (const c of rows) {
+      if (done.has(c.id)) continue;
+      const keys = new Set([...skuPartCandidates(c.sku), ...(c.oems ? c.oems.split(",").filter((s) => s.length >= 5) : [])]);
+      for (const k of keys) {
+        const key = `${c.mslug}::${k}`;
+        const list = index.get(key);
+        if (list) list.push(c);
+        else index.set(key, [c]);
+      }
+    }
+    if (index.size === 0) {
+      writeImageCursor(IMAGE_CURSOR_FILE, chunkEnd);
+      continue;
+    }
+
+    // Oto İsmail dosyalarını tara; eşleşen ürün başına ilk görsel adresi alınır.
+    const found = new Map<string, { cand: Cand; url: string }>();
+    for (const file of files) {
+      for await (const raw of readRows(join(DIR, file))) {
+        const url = otoIsmailImageUrl(raw);
+        if (!url) continue;
+        for (const key of imageMatchKeys(raw)) {
+          const hit = index.get(key);
+          if (!hit) continue;
+          for (const cand of hit) if (!found.has(cand.id)) found.set(cand.id, { cand, url });
         }
-      } else if (res.status >= 500 || res.status === 429 || res.status === 403) {
-        log(`Görsel sunucusu ${res.status} döndü; çalışma durduruluyor.`);
+      }
+    }
+    // İmleç id sırasıyla ilerlediği için eşleşmeler de id sırasıyla işlenir.
+    const matches = [...found.values()].sort((a, b) => (a.cand.id < b.cand.id ? -1 : 1));
+    log(`Parça (${rows.length} ürün, ${chunkEnd.slice(0, 8)}…'e kadar): ${matches.length} üründe Oto İsmail görseli bulundu.`);
+
+    let lastHandled: string | null = null;
+    let finishedChunk = true;
+    for (const { cand, url } of matches) {
+      if (handled >= limit || timeLeft() < 60_000) {
+        finishedChunk = false;
         break;
       }
-    } catch (err) {
-      status = "error";
-      log(`${cand.sku}: ${err instanceof Error ? err.message : err}`);
+      handled += 1;
+      let status: "ok" | "noimage" | "error" = "noimage";
+      try {
+        const res = await fetch(url, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(30_000) });
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          if (isImage(buf)) {
+            const shard = createHash("md5").update(cand.id).digest("hex").slice(0, 2);
+            const file = `${slugify(cand.sku) || cand.id}.webp`;
+            mkdirSync(join(IMAGE_DIR, shard), { recursive: true });
+            await writeFile(join(IMAGE_DIR, shard, file), await toWebp(buf));
+            await db.insert(productImages).values({
+              id: newId(),
+              productId: cand.id,
+              s3Key: `urun-gorsel/${shard}/${file}`,
+              url: `${IMAGE_BASE}/${shard}/${file}`,
+              alt: cand.name.slice(0, 255),
+              sortOrder: 0,
+            });
+            status = "ok";
+          }
+        } else if (res.status >= 500 || res.status === 429 || res.status === 403) {
+          log(`Görsel sunucusu ${res.status} döndü; çalışma durduruluyor.`);
+          stopped = true;
+          finishedChunk = false;
+          break;
+        }
+      } catch (err) {
+        status = "error";
+        log(`${cand.sku}: ${err instanceof Error ? err.message : err}`);
+      }
+      stats[status] += 1;
+      writeFileSync(IMAGE_DONE_FILE, `${cand.id}\t${status}\t${Date.now()}\n`, { flag: "a" });
+      lastHandled = cand.id;
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     }
-    stats[status] += 1;
-    writeFileSync(IMAGE_DONE_FILE, `${cand.id}\t${status}\t${Date.now()}\n`, { flag: "a" });
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    // Parça bittiyse sonuna, yarıda kaldıysa son işlenen ürüne ilerlenir (eşleşmeyenler atlanmış olur).
+    if (finishedChunk) writeImageCursor(IMAGE_CURSOR_FILE, chunkEnd);
+    else if (lastHandled) writeImageCursor(IMAGE_CURSOR_FILE, lastHandled);
   }
   log(`Görsel: ${stats.ok} eklendi, ${stats.noimage} görselsiz/bozuk, ${stats.error} hata.`);
 }
