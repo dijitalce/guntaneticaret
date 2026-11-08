@@ -39,7 +39,8 @@ export function SearchBox({ quickLinks = [] }: { quickLinks?: QuickLink[] }) {
 
   useEffect(() => {
     setActive(-1);
-    if (term.length < 2) {
+    // Canlı öneri 3 harften başlar ve yazmaya ara verince istenir: iptal edilen istek sunucudaki aramayı durdurmaz.
+    if (term.trim().length < 3) {
       setHits([]);
       setResultTerm(term);
       return;
@@ -57,7 +58,7 @@ export function SearchBox({ quickLinks = [] }: { quickLinks?: QuickLink[] }) {
           setHits([]);
           setResultTerm(term);
         });
-    }, 180);
+    }, 350);
     return () => {
       clearTimeout(t);
       ctrl.abort();

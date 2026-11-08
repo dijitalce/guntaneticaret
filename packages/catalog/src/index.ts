@@ -5,6 +5,7 @@ import {
   compileVisibility,
   db,
   manufacturers,
+  pool,
   productCategories,
   productFitments,
   productImages,
@@ -1066,11 +1067,87 @@ async function entityIdsForToken(token: string) {
   };
 }
 
-export async function searchCatalog(tenantId: string, q: string, limit = 8) {
-  const query = q.trim();
-  if (query.length < 2) return [];
+export type CatalogSearchHit = {
+  id: string;
+  title: string;
+  slug: string;
+  sku: string;
+  price: string;
+  manufacturer: string | null;
+  manufacturerLogo: string | null;
+  stockStatus: string;
+  thumbnail: string | null;
+};
+
+/*
+ * Yedek SQL araması (Meilisearch yokken) 1,4 milyon üründe LIKE taraması yapar; tek sorgu 20 sn'yi
+ * bulabiliyor ve canlı aramada her tuş yeni bir sorgu başlatıyordu (tarayıcının iptali sunucudaki
+ * sorguyu durdurmaz). Veritabanını korumak için: sonuçlar önbelleğe alınır, aynı arama aynı anda bir kez
+ * çalışır, aynı anda en fazla SEARCH_MAX_CONCURRENT arama çalışır ve her sorgu en fazla
+ * SEARCH_TIMEOUT_S saniye sürer (MariaDB sorguyu kendisi durdurur; sonuç boş döner).
+ */
+const SEARCH_TIMEOUT_S = 4;
+const SEARCH_MAX_CONCURRENT = 2;
+const SEARCH_CACHE_TTL_MS = 10 * 60_000;
+const SEARCH_CACHE_MAX = 500;
+const searchCache = new Map<string, { at: number; hits: CatalogSearchHit[] }>();
+const searchInFlight = new Map<string, Promise<CatalogSearchHit[]>>();
+let searchRunning = 0;
+const searchWaiters: Array<() => void> = [];
+
+async function withSearchSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (searchRunning >= SEARCH_MAX_CONCURRENT) await new Promise<void>((resolve) => searchWaiters.push(resolve));
+  searchRunning += 1;
+  try {
+    return await fn();
+  } finally {
+    searchRunning -= 1;
+    searchWaiters.shift()?.();
+  }
+}
+
+const SEARCH_FIELDS = ["id", "title", "slug", "sku", "price", "manufacturer", "manufacturerLogo", "stockStatus", "thumbnail"] as const;
+
+export async function searchCatalog(tenantId: string, q: string, limit = 8): Promise<CatalogSearchHit[]> {
+  const query = q.trim().replace(/\s+/g, " ");
+  if (query.length < 2 || searchTokens(query).length === 0) return [];
+  const key = `${tenantId}|${limit}|${query.toLocaleLowerCase("tr-TR")}`;
+  const cached = searchCache.get(key);
+  if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) return cached.hits;
+  const pending = searchInFlight.get(key);
+  if (pending) return pending;
+  const run = withSearchSlot(async () => {
+    const built = await buildCatalogSearch(tenantId, query, limit);
+    if (!built) return [];
+    const { sql: text, params } = built.select.toSQL();
+    let rows: unknown[][];
+    try {
+      const [result] = await pool.query({
+        sql: `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_S} FOR ${text}`,
+        values: params,
+        rowsAsArray: true,
+      });
+      rows = result as unknown[][];
+    } catch (err) {
+      // 1969: ER_STATEMENT_TIMEOUT. Süre dolan arama boş döner; önbelleğe yazılır ki aynı arama tekrar yüklenmesin.
+      if ((err as { errno?: number }).errno !== 1969) throw err;
+      rows = [];
+    }
+    return rows.map((r) => Object.fromEntries(SEARCH_FIELDS.map((f, i) => [f, r[i] ?? null])) as CatalogSearchHit);
+  })
+    .then((hits) => {
+      if (searchCache.size >= SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value!);
+      searchCache.set(key, { at: Date.now(), hits });
+      return hits;
+    })
+    .finally(() => searchInFlight.delete(key));
+  searchInFlight.set(key, run);
+  return run;
+}
+
+async function buildCatalogSearch(tenantId: string, query: string, limit: number) {
   const tokens = searchTokens(query);
-  if (tokens.length === 0) return [];
+  if (tokens.length === 0) return null;
 
   const [seesAll, entityIds] = await Promise.all([
     tenantSeesAllCatalog(tenantId),
@@ -1115,7 +1192,8 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
     sql` + `,
   );
 
-  return db
+  // Sütun sırası SEARCH_FIELDS ile aynı olmalı (sonuç satırları dizi olarak okunur).
+  const select = db
     .select({
       id: products.id,
       title: products.name,
@@ -1143,4 +1221,6 @@ export async function searchCatalog(tenantId: string, q: string, limit = 8) {
       asc(products.name),
     )
     .limit(limit);
+  // Drizzle sorgusu "thenable"dır: async fonksiyondan doğrudan dönerse çalıştırılır; bu yüzden nesne içinde dönülür.
+  return { select };
 }
