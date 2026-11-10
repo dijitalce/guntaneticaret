@@ -29,6 +29,7 @@ import {
   type BasbugRaw,
 } from "./basbug-map";
 import { runDedupeCheapest } from "./dedupe-cheapest";
+import { syncProductChildren } from "./child-rows";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { toStoredTiers } from "./price-tiers";
 import { resolveFxRates, type FxRates } from "./fx";
@@ -278,11 +279,6 @@ async function main() {
         );
 
       const productIds = inserted.map((r) => r.id);
-      if (productIds.length) {
-        await db.delete(productOems).where(inArray(productOems.productId, productIds));
-        await db.delete(productCategories).where(inArray(productCategories.productId, productIds));
-        await db.delete(productFitments).where(inArray(productFitments.productId, productIds));
-      }
 
       const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
       const cats: Array<{ productId: string; categoryId: string }> = [];
@@ -309,9 +305,8 @@ async function main() {
           });
         }
       }
-      if (oems.length) await db.insert(productOems).ignore().values(oems);
-      if (cats.length) await db.insert(productCategories).ignore().values(cats);
-      if (fits.length) await db.insert(productFitments).ignore().values(fits);
+      // Yalnızca fark yazılır (bkz. child-rows.ts); fiyat/stok değişiminde bu tablolara dokunulmaz.
+      await syncProductChildren(productIds, { oems, cats, fits });
       created += inserted.length;
       if (i === 0) console.log(`First batch OK, inserted=${inserted.length}`);
     } catch (err) {

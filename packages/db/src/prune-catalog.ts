@@ -1,4 +1,4 @@
-import { and, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { PRODUCT_STATUS } from "@guntan/types";
 import { db, pool } from "./client";
 import { products } from "./schema";
@@ -28,6 +28,10 @@ export async function pruneUnusedCatalog(options: { vacuumFull?: boolean } = {})
       and (description = name or length(description) = 0)
   `);
 
+  // Yalnızca tedarikçi listesinden çıkmış ürünler silinir. "inactive" ürünler (en ucuz tedarikçi
+  // seçiminde geride kalan kopyalar, elle pasife alınanlar) listede durduğu için silinmez: silinince
+  // bir sonraki senkron onları yeni id'lerle uyumluluk/OEM satırlarıyla birlikte yeniden yaratıyor,
+  // her gün yüz binlerce ürün silinip yazıldığı için veritabanı şişip kotayı aşıyordu.
   let inactiveProductsDeleted = 0;
   for (;;) {
     const doomed = await db
@@ -35,7 +39,7 @@ export async function pruneUnusedCatalog(options: { vacuumFull?: boolean } = {})
       .from(products)
       .where(
         and(
-          inArray(products.status, [PRODUCT_STATUS.INACTIVE, PRODUCT_STATUS.MISSING_FROM_FEED]),
+          eq(products.status, PRODUCT_STATUS.MISSING_FROM_FEED),
           sql`not exists (select 1 from order_items oi where oi.product_id = ${products.id})`,
           sql`not exists (select 1 from cart_items ci where ci.product_id = ${products.id})`,
         ),
@@ -63,8 +67,11 @@ export async function pruneUnusedCatalog(options: { vacuumFull?: boolean } = {})
     where created_at < date_sub(now(), interval 30 day)
   `);
 
+  // OPTIMIZE tabloyu yeniden yazar ve geçici olarak bir kopyası kadar yer kaplar (en büyük tablolarda
+  // 2-3 GB). Kotaya yakın veritabanında her senkronda çalışınca ölçüm anında sınır aşılmış görünüyordu;
+  // yalnızca elle istenince (VACUUM_FULL=1) çalışır.
   let vacuumed = false;
-  const optimizeTables = [
+  const optimizeTables = vacuumFull ? [
     "products",
     "product_fitments",
     "product_oems",
@@ -73,12 +80,12 @@ export async function pruneUnusedCatalog(options: { vacuumFull?: boolean } = {})
     "tenant_catalog_index",
     "xml_import_row_errors",
     "audit_logs",
-  ];
+  ] : [];
   try {
     for (const table of optimizeTables) {
       await pool.query(`optimize table \`${table}\``);
     }
-    vacuumed = true;
+    vacuumed = optimizeTables.length > 0;
   } catch (err) {
     console.warn("OPTIMIZE TABLE skipped:", err instanceof Error ? err.message : err);
   }

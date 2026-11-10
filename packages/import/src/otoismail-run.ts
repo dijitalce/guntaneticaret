@@ -48,6 +48,7 @@ import { useStoredPriceTiers } from "./price-tier-store";
 import { loadSyncEnv, syncHomeDir } from "./sync-env";
 import { OtoIsmailClient, otoIsmailConfigFromEnv, writeNdjson } from "./otoismail-fetch";
 import { nextImageChunk, writeImageCursor } from "./image-cursor";
+import { syncProductChildren } from "./child-rows";
 import {
   OTOISMAIL_SUPPLIER_CODE,
   imageMatchKeys,
@@ -274,11 +275,6 @@ async function importBrand(ctx: Ctx, brand: string, path: string) {
         .where(and(eq(products.supplierId, ctx.supplierId), inArray(products.externalId, items.map((i) => i.mapped.externalId))));
       const idByExt = new Map(rows.map((r) => [r.externalId, r.id]));
       const ids = rows.map((r) => r.id);
-      if (ids.length) {
-        await db.delete(productOems).where(inArray(productOems.productId, ids));
-        await db.delete(productCategories).where(inArray(productCategories.productId, ids));
-        await db.delete(productFitments).where(inArray(productFitments.productId, ids));
-      }
       const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
       const cats: Array<{ productId: string; categoryId: string }> = [];
       const fits = new Map<string, { productId: string; vehicleBrandId: string; vehicleModelId: string }>();
@@ -292,9 +288,8 @@ async function importBrand(ctx: Ctx, brand: string, path: string) {
           fits.set(`${productId}:${ids2.modelId}`, { productId, vehicleBrandId: ids2.brandId, vehicleModelId: ids2.modelId });
         }
       }
-      if (oems.length) await db.insert(productOems).ignore().values(oems);
-      if (cats.length) await db.insert(productCategories).ignore().values(cats);
-      if (fits.size) await db.insert(productFitments).ignore().values([...fits.values()]);
+      // Yalnızca fark yazılır (bkz. child-rows.ts); fiyat/stok değişiminde bu tablolara dokunulmaz.
+      await syncProductChildren(ids, { oems, cats, fits: [...fits.values()] });
       stats.imported += items.length;
     } catch (err) {
       stats.failed += items.length;

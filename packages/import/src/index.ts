@@ -24,6 +24,7 @@ import {
 import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type XmlFieldMapping } from "@guntan/types";
 import { addVat, applyMarginToAmount, applyMarginToPrice, vatRateFromEnv } from "./price-tiers";
 import { useStoredPriceTiers } from "./price-tier-store";
+import { syncProductChildren } from "./child-rows";
 
 export {
   DEFAULT_PRICE_TIERS,
@@ -309,35 +310,29 @@ async function processBatch(supplierId: string, batch: MappedProduct[], stats: I
         stats.created += 1;
       }
 
-      if (row.oem) {
-        await db.delete(productOems).where(eq(productOems.productId, productId));
-        await db.insert(productOems).values({
-          productId,
-          raw: row.oem,
-          normalized: normalizeOem(row.oem),
-        });
-      }
-
+      // Yalnızca fark yazılır (bkz. child-rows.ts): değişmeyen OEM/kategori/uyumluluk satırlarına dokunulmaz.
+      const children: Parameters<typeof syncProductChildren>[1] = {};
+      if (row.oem) children.oems = [{ productId, raw: row.oem, normalized: normalizeOem(row.oem) }];
       if (row.category) {
         const cat = await upsertCategory(row.category);
-        await db.delete(productCategories).where(eq(productCategories.productId, productId));
-        await db.insert(productCategories).values({ productId, categoryId: cat.id });
+        children.cats = [{ productId, categoryId: cat.id }];
       }
-
       if (row.vehicleBrand && row.vehicleModel) {
         const brand = await upsertBrand(row.vehicleBrand);
         const model = await upsertModel(brand.id, row.vehicleModel);
         const gen = row.vehicleGeneration ? await upsertGeneration(model.id, row.vehicleGeneration) : null;
         const engine = gen && row.vehicleEngine ? await upsertEngine(gen.id, row.vehicleEngine) : null;
-        await db.delete(productFitments).where(eq(productFitments.productId, productId));
-        await db.insert(productFitments).values({
-          productId,
-          vehicleBrandId: brand.id,
-          vehicleModelId: model.id,
-          vehicleGenerationId: gen?.id ?? null,
-          vehicleEngineId: engine?.id ?? null,
-        });
+        children.fits = [
+          {
+            productId,
+            vehicleBrandId: brand.id,
+            vehicleModelId: model.id,
+            vehicleGenerationId: gen?.id ?? null,
+            vehicleEngineId: engine?.id ?? null,
+          },
+        ];
       }
+      await syncProductChildren([productId], children);
     } catch (err) {
       stats.failed += 1;
       await db.insert(xmlImportRowErrors).values({

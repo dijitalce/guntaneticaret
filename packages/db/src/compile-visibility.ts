@@ -21,7 +21,6 @@ export async function compileVisibility(db: Database, tenantId?: string) {
     : await db.select().from(tenants);
 
   for (const tenant of tenantRows) {
-    await db.delete(tenantCatalogIndex).where(eq(tenantCatalogIndex.tenantId, tenant.id));
     await db.delete(tenantVisibleBrands).where(eq(tenantVisibleBrands.tenantId, tenant.id));
 
     const rules = await db
@@ -63,6 +62,7 @@ export async function compileVisibility(db: Database, tenantId?: string) {
     // ALL-mode tenants already see every active product. Materializing that
     // as tenant_catalog_index duplicates the whole catalog (hundreds of MB).
     if (tenant.visibilityMode === VISIBILITY_MODE.ALL) {
+      await db.delete(tenantCatalogIndex).where(eq(tenantCatalogIndex.tenantId, tenant.id));
       continue;
     }
 
@@ -135,14 +135,26 @@ export async function compileVisibility(db: Database, tenantId?: string) {
       }
     }
 
-    const ids = [...visibleIds];
-    if (ids.length > 0) {
-      const chunk = 500;
-      for (let i = 0; i < ids.length; i += chunk) {
-        await db.insert(tenantCatalogIndex).values(
-          ids.slice(i, i + chunk).map((productId) => ({ tenantId: tenant.id, productId })),
-        );
-      }
+    // Yalnızca fark yazılır: indeksi her senkronda silip baştan yazmak (yüz binlerce satır)
+    // tabloyu parçalayıp veritabanını şişiriyordu.
+    const existingRows = await db
+      .select({ productId: tenantCatalogIndex.productId })
+      .from(tenantCatalogIndex)
+      .where(eq(tenantCatalogIndex.tenantId, tenant.id));
+    const existing = new Set(existingRows.map((r) => r.productId));
+    const remove = [...existing].filter((id) => !visibleIds.has(id));
+    const add = [...visibleIds].filter((id) => !existing.has(id));
+    const chunk = 500;
+    for (let i = 0; i < remove.length; i += chunk) {
+      await db
+        .delete(tenantCatalogIndex)
+        .where(and(eq(tenantCatalogIndex.tenantId, tenant.id), inArray(tenantCatalogIndex.productId, remove.slice(i, i + chunk))));
+    }
+    for (let i = 0; i < add.length; i += chunk) {
+      await db
+        .insert(tenantCatalogIndex)
+        .ignore()
+        .values(add.slice(i, i + chunk).map((productId) => ({ tenantId: tenant.id, productId })));
     }
   }
 }
