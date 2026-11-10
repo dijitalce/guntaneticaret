@@ -1,5 +1,5 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { compileVisibility, db, manufacturers, productOems, products, suppliers } from "@guntan/db";
+import { inArray } from "drizzle-orm";
+import { compileVisibility, db, pool, products } from "@guntan/db";
 import { PRODUCT_STATUS } from "@guntan/types";
 
 export type DedupeCandidate = {
@@ -76,45 +76,54 @@ export function pickCheapestWinners(candidates: DedupeCandidate[]): DedupeDecisi
 }
 
 export async function runDedupeCheapest(options: { compile?: boolean } = {}) {
-  const rows = await db
-    .select({
-      id: products.id,
-      price: products.price,
-      stockQty: products.stockQty,
-      status: products.status,
-      supplierCode: suppliers.code,
-      normalizedOem: productOems.normalized,
-      manufacturerSlug: manufacturers.slug,
-    })
-    .from(products)
-    .innerJoin(suppliers, eq(products.supplierId, suppliers.id))
-    .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-    .innerJoin(productOems, eq(productOems.productId, products.id))
-    .where(
-      and(
-        inArray(products.status, [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.INACTIVE]),
-        sql`length(${productOems.normalized}) >= 5`,
-      ),
-    );
+  // Gruplama veritabanında yapılır: yalnızca birden fazla ürün içeren (OEM, üretici) grupları belleğe
+  // gelir. Önceden 2 milyon OEM satırının tamamı belleğe alınıyor, süreç barındırmanın bellek sınırına
+  // takılıp öldürülüyordu ("basbug-cli.ts çıkış kodu null").
+  const [rows] = await pool.query({
+    sql: `with dup as (
+            select po.normalized, p.manufacturer_id
+              from product_oems po
+              join products p on p.id = po.product_id
+             where p.status in (?, ?) and length(po.normalized) >= 5 and p.manufacturer_id is not null
+             group by po.normalized, p.manufacturer_id
+            having count(distinct p.id) > 1
+          )
+          select p.id, p.price, p.stock_qty, p.status, s.code, po.normalized, m.slug
+            from dup
+            join product_oems po on po.normalized = dup.normalized
+            join products p on p.id = po.product_id and p.manufacturer_id = dup.manufacturer_id
+            join suppliers s on s.id = p.supplier_id
+            join manufacturers m on m.id = p.manufacturer_id
+           where p.status in (?, ?)`,
+    values: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.INACTIVE, PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.INACTIVE],
+    rowsAsArray: true,
+  });
 
-  const candidates: DedupeCandidate[] = rows.map((r) => ({
-    id: r.id,
-    price: Number(r.price),
-    inStock: r.stockQty > 0,
-    supplierCode: r.supplierCode,
-    normalizedOem: r.normalizedOem,
-    manufacturerSlug: r.manufacturerSlug,
-  }));
+  const statusById = new Map<string, string>();
+  const candidates: DedupeCandidate[] = (rows as unknown[][]).map(([id, price, stockQty, status, supplierCode, normalizedOem, manufacturerSlug]) => {
+    statusById.set(String(id), String(status));
+    return {
+      id: String(id),
+      price: Number(price),
+      inStock: Number(stockQty) > 0,
+      supplierCode: String(supplierCode),
+      normalizedOem: String(normalizedOem),
+      manufacturerSlug: String(manufacturerSlug),
+    };
+  });
 
   const decision = pickCheapestWinners(candidates);
 
+  // Yalnızca durumu gerçekten değişen ürünler yazılır (gereksiz güncelleme indeksleri şişirir).
+  const toDeactivate = decision.deactivateIds.filter((id) => statusById.get(id) !== PRODUCT_STATUS.INACTIVE);
+  const toActivate = decision.activateIds.filter((id) => statusById.get(id) !== PRODUCT_STATUS.ACTIVE);
   const CHUNK = 500;
-  for (let i = 0; i < decision.deactivateIds.length; i += CHUNK) {
-    const batch = decision.deactivateIds.slice(i, i + CHUNK);
+  for (let i = 0; i < toDeactivate.length; i += CHUNK) {
+    const batch = toDeactivate.slice(i, i + CHUNK);
     await db.update(products).set({ status: PRODUCT_STATUS.INACTIVE }).where(inArray(products.id, batch));
   }
-  for (let i = 0; i < decision.activateIds.length; i += CHUNK) {
-    const batch = decision.activateIds.slice(i, i + CHUNK);
+  for (let i = 0; i < toActivate.length; i += CHUNK) {
+    const batch = toActivate.slice(i, i + CHUNK);
     await db.update(products).set({ status: PRODUCT_STATUS.ACTIVE }).where(inArray(products.id, batch));
   }
 
@@ -125,7 +134,7 @@ export async function runDedupeCheapest(options: { compile?: boolean } = {}) {
   return {
     candidates: candidates.length,
     ...decision,
-    deactivated: decision.deactivateIds.length,
-    activated: decision.activateIds.length,
+    deactivated: toDeactivate.length,
+    activated: toActivate.length,
   };
 }
