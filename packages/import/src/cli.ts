@@ -25,6 +25,7 @@ import { inferFitments } from "./fitment-from-name";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { toStoredTiers } from "./price-tiers";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
+import { syncProductChildren } from "./child-rows";
 
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
 
@@ -275,11 +276,6 @@ async function main() {
         .from(products)
         .where(and(eq(products.supplierId, supplier.id), inArray(products.externalId, batch.map((r) => r.externalId))));
       const productIds = inserted.map((r) => r.id);
-      if (productIds.length) {
-        await db.delete(productOems).where(inArray(productOems.productId, productIds));
-        await db.delete(productCategories).where(inArray(productCategories.productId, productIds));
-        await db.delete(productFitments).where(inArray(productFitments.productId, productIds));
-      }
 
       const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
       const cats: Array<{ productId: string; categoryId: string }> = [];
@@ -305,11 +301,10 @@ async function main() {
           });
         }
       }
-      if (oems.length) await db.insert(productOems).ignore().values(oems);
-      if (cats.length) await db.insert(productCategories).ignore().values(cats);
-      if (fits.length) {
-        await db.insert(productFitments).ignore().values(fits);
-      }
+      // Yalnızca fark yazılır (bkz. child-rows.ts). Altay fiyatları dövizden çevrildiği için her
+      // senkronda neredeyse tüm ürünler "değişmiş" sayılıyor; satırları silip yeniden yazmak
+      // günde iki kez ~120 bin ürünün kayıtlarını baştan yazıp veritabanını şişiriyordu.
+      await syncProductChildren(productIds, { oems, cats, fits });
       created += inserted.length;
     } catch (err) {
       failed += batch.length;

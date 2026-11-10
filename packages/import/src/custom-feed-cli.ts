@@ -31,6 +31,7 @@ import { inferFitments } from "./fitment-from-name";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { resolveFxRates } from "./fx";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
+import { syncProductChildren } from "./child-rows";
 import { slugify } from "./basbug-map";
 
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
@@ -202,12 +203,6 @@ async function main() {
         .where(and(eq(products.supplierId, feed.supplierId), inArray(products.externalId, batch.map((r) => r.externalId))));
       const idByExternal = new Map(saved.map((r) => [r.externalId, r.id]));
       const ids = saved.map((r) => r.id);
-      if (ids.length) {
-        await db.delete(productOems).where(inArray(productOems.productId, ids));
-        await db.delete(productCategories).where(inArray(productCategories.productId, ids));
-        await db.delete(productFitments).where(inArray(productFitments.productId, ids));
-        await db.delete(productImages).where(inArray(productImages.productId, ids));
-      }
       const oems: { productId: string; raw: string; normalized: string }[] = [];
       const cats: { productId: string; categoryId: string }[] = [];
       const fits: { productId: string; vehicleBrandId: string; vehicleModelId: string }[] = [];
@@ -232,10 +227,22 @@ async function main() {
         }
         if (row.imageUrl) images.push({ id: newId(), productId, s3Key: row.imageUrl.slice(0, 512), url: row.imageUrl, alt: row.name.slice(0, 255), sortOrder: 0 });
       }
-      if (oems.length) await db.insert(productOems).ignore().values(oems);
-      if (cats.length) await db.insert(productCategories).ignore().values(cats);
-      if (fits.length) await db.insert(productFitments).ignore().values(fits);
-      if (images.length) await db.insert(productImages).values(images);
+      // Yalnızca fark yazılır (bkz. child-rows.ts); satırları her senkronda silip yeniden yazmak veritabanını şişiriyordu.
+      await syncProductChildren(ids, { oems, cats, fits });
+      // Görsel: kaynağın verdiği adres üründe zaten varsa dokunulmaz; yoksa ürünün görselleri bu adresle değiştirilir.
+      // Kaynakta görseli olmayan ürünlerin (ör. görsel işlerinin eklediği) görselleri artık silinmez.
+      if (images.length) {
+        const have = await db
+          .select({ productId: productImages.productId, url: productImages.url })
+          .from(productImages)
+          .where(inArray(productImages.productId, images.map((im) => im.productId)));
+        const haveKey = new Set(have.map((h) => `${h.productId}|${h.url}`));
+        const changed = images.filter((im) => !haveKey.has(`${im.productId}|${im.url}`));
+        if (changed.length) {
+          await db.delete(productImages).where(inArray(productImages.productId, changed.map((im) => im.productId)));
+          await db.insert(productImages).values(changed);
+        }
+      }
       created += saved.length;
     } catch (err) {
       failed += batch.length;

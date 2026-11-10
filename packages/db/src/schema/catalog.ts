@@ -155,7 +155,8 @@ export const products = mysqlTable("products", {
   // manufacturer_id FK'si için küçük, tek sütunlu indeks (MySQL FK'yi başka indekse bağlamasın).
   index("products_manufacturer_id_idx").on(t.manufacturerId),
   index("products_price_active_idx").on(t.status, t.price),
-  index("products_name_prefix_idx").on(t.name),
+  // products_name_prefix_idx kaldırıldı: ad aramaları "%kelime%" biçiminde (indeks kullanamaz), site araması
+  // product_search tam metin indeksini kullanır; 512 karakterlik sütundaki indeks yüzlerce MB yer tutuyordu.
 ]);
 
 export const productImages = mysqlTable("product_images", {
