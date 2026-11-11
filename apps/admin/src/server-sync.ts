@@ -251,7 +251,7 @@ export function feedFileInfo(path: string) {
   return fileInfo(path);
 }
 
-const SYNC_ENV_PREFIXES = ["DATABASE_", "ERYAZ_", "BASBUG_", "OTOISMAIL_", "ARAS_", "ALTAY_", "MEILI_"];
+const SYNC_ENV_PREFIXES = ["DATABASE_", "ERYAZ_", "BASBUG_", "OTOISMAIL_", "B2B_IKIMIZ_", "ARAS_", "ALTAY_", "MEILI_"];
 const SYNC_ENV_KEYS = ["REDIS_URL", "STOREFRONT_URL", "APP_SECRET", "AUTH_SECRET", "SESSION_SECRET"];
 
 function isSyncEnvKey(key: string) {
@@ -274,7 +274,7 @@ function envLine(key: string, value: string): string | null {
 export function persistSyncEnv(): { written: boolean; path: string } {
   if (process.env.NODE_ENV !== "production" || process.platform !== "linux") return { written: false, path: ENV_FILE };
   const keys = Object.keys(process.env).filter((k) => isSyncEnvKey(k) && process.env[k]);
-  if (!keys.some((k) => k.startsWith("ERYAZ_") || k.startsWith("BASBUG_") || k.startsWith("OTOISMAIL_"))) return { written: false, path: ENV_FILE };
+  if (!keys.some((k) => k.startsWith("ERYAZ_") || k.startsWith("BASBUG_") || k.startsWith("OTOISMAIL_") || k.startsWith("B2B_IKIMIZ_"))) return { written: false, path: ENV_FILE };
   let existing = "";
   try {
     existing = readFileSync(ENV_FILE, "utf8");

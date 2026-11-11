@@ -223,10 +223,15 @@ async function main() {
     if (!SKIP_FETCH && process.env.OTOISMAIL_USERNAME && process.env.OTOISMAIL_PASSWORD) {
       await step("Oto İsmail senkron", () => runScript("otoismail-cli.ts", {}));
     }
+    // İkimiz Oto B2B (JSON web servisi): giriş + sayfalı ürün listesi; yalnızca yeni/değişenleri yazar.
+    let b2bImported = false;
+    if (!SKIP_FETCH && process.env.B2B_IKIMIZ_USERNAME && process.env.B2B_IKIMIZ_PASSWORD) {
+      b2bImported = await step("İkimiz B2B senkron", () => runScript("b2b-ikimiz-cli.ts", { B2B_IKIMIZ_STANDALONE: "0" }));
+    }
     if (basbugReady) {
       // basbug-cli sonunda dedupe + görünürlük derlemesini de yapar.
       basbugImported = await step("Başbuğ import", () => runScript("basbug-cli.ts", { BASBUG_JSON_PATH: basbugPath }));
-    } else if (altayReady || customImported) {
+    } else if (altayReady || customImported || b2bImported) {
       await step("Dedupe + görünürlük", () => runScript("dedupe-cli.ts", {}));
     }
     if (tierStore && tiers && altayImported && basbugImported && !errors.length) {

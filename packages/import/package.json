@@ -22,7 +22,8 @@
     "otoparcasan-images": "tsx src/otoparcasan-images-cli.ts",
     "parcatedarik-images": "tsx src/parcatedarik-images-cli.ts",
     "indexnow": "tsx src/indexnow-cli.ts",
-    "b2b-probe": "tsx src/b2b-probe-cli.ts"
+    "b2b-probe": "tsx src/b2b-probe-cli.ts",
+    "b2b-sync": "tsx src/b2b-ikimiz-cli.ts"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",

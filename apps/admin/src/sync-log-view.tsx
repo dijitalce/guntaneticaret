@@ -9,6 +9,7 @@ const STAGE_INFO: Record<string, { label: string; hint: string }> = {
   "Başbuğ API çek": { label: "Başbuğ verisi çekme", hint: "Başbuğ API'sinden ürün grupları, net fiyat, stok ve döviz kuru çekilir." },
   "Altay import": { label: "Altay ürünlerini içe aktarma", hint: "Değişen ürünler veritabanına yazılır, fiyat dilimleri uygulanır." },
   "Oto İsmail senkron": { label: "Oto İsmail senkronu", hint: "Markalar sırayla çekilip yazılır; süre dolarsa kaldığı yerden bir sonraki çalışmada devam eder." },
+  "İkimiz B2B senkron": { label: "İkimiz Oto B2B senkronu", hint: "B2B web servisine giriş yapılır, ürünler sayfa sayfa çekilir; yalnızca yeni/değişenler yazılır, listeden çıkanlar satıştan kalkar." },
   "Başbuğ import": { label: "Başbuğ ürünlerini içe aktarma", hint: "Değişen ürünler yazılır; ardından en ucuz eşleşme ve görünürlük derlenir." },
   "Dedupe + görünürlük": { label: "Eşleştirme ve görünürlük", hint: "Aynı parçanın en uygun tedarikçisi seçilir, sitelerdeki görünürlük güncellenir." },
 };
