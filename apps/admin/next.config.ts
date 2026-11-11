@@ -60,8 +60,9 @@ const nextConfig: NextConfig = {
   // ioredis'i bundle'la; Hostinger nested node_modules @ioredis/commands'u düşürüyor.
   serverExternalPackages: ["mysql2", "bullmq", "meilisearch"],
   experimental: {
-    workerThreads: false,
-    cpus: 1,
+    // Paylaşımlı barındırma süreç sınırı için varsayılan 1; VPS'te NEXT_BUILD_CPUS=3 ile derleme hızlanır.
+    workerThreads: Number(process.env.NEXT_BUILD_CPUS ?? 1) > 1,
+    cpus: Math.max(1, Number(process.env.NEXT_BUILD_CPUS ?? 1) || 1),
   },
   webpack: (config) => {
     config.resolve.modules = [

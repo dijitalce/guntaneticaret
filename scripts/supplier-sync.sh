@@ -27,4 +27,4 @@ fi
 export GOMAXPROCS="${GOMAXPROCS:-2}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2}"
 
 cd "$ROOT/packages/import"
-"$NODE" --v8-pool-size=2 --import tsx src/sync-cli.ts "$@" >> "$LOG" 2>&1
+"$NODE" --v8-pool-size="${V8_POOL:-2}" ${NODE_HEAP_MB:+--max-old-space-size=$NODE_HEAP_MB} --import tsx src/sync-cli.ts "$@" >> "$LOG" 2>&1

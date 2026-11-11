@@ -1,0 +1,36 @@
+# VPS (4 vCPU / 16 GB) için MySQL ayarı: /etc/mysql/conf.d/guntan.cnf
+# Uygulama için ayrılan ~6 GB'ı ve işletim sistemini düşerek ~7 GB'ı veritabanına verir.
+# Değişiklikten sonra: systemctl restart mysql   (buffer pool'u yeniden ısıtmak birkaç dakika sürer)
+[mysqld]
+# 1,38 milyon ürün + indeksler + product_search: sık okunan kısmın bellekte kalması en büyük kazanç.
+innodb_buffer_pool_size = 7G
+innodb_buffer_pool_instances = 4
+# Büyük importlar ve toplu UPDATE'ler için yeterli yazma günlüğü (küçük günlük sık checkpoint = yavaşlık).
+innodb_redo_log_capacity = 2G
+# 2: günlük saniyede bir diske yazılır. İşletim sistemi çökerse son ~1 sn işlem kaybolabilir (MySQL çökmesinde kayıp yok);
+# import/senkron yazmalarını kat kat hızlandırır. Sipariş kaybı kabul edilemezse 1 yap.
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+# SSD/NVMe varsayımı.
+innodb_io_capacity = 2000
+innodb_io_capacity_max = 4000
+
+# İki Next uygulaması + cron işleri. Havuz: DATABASE_POOL_SIZE (örn. 15) × süreç sayısı bunun altında kalmalı.
+max_connections = 200
+wait_timeout = 600
+thread_cache_size = 32
+table_open_cache = 4000
+table_definition_cache = 2000
+
+# Sıralama/gruplama ara tabloları (dedupe, listeleme).
+tmp_table_size = 256M
+max_heap_table_size = 256M
+sort_buffer_size = 4M
+join_buffer_size = 4M
+# Büyük toplu INSERT/UPDATE paketleri.
+max_allowed_packet = 256M
+
+# Yavaş sorguları yakala: sorgu logu açıkken `mysqldumpslow -s t /var/log/mysql/slow.log`
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 1

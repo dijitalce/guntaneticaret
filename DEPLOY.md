@@ -185,3 +185,17 @@ MySQL’de `OPTIMIZE TABLE` kullanılır (Postgres `VACUUM` yok).
 - Shared MySQL bağlantı limiti düşük — pool `max` 5 civarı (kodda ayarlı).
 - Uzun import’ta kopma olursa batch CLI’ler kaldığı yerden / yeniden çalıştırılabilir (upsert).
 - Eski Supabase/Postgres verisi taşınmaz; ürün kaynağı XML + Basbug.
+
+## VPS ayarları (kendi sunucu)
+
+Hostinger paylaşımlı sınırları (küçük DB havuzu, tek çekirdekli derleme, 14 dk'lık işler) varsayılan kalır; VPS'te şu env değerleriyle açılır:
+
+```
+DATABASE_POOL_SIZE=15      # MySQL max_connections altında kalacak şekilde (iki uygulama ayrı havuz açar)
+NEXT_BUILD_CPUS=3          # pnpm build için; 4 vCPU'da bir çekirdek sistemde kalsın
+```
+
+Senkron cron'unda (veya `guntan-sync.env`): `GOMAXPROCS=3 UV_THREADPOOL_SIZE=4 V8_POOL=3 NODE_HEAP_MB=3072`.
+Uzun işler için süre sınırı (`OTOPARCASAN_MAX_MINUTES`, `OTOISMAIL_MAX_MINUTES`, `PARCATEDARIK_MAX_MINUTES`, varsayılan 14) VPS'te cron aralığına kadar yükseltilebilir.
+
+`deploy/vps/mysql.cnf` (16 GB RAM için buffer pool, günlük, yavaş sorgu logu) ve `deploy/vps/nginx.conf` (ürün görsellerini doğrudan diskten sunma, `_next/static` önbelleği, gzip) referans dosyalardır.

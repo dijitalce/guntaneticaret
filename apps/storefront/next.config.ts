@@ -52,8 +52,9 @@ const nextConfig: NextConfig = {
       dynamic: 30,
       static: 180,
     },
-    workerThreads: false,
-    cpus: 1,
+    // Paylaşımlı barındırma süreç sınırı için varsayılan 1; VPS'te NEXT_BUILD_CPUS=3 ile derleme hızlanır.
+    workerThreads: Number(process.env.NEXT_BUILD_CPUS ?? 1) > 1,
+    cpus: Math.max(1, Number(process.env.NEXT_BUILD_CPUS ?? 1) || 1),
   },
   webpack: (config) => {
     config.resolve.modules = [

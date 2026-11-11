@@ -31,6 +31,11 @@ export function resolveMysqlUrl(url: string): string {
   );
 }
 
+function envInt(name: string, fallback: number): number {
+  const n = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+}
+
 export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: number } = {}): PoolOptions {
   const normalized = resolveMysqlUrl(url);
   const parsed = new URL(normalized);
@@ -44,11 +49,12 @@ export function mysqlConnectOptions(url: string, overrides: { connectionLimit?: 
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database: parsed.pathname.replace(/^\//, "").replace(/\?.*$/, ""),
-    // Hostinger shared MySQL process/connection caps — keep the pool tiny.
-    connectionLimit: overrides.connectionLimit ?? (isLocal ? 10 : 5),
+    // Varsayılan: Hostinger paylaşımlı MySQL bağlantı sınırı yüzünden küçük havuz.
+    // Kendi VPS'inde DATABASE_POOL_SIZE ile büyüt (storefront + admin ayrı havuz açar; MySQL max_connections'ın altında kal).
+    connectionLimit: overrides.connectionLimit ?? envInt("DATABASE_POOL_SIZE", isLocal ? 10 : 5),
     waitForConnections: true,
     // 0 = sınırsız bekleme. Uzak MySQL yavaşken kuyruk şişer, sayfa asılı kalır.
-    queueLimit: isLocal ? 0 : 25,
+    queueLimit: envInt("DATABASE_QUEUE_LIMIT", isLocal ? 0 : 25),
     enableKeepAlive: true,
     ssl: wantSsl ? { rejectUnauthorized: false } : undefined,
     timezone: "Z",
