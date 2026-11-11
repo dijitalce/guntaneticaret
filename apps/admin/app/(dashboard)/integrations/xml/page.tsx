@@ -29,12 +29,14 @@ const RUN_LABEL: Record<string, string> = {
 const FEED_SOURCE: Record<string, string> = {
   altay: "Eryaz (Altay) servisinden XML olarak indirilir",
   basbug: "Başbuğ API'sinden JSON olarak çekilir",
+  ikimiz: "İkimiz Oto B2B web servisinden giriş yapılarak sayfa sayfa çekilir (ana senkronun içinde)",
   otoismail: "Oto İsmail web servisinden marka marka çekilir (ayrı zamanlanmış görev; görseli olmayan ürünlere görsel de tamamlar)",
 };
 
 function feedSource(name: string, mapping: unknown) {
   if (isCustomFeed(mapping)) return "Panelden eklenen XML adresinden indirilir";
   if (name.toLowerCase().includes("oto ismail")) return FEED_SOURCE.otoismail;
+  if (name.toLowerCase().includes("ikimiz") || name.includes("İkimiz")) return FEED_SOURCE.ikimiz;
   const key = name.toLowerCase().includes("başbuğ") || name.toLowerCase().includes("basbug") ? "basbug" : "altay";
   return FEED_SOURCE[key];
 }
@@ -90,12 +92,14 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
   const syncHours = await getSyncHours();
   const customFeeds = feeds.filter((f) => isCustomFeed(f.mapping));
   const status = server.status;
+  const ikimizRun = runs.find((r) => r.feedName?.includes("kimiz") && r.run.finishedAt)?.run;
   const plannedStages = [
     ...(server.eryazReady ? ["Altay XML indir"] : []),
     ...(server.basbugReady ? ["Başbuğ API çek"] : []),
     "Altay import",
     ...customFeeds.filter((f) => f.isActive).map((f) => `${f.name} (XML kaynağı)`),
     ...(server.otoIsmail.ready ? ["Oto İsmail senkron"] : []),
+    ...(server.b2bIkimizReady ? ["İkimiz B2B senkron"] : []),
     "Başbuğ import",
   ];
   const stateTone = server.running ? "info" : server.interrupted ? "bad" : status?.state === "ok" ? "ok" : status?.state === "warning" ? "warn" : status?.state === "failed" ? "bad" : "neutral";
@@ -239,6 +243,14 @@ export default async function XmlPage({ searchParams }: { searchParams: Promise<
                         : "Henüz indirilmedi"}
                     </td>
                     <td>{server.otoIsmail.lastDoneAt ? formatDate(server.otoIsmail.lastDoneAt) : "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>İkimiz Oto (B2B)</strong>
+                    </td>
+                    <td>{server.b2bIkimizReady ? <StatusBadge tone="ok">Ayarlı</StatusBadge> : <StatusBadge tone="warn">Bilgi yok</StatusBadge>}</td>
+                    <td className="mono text-sm">{ikimizRun?.total ? `${ikimizRun.total} ürün` : "Henüz çalışmadı"}</td>
+                    <td>{ikimizRun?.finishedAt ? formatDate(ikimizRun.finishedAt) : "—"}</td>
                   </tr>
                   {customFeeds.map((f) => {
                     const file = feedFileInfo(customFeedPath(f.id));

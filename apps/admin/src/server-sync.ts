@@ -178,6 +178,7 @@ export function readServerSync() {
     eryazReady: ["ERYAZ_USERNAME", "ERYAZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])) || keys.some((k) => k.startsWith("ERYAZ_")),
     basbugReady: keys.some((k) => k.startsWith("BASBUG_")) || Object.keys(process.env).some((k) => k.startsWith("BASBUG_")),
     otoIsmail: readOtoIsmail(keys),
+    b2bIkimizReady: ["B2B_IKIMIZ_USERNAME", "B2B_IKIMIZ_PASSWORD"].every((k) => keys.includes(k) || Boolean(process.env[k])),
     altay: altayPath ? fileInfo(altayPath) : null,
     basbug: basbugPath ? fileInfo(basbugPath) : null,
   };
