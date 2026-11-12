@@ -196,7 +196,9 @@ export default async function HomePage() {
 
       <section className="seo-block">
         <h2>{copy.heading}</h2>
-        {tenant.seoContent ? <p>{tenant.seoContent}</p> : copy.paragraphs.map((p) => <p key={p}>{p}</p>)}
+        {(tenant.seoContent ? tenant.seoContent.split(/\n\s*\n/).filter((p) => p.trim()) : copy.paragraphs).map((p) => (
+          <p key={p}>{p}</p>
+        ))}
         {brands.length > 0 ? (
           <p className="seo-links">
             {brands.slice(0, 16).map((b) => (

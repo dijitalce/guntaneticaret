@@ -13,6 +13,7 @@ import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
 import { COMPANY_ADDRESS, COMPANY_CONTACT } from "./content/contact";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES, siteHosts } from "./group-sites";
+import { SITE_SEO, siteSeoFill } from "./content/site-seo";
 
 type SiteDef = {
   slug: string;
@@ -65,6 +66,7 @@ async function ensureHosts(tenantId: string, productionHost: string, aliases: re
 
 async function ensureSettings(tenantId: string, site: SiteDef) {
   const [settings] = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+  const seo = SITE_SEO[site.slug];
   const payload = {
     siteName: site.name,
     phone: COMPANY_CONTACT.phone,
@@ -72,9 +74,9 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
     email: site.email,
     address: site.slug === "guntan" ? COMPANY_ADDRESS : "İstanbul",
     themeTokens: { ...DEFAULT_THEME_TOKENS },
-    defaultMetaTitle: site.name,
-    defaultMetaDescription: `${site.name} için oto yedek parça.`,
-    seoContent: `${site.name} yedek parça kataloğu.`,
+    defaultMetaTitle: seo?.title ?? null,
+    defaultMetaDescription: seo?.description ?? null,
+    seoContent: seo?.content ?? null,
     logoUrl: "/brand/logo.png",
     faviconUrl: "/favicon.png",
     placeholderImageUrl: "/placeholder-product.jpg",
@@ -93,6 +95,8 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
     const v = current[key];
     if (v == null || v === "") fill[key] = value;
   }
+  // İlk kurulumun yer tutucu SEO metinleri de boş sayılır.
+  Object.assign(fill, siteSeoFill(site.slug, [site.name, settings.siteName], settings));
   fill.socialJson = { ...payload.socialJson, ...(settings.socialJson ?? {}) };
   if (!settings.themeTokens || Object.keys(settings.themeTokens).length === 0) fill.themeTokens = payload.themeTokens;
   await db.update(tenantSettings).set(fill).where(eq(tenantSettings.id, settings.id));

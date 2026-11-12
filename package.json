@@ -19,6 +19,7 @@
     "db:ensure-product-search": "pnpm --filter @guntan/db ensure-product-search",
     "db:sync-catalog": "pnpm --filter @guntan/db sync-catalog",
     "db:sync-tenants": "pnpm --filter @guntan/db sync-tenants",
+    "db:seed-site-seo": "pnpm --filter @guntan/db seed-site-seo",
     "db:compile-visibility": "pnpm --filter @guntan/db compile-visibility",
     "db:prune": "pnpm --filter @guntan/db prune",
     "import:xml": "pnpm --filter @guntan/import guntan-xml",
