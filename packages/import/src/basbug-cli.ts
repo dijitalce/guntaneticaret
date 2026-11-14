@@ -30,6 +30,7 @@ import {
 } from "./basbug-map";
 import { runDedupeCheapest } from "./dedupe-cheapest";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { toStoredTiers } from "./price-tiers";
 import { resolveFxRates, type FxRates } from "./fx";
@@ -293,6 +294,9 @@ async function main() {
         if (row.category) {
           const cat = await ensureCat(row.category);
           cats.push({ productId, categoryId: cat.id });
+        } else {
+          const categoryId = await inferredCategoryId(row.name);
+          if (categoryId) cats.push({ productId, categoryId });
         }
         for (const f of inferBasbugFitments(raw)) {
           const ids = fitIds.get(`${f.brand}::${f.model}`);

@@ -13,6 +13,7 @@
     "guntan-xml": "tsx src/cli.ts",
     "basbug-json": "tsx src/basbug-cli.ts",
     "dedupe-cheapest": "tsx src/dedupe-cli.ts",
+    "assign-categories": "tsx src/assign-categories-cli.ts",
     "price-tiers": "tsx src/apply-price-tiers-cli.ts",
     "supplier-sync": "tsx src/sync-cli.ts",
     "otoismail-sync": "tsx src/otoismail-cli.ts",

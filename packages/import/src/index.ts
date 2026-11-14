@@ -25,6 +25,7 @@ import { IMPORT_RUN_STATUS, PRODUCT_SOURCE, PRODUCT_STATUS, XML_BATCH_SIZE, type
 import { addVat, applyMarginToAmount, applyMarginToPrice, vatRateFromEnv } from "./price-tiers";
 import { useStoredPriceTiers } from "./price-tier-store";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 
 export {
   DEFAULT_PRICE_TIERS,
@@ -316,6 +317,9 @@ async function processBatch(supplierId: string, batch: MappedProduct[], stats: I
       if (row.category) {
         const cat = await upsertCategory(row.category);
         children.cats = [{ productId, categoryId: cat.id }];
+      } else {
+        const categoryId = await inferredCategoryId(row.name);
+        if (categoryId) children.cats = [{ productId, categoryId }];
       }
       if (row.vehicleBrand && row.vehicleModel) {
         const brand = await upsertBrand(row.vehicleBrand);
