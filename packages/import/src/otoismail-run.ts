@@ -49,6 +49,7 @@ import { loadSyncEnv, syncHomeDir } from "./sync-env";
 import { OtoIsmailClient, otoIsmailConfigFromEnv, writeNdjson } from "./otoismail-fetch";
 import { nextImageChunk, writeImageCursor } from "./image-cursor";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 import {
   OTOISMAIL_SUPPLIER_CODE,
   imageMatchKeys,
@@ -282,7 +283,9 @@ async function importBrand(ctx: Ctx, brand: string, path: string) {
         const productId = idByExt.get(mapped.externalId);
         if (!productId) continue;
         for (const n of otoIsmailNumbers(raw)) oems.push({ productId, ...n });
-        if (mapped.category) cats.push({ productId, categoryId: await ensureCat(ctx, mapped.category) });
+        // Oto İsmail çoğu üründe grup göndermez; o zaman kategori ürün adından bulunur.
+        const categoryId = mapped.category ? await ensureCat(ctx, mapped.category) : await inferredCategoryId(mapped.name);
+        if (categoryId) cats.push({ productId, categoryId });
         for (const f of inferFitments(mapped.name, 8)) {
           const ids2 = await ensureFit(ctx, f.brand, f.model);
           fits.set(`${productId}:${ids2.modelId}`, { productId, vehicleBrandId: ids2.brandId, vehicleModelId: ids2.modelId });

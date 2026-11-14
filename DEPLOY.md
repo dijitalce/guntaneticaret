@@ -30,6 +30,7 @@ proxy_set_header X-Forwarded-Proto $scheme;
 - `pnpm db:sync-catalog`
 - `pnpm db:sync-tenants` — ana + 6 park domain’i birincil hostname yapar
 - `pnpm db:seed-site-seo` — sitelerin meta başlık/açıklama ve ana sayfa SEO metnini listeler; `--apply` ile yazar (panelden elle girilen metne dokunmaz)
+- `pnpm import:assign-categories` — kategorisi olmayan ürünlere ürün adından kategori atar; önce rapor verir, `--apply` ile yazar (`--limit=50000` ile parça parça çalıştırılabilir). Tedarikçi senkronları da kategori gelmeyen üründe aynı kuralı uygular.
 - Worker ayrı süreç
 - `scripts/backup.sh` cron ile günlük (`mysqldump`)
 - `STOREFRONT_URL=https://guntanotoyedekparca.com`

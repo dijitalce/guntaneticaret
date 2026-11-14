@@ -26,6 +26,7 @@ import { useStoredPriceTiers } from "./price-tier-store";
 import { toStoredTiers } from "./price-tiers";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
 
@@ -289,6 +290,9 @@ async function main() {
         if (row.category) {
           const cat = await ensureCat(row.category);
           cats.push({ productId: rec.id, categoryId: cat.id });
+        } else {
+          const categoryId = await inferredCategoryId(row.name);
+          if (categoryId) cats.push({ productId: rec.id, categoryId });
         }
         for (const f of fitBySku.get(row.externalId) ?? []) {
           const ids = fitIds.get(`${f.brand}::${f.model}`);

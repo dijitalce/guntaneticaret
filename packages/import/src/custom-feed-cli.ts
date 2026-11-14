@@ -32,6 +32,7 @@ import { useStoredPriceTiers } from "./price-tier-store";
 import { resolveFxRates } from "./fx";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 import { slugify } from "./basbug-map";
 
 const FORCE_FULL = process.env.FORCE_FULL_IMPORT === "1";
@@ -214,10 +215,8 @@ async function main() {
           const normalized = normalizeOem(raw);
           if (normalized.length >= 3) oems.push({ productId, raw: raw.slice(0, 191), normalized });
         }
-        if (row.category) {
-          const categoryId = await ensureCat(row.category);
-          if (categoryId) cats.push({ productId, categoryId });
-        }
+        const categoryId = row.category ? await ensureCat(row.category) : await inferredCategoryId(row.name);
+        if (categoryId) cats.push({ productId, categoryId });
         const fitList = row.vehicleBrand && row.vehicleModel ? [{ brand: row.vehicleBrand, model: row.vehicleModel }] : inferFitments(row.name);
         for (const f of fitList) {
           const ids2 = await ensureFit(f.brand, f.model);

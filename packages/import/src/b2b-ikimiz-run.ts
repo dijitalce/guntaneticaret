@@ -27,6 +27,7 @@ import { B2bIkimizClient, b2bIkimizConfigFromEnv } from "./b2b-ikimiz-fetch";
 import { B2B_IKIMIZ_SUPPLIER_CODE, b2bIkimizNumbers, mapB2bIkimizRow, type B2bIkimizRaw } from "./b2b-ikimiz-map";
 import { slugify } from "./basbug-map";
 import { syncProductChildren } from "./child-rows";
+import { inferredCategoryId } from "./category-resolve";
 import { loadExistingProducts, markMissingFromFeed, needsImport } from "./content-hashes";
 import { runDedupeCheapest } from "./dedupe-cheapest";
 import { inferFitments } from "./fitment-from-name";
@@ -189,18 +190,22 @@ async function writeItems(ctx: Ctx, items: Item[]) {
     .where(and(eq(products.supplierId, ctx.supplierId), inArray(products.externalId, items.map((i) => i.mapped.externalId))));
   const idByExt = new Map(saved.map((r) => [r.externalId, r.id]));
   const oems: Array<{ productId: string; raw: string; normalized: string }> = [];
+  const cats: Array<{ productId: string; categoryId: string }> = [];
   const fits = new Map<string, { productId: string; vehicleBrandId: string; vehicleModelId: string }>();
   for (const { raw, mapped } of items) {
     const productId = idByExt.get(mapped.externalId);
     if (!productId) continue;
     for (const n of b2bIkimizNumbers(raw)) oems.push({ productId, ...n });
+    // B2B kategori göndermez; kategori ürün adından bulunur.
+    const categoryId = await inferredCategoryId(mapped.name);
+    if (categoryId) cats.push({ productId, categoryId });
     for (const f of inferFitments(mapped.name, 8)) {
       const ids = await ensureFit(ctx, f.brand, f.model);
       if (ids) fits.set(`${productId}:${ids.modelId}`, { productId, vehicleBrandId: ids.brandId, vehicleModelId: ids.modelId });
     }
   }
   // Yalnızca fark yazılır (bkz. child-rows.ts).
-  await syncProductChildren(saved.map((r) => r.id), { oems, fits: [...fits.values()] });
+  await syncProductChildren(saved.map((r) => r.id), { oems, cats, fits: [...fits.values()] });
   return saved.length;
 }
 
