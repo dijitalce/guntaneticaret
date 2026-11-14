@@ -44,7 +44,7 @@ export default async function NotificationsPage({
   const tab = sp.sekme ?? "orders";
   await ensureExtTables();
   const [settings, overrides, stats] = await Promise.all([
-    getNotifySettings(),
+    getNotifySettings({ fresh: true }),
     getTemplateOverrides(),
     extRows<{ sent: number; failed: number; skipped: number; opened: number; emails: number }>(sql`select
       sum(status = 'sent') sent, sum(status = 'failed') failed, sum(status = 'skipped') skipped,

@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     writeAudit({ actorId: session.user.id, actorEmail: session.user.email, entity: "notification", entityId: "settings", action: act, after });
 
   if (action === "provider") {
-    const cur = await getNotifySettings();
+    const cur = await getNotifySettings({ fresh: true });
     const emailProvider = text(form, "emailProvider");
     const security = text(form, "smtpSecurity");
     const port = Math.round(Number(text(form, "smtpPort")));

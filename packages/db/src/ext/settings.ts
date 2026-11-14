@@ -152,11 +152,15 @@ export type IntegrationSecrets = {
 
 export const DEFAULT_SECRETS: IntegrationSecrets = { metaCapiToken: "", metaTestCode: "", ga4ApiSecret: "" };
 
-const cache = new Map<string, { at: number; value: unknown }>();
+// Next, sayfaları ve API rotalarını ayrı paketlediği için modül düzeyindeki bir Map her pakette
+// ayrı kopya olur; kayıt sonrası temizlik sayfanın kopyasına ulaşmaz. Önbellek süreç genelinde tektir.
+const globalForSettings = globalThis as unknown as { __guntanSettingsCache?: Map<string, { at: number; value: unknown }> };
+const cache = (globalForSettings.__guntanSettingsCache ??= new Map<string, { at: number; value: unknown }>());
 const TTL = 30_000;
 
-async function load<T extends object>(key: string, defaults: T): Promise<T> {
-  const hit = cache.get(key);
+/** `fresh`: önbelleği atlar; ayar formları başka süreçte yapılmış kaydı da hemen görsün diye. */
+async function load<T extends object>(key: string, defaults: T, fresh = false): Promise<T> {
+  const hit = fresh ? undefined : cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.value as T;
   const stored = await getAppSetting<Partial<T>>(key).catch(() => null);
   const value = mergeDeep(defaults, stored?.value ?? {});
@@ -213,8 +217,8 @@ export function openSecret(value: string): string {
 
 const SEALED_NOTIFY_KEYS = ["smtpPass", "emailApiKey", "netgsmPass"] as const;
 
-export async function getNotifySettings(): Promise<NotifySettings> {
-  const raw = await load("notify.settings", DEFAULT_NOTIFY);
+export async function getNotifySettings(opts?: { fresh?: boolean }): Promise<NotifySettings> {
+  const raw = await load("notify.settings", DEFAULT_NOTIFY, opts?.fresh);
   const out = { ...raw };
   for (const k of SEALED_NOTIFY_KEYS) out[k] = openSecret(raw[k]);
   return out;
