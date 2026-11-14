@@ -30,6 +30,7 @@ import {
 } from "./schema";
 import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
+import { BANK_ACCOUNT } from "./content/bank-account";
 import { COMPANY_ADDRESS, COMPANY_CONTACT } from "./content/contact";
 import { GIZLILIK_BODY, GIZLILIK_TITLE } from "./content/gizlilik";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES } from "./group-sites";
@@ -452,18 +453,8 @@ async function main() {
   }
 
   for (const row of [
-    {
-      tenantId: guntan.id,
-      bankName: "Ziraat Bankası",
-      accountHolder: "Güntan Oto Yedek Parça",
-      iban: "TR00 0000 0000 0000 0000 0000 01",
-    },
-    {
-      tenantId: japon.id,
-      bankName: "Ziraat Bankası",
-      accountHolder: "Japon Grup Oto Yedek Parça",
-      iban: "TR00 0000 0000 0000 0000 0000 02",
-    },
+    { tenantId: guntan.id, ...BANK_ACCOUNT },
+    { tenantId: japon.id, ...BANK_ACCOUNT },
   ]) {
     const [have] = await db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, row.tenantId)).limit(1);
     if (!have) await db.insert(tenantBankAccounts).values(row);

@@ -22,6 +22,7 @@
     "sync-catalog": "tsx src/sync-vehicle-catalog.ts",
     "sync-tenants": "tsx src/sync-tenants.ts",
     "seed-site-seo": "tsx src/seed-site-seo.ts",
+    "seed-bank-account": "tsx src/seed-bank-account.ts",
     "compile-visibility": "tsx src/compile-cli.ts",
     "prune": "tsx src/prune-cli.ts",
     "studio": "drizzle-kit studio",

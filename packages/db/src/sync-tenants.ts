@@ -11,6 +11,7 @@ import {
 } from "./schema";
 import { newId } from "./schema/common";
 import { compileVisibility } from "./compile-visibility";
+import { BANK_ACCOUNT } from "./content/bank-account";
 import { COMPANY_ADDRESS, COMPANY_CONTACT } from "./content/contact";
 import { ALL_CATALOG_URL, ALL_SITE, GROUP_SITES, siteHosts } from "./group-sites";
 import { SITE_SEO, siteSeoFill } from "./content/site-seo";
@@ -102,15 +103,10 @@ async function ensureSettings(tenantId: string, site: SiteDef) {
   await db.update(tenantSettings).set(fill).where(eq(tenantSettings.id, settings.id));
 }
 
-async function ensureBank(tenantId: string, accountHolder: string) {
+async function ensureBank(tenantId: string) {
   const [bank] = await db.select().from(tenantBankAccounts).where(eq(tenantBankAccounts.tenantId, tenantId)).limit(1);
   if (bank) return;
-  await db.insert(tenantBankAccounts).values({
-    tenantId,
-    bankName: "Ziraat Bankası",
-    accountHolder,
-    iban: "TR00 0000 0000 0000 0000 0000 00",
-  });
+  await db.insert(tenantBankAccounts).values({ tenantId, ...BANK_ACCOUNT });
 }
 
 async function main() {
@@ -121,7 +117,7 @@ async function main() {
   const guntan = await ensureTenant(allSite);
   await ensureHosts(guntan.id, ALL_SITE.productionHost, ALL_SITE.localHosts);
   await ensureSettings(guntan.id, allSite);
-  await ensureBank(guntan.id, ALL_SITE.name);
+  await ensureBank(guntan.id);
 
   for (const site of GROUP_SITES) {
     const [group] = await db.select().from(brandGroups).where(eq(brandGroups.slug, site.groupSlug)).limit(1);
@@ -131,7 +127,7 @@ async function main() {
     const tenant = await ensureTenant(def);
     await ensureHosts(tenant.id, site.productionHost, site.localHosts);
     await ensureSettings(tenant.id, def);
-    await ensureBank(tenant.id, site.name);
+    await ensureBank(tenant.id);
 
     const [rule] = await db
       .select()

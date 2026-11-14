@@ -163,8 +163,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               {banks.map((b) => (
                 <p key={b.id}>
                   <strong>{b.bankName}</strong><br />
-                  {b.accountHolder}<br />
-                  <code>{b.iban}</code>
+                  İSİM: {b.accountHolder}<br />
+                  İBAN: <code>{b.iban}</code>
                 </p>
               ))}
             </div>

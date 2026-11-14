@@ -82,8 +82,8 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
               {banks.map((b) => (
                 <div key={b.id} style={{ display: "grid", gap: "0.2rem" }}>
                   <strong>{b.bankName}</strong>
-                  <span className="muted">{b.accountHolder}</span>
-                  <code style={{ fontSize: "0.92rem" }}>{b.iban}</code>
+                  <span><span className="muted">İSİM:</span> {b.accountHolder}</span>
+                  <span><span className="muted">İBAN:</span> <code style={{ fontSize: "0.92rem" }}>{b.iban}</code></span>
                 </div>
               ))}
             </div>

@@ -127,7 +127,7 @@ export async function buildOrderVars(orderId: string) {
     ? `<table class="items">${accounts
         .map(
           (a) =>
-            `<tr><td><strong>${escapeHtml(a.bankName)}</strong><br>${escapeHtml(a.accountHolder)}<br><span style="font-family:monospace">${escapeHtml(a.iban)}</span></td></tr>`,
+            `<tr><td><strong>${escapeHtml(a.bankName)}</strong><br>İSİM: ${escapeHtml(a.accountHolder)}<br>İBAN: <span style="font-family:monospace">${escapeHtml(a.iban)}</span></td></tr>`,
         )
         .join("")}</table>`
     : "";
