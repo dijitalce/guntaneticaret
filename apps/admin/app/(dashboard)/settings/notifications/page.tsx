@@ -8,6 +8,7 @@ import {
   emailConfigured,
   ensureExtTables,
   extRows,
+  getAppSetting,
   getNotifySettings,
   getTemplateOverrides,
 } from "@guntan/db";
@@ -43,8 +44,9 @@ export default async function NotificationsPage({
   const sp = await searchParams;
   const tab = sp.sekme ?? "orders";
   await ensureExtTables();
-  const [settings, overrides, stats] = await Promise.all([
+  const [settings, savedAt, overrides, stats] = await Promise.all([
     getNotifySettings({ fresh: true }),
+    getAppSetting("notify.settings").then((r) => r?.updatedAt ?? null).catch(() => null),
     getTemplateOverrides(),
     extRows<{ sent: number; failed: number; skipped: number; opened: number; emails: number }>(sql`select
       sum(status = 'sent') sent, sum(status = 'failed') failed, sum(status = 'skipped') skipped,
@@ -267,6 +269,7 @@ export default async function NotificationsPage({
                   </button>
                 ) : null}
               </div>
+              <small className="field-hint">Son kayıt: {savedAt ? formatDate(savedAt) : "henüz kaydedilmedi"}</small>
             </form>
           </Panel>
           <div>

@@ -71,6 +71,17 @@ export async function POST(request: Request) {
     if (form.get("clearEmailKey") === "1") next.emailApiKey = "";
     if (form.get("clearSmtpPass") === "1") next.smtpPass = "";
     await saveNotifySettings(next);
+    // Yazılanı veritabanından geri oku; "kaydedildi" deyip eski değeri göstermek yerine farkı açıkça bildir.
+    const stored = await getNotifySettings({ fresh: true });
+    const CHECK = ["emailProvider", "smtpHost", "smtpPort", "smtpSecurity", "smtpUser", "smtpPass", "fromEmail", "replyTo"] as const;
+    const diff = CHECK.filter((k) => stored[k] !== next[k]);
+    if (diff.length) {
+      console.error("[notify] kayıt doğrulanamadı; farklı alanlar:", diff.join(", "));
+      await audit("update_mismatch", { fields: diff });
+      return redirectTo(request, `${back}?sekme=ayarlar`, {
+        hata: `Ayarlar veritabanına yazılamadı: kayıttan sonra okunan değerler gönderilenden farklı (${diff.join(", ")}). Sunucu loguna bakın.`,
+      });
+    }
     await audit("update", {
       ...next,
       emailApiKey: next.emailApiKey ? "(gizli)" : "",
