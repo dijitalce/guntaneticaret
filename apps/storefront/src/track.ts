@@ -63,6 +63,8 @@ export function trackCommerce(event: CommerceEvent, data: { items: TrackItem[]; 
   try {
     w.gtag?.("event", event, params);
     if (event === "purchase" && w.__gtAdsSendTo) {
+      // Satın alma dönüşümü çerez tercihinden bağımsız ölçülür; kişiselleştirme (ad_personalization) tercihe bağlı kalır.
+      w.gtag?.("consent", "update", { ad_storage: "granted", ad_user_data: "granted" });
       w.gtag?.("event", "conversion", { send_to: w.__gtAdsSendTo, value, currency: "TRY", transaction_id: data.orderNo });
     }
     if (Array.isArray(w.dataLayer)) {
