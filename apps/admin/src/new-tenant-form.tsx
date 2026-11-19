@@ -142,11 +142,11 @@ export function NewTenantForm({
             <div className="form-row">
               <div className="field">
                 <label htmlFor="phone">Telefon</label>
-                <input className="input" id="phone" name="phone" placeholder="0551 194 61 68" />
+                <input className="input" id="phone" name="phone" placeholder="0501 637 49 28" />
               </div>
               <div className="field">
                 <label htmlFor="whatsapp">WhatsApp</label>
-                <input className="input" id="whatsapp" name="whatsapp" placeholder="905511946168" />
+                <input className="input" id="whatsapp" name="whatsapp" placeholder="905016374928" />
               </div>
               <div className="field">
                 <label htmlFor="email">E-posta</label>
