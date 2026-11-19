@@ -11,6 +11,11 @@ const META_RE = /^\d{6,20}$/;
 const TIKTOK_RE = /^[A-Z0-9]{8,30}$/i;
 const ADS_RE = /^AW-\d{6,15}$/i;
 
+/** Ads hesabına bağlı "Site - Telefon Tıklaması" / "Site - WhatsApp Tıklaması" dönüşüm etiketleri. */
+const CLICK_LABELS: Record<string, { tel: string; whatsapp: string }> = {
+  "AW-18545083547": { tel: "WkYYCICItLsdEJuJ_opF", whatsapp: "Vf47CIOItLsdEJuJ_opF" },
+};
+
 export function Analytics({
   gaId,
   gtmId,
@@ -58,6 +63,20 @@ export function Analytics({
     w.fbq?.("consent", allowMarketing ? "grant" : "revoke");
     if (decided) (allowMarketing ? w.ttq?.grantConsent : w.ttq?.revokeConsent)?.call(w.ttq);
   }, [allowMarketing, decided]);
+  // Telefon (tel:) ve WhatsApp (wa.me) tıklamaları: tek dinleyici, sonradan çizilen linkleri de yakalar.
+  useEffect(() => {
+    const labels = ads ? CLICK_LABELS[ads.toUpperCase()] : undefined;
+    if (!ads || !labels) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      const href = a?.getAttribute("href")?.toLowerCase() ?? "";
+      const label = href.startsWith("tel:") ? labels.tel : /^https?:\/\/(wa\.me|api\.whatsapp\.com)\//.test(href) ? labels.whatsapp : null;
+      if (!label) return;
+      (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag?.("event", "conversion", { send_to: `${ads}/${label}` });
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [ads]);
   if (!ga && !gtm && !meta && !tiktok && !ads) return null;
   return (
     <>
