@@ -126,6 +126,21 @@ Kurulum:
 Aynı anda iki senkron çalışmaz (kilit dosyası). Başbuğ tek oturuma izin verir; senkron bitince oturumu kapatır.
 Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
+### Katalog facet snapshot (MariaDB yükü)
+
+Marka/model/kategori sayfalarındaki üretici facet’leri ve ürün sayımları istek anında `COUNT DISTINCT` ile 1–2M satır tarıyordu. Artık `catalog_facet_snapshots` tablosundan okunur; tabloyu cron doldurur:
+
+```bash
+# Saatte bir (veya gece daha sık); her çalışma FACET_MAX_MINUTES (45) ile sınırlı, kaldığı yerden devam eder
+20 * * * * bash /PROJE_YOLU/scripts/refresh-facets.sh
+```
+
+İlk deploy sonrası bir kez elle çalıştırın ki snapshot’lar dolsun; aksi halde facet’ler boş görünür (sayfa açılır, MariaDB’ye ağır sorgu gitmez):
+
+```bash
+bash /PROJE_YOLU/scripts/refresh-facets.sh --tenant=guntan
+```
+
 ### Altay ürün görselleri (otoparcasan.com, izinli)
 
 Altay XML'inde `PicturePath` boş geldiği için görseller otoparcasan.com'dan alınır. Cron (15 dakikada bir, `*/15 * * * *`). Deploy betiklerin çalıştırma iznini düşürdüğü için başında `bash` olmalı:

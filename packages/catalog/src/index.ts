@@ -2,6 +2,8 @@ import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lte, notInArray, o
 import { alias } from "drizzle-orm/mysql-core";
 import {
   categories,
+  brandFacetKey,
+  categoryFacetKey,
   compileVisibility,
   db,
   manufacturers,
@@ -11,12 +13,16 @@ import {
   productImages,
   productOems,
   products,
+  readFacetSnapshot,
   tenantSeesAllCatalog,
   tenantVisibleBrands,
   vehicleBrands,
   vehicleEngines,
   vehicleGenerations,
   vehicleModels,
+  writeFacetSnapshot,
+  type BrandFacetSnapshot,
+  type CategoryFacetSnapshot,
 } from "@guntan/db";
 import { LISTING_PAGE_SIZE, LISTING_SORT, type ListingSort } from "@guntan/types";
 
@@ -330,7 +336,7 @@ function listingOrder(sort: ListingSort) {
 
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
 
-const LISTING_MEM_TTL_MS = 90_000;
+const LISTING_MEM_TTL_MS = 5 * 60_000;
 const listingMem = new Map<string, { exp: number; value: ListingResult }>();
 
 function listingCacheKey(query: ListingQuery) {
@@ -423,16 +429,36 @@ async function listProductsUncached(query: ListingQuery) {
       .where(and(...fitmentConds))
       .as("fit_ids");
     const whereClause = and(...conditions);
+    // Filtresiz marka/model: toplam sayı snapshot’tan (cron); istekte 1–2M satır COUNT yok.
+    const canUseSnapTotal =
+      Boolean(query.brandId) &&
+      !query.engineId &&
+      !query.manufacturerId &&
+      !query.inStock &&
+      query.minPrice == null &&
+      query.maxPrice == null &&
+      !categoryIds?.length;
+    const snapTotal = canUseSnapTotal
+      ? (await readFacetSnapshot<BrandFacetSnapshot>(brandFacetKey(query.tenantId, query.brandId!, query.modelId)))?.payload
+          .productTotal
+      : undefined;
+
+    const rowsPromise = db
+      .select(listingSelect)
+      .from(fitIds)
+      .innerJoin(products, eq(products.id, fitIds.productId))
+      .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+      .where(whereClause)
+      .orderBy(order)
+      .limit(LISTING_PAGE_SIZE)
+      .offset(offset);
+
+    if (snapTotal != null) {
+      return attachListingExtras(await rowsPromise, snapTotal, page);
+    }
+
     const [rows, countRows] = await Promise.all([
-      db
-        .select(listingSelect)
-        .from(fitIds)
-        .innerJoin(products, eq(products.id, fitIds.productId))
-        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-        .where(whereClause)
-        .orderBy(order)
-        .limit(LISTING_PAGE_SIZE)
-        .offset(offset),
+      rowsPromise,
       db
         .select({ value: sql<number>`cast(count(*) as unsigned)` })
         .from(fitIds)
@@ -460,7 +486,18 @@ async function listProductsUncached(query: ListingQuery) {
         .innerJoin(products, eq(products.id, productCategories.productId))
         .where(whereClause);
 
-    const [rows, countRows] = await Promise.all([
+    const canUseCatSnap =
+      Boolean(query.categoryId) &&
+      !query.manufacturerId &&
+      !query.inStock &&
+      query.minPrice == null &&
+      query.maxPrice == null;
+    const catSnapTotal = canUseCatSnap
+      ? (await readFacetSnapshot<CategoryFacetSnapshot>(categoryFacetKey(query.tenantId, query.categoryId!)))?.payload
+          .productTotal
+      : undefined;
+
+    const pageRows =
       categoryIds!.length === 1
         ? fromCategory().orderBy(order).limit(LISTING_PAGE_SIZE).offset(offset)
         : fromCategory()
@@ -478,9 +515,13 @@ async function listProductsUncached(query: ListingQuery) {
             )
             .orderBy(order)
             .limit(LISTING_PAGE_SIZE)
-            .offset(offset),
-      countFromCategory(),
-    ]);
+            .offset(offset);
+
+    if (catSnapTotal != null) {
+      return attachListingExtras(await pageRows, catSnapTotal, page);
+    }
+
+    const [rows, countRows] = await Promise.all([pageRows, countFromCategory()]);
     return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
   }
 
@@ -540,58 +581,63 @@ async function attachListingExtras(
   };
 }
 
-type BrandFacets = {
-  categories: { id: string; name: string; slug: string; count: number }[];
-  manufacturers: { id: string; name: string; slug: string; logo: string | null }[];
-  engines: { id: string; name: string; slug: string }[];
-};
+type BrandFacets = BrandFacetSnapshot;
 
-const BRAND_FACET_TTL_MS = 10 * 60_000;
+const BRAND_FACET_TTL_MS = 30 * 60_000;
 const brandFacetMem = new Map<string, { exp: number; value: BrandFacets }>();
+const EMPTY_BRAND_FACETS: BrandFacets = { categories: [], manufacturers: [], engines: [], productTotal: 0 };
 
 /**
- * Marka/model sayfası facet’leri. product_categories’ten başlayan 4’lü JOIN
- * 1.5M katalogda 4–16 sn sürebiliyordu; fitment indeksinden (brand/model → product)
- * başlayıp process cache ile tekrarlayan taramayı kesiyoruz.
+ * Marka/model facet’leri — istek yolunda ağır COUNT/JOIN yok.
+ * `catalog_facet_snapshots` (cron: refresh-facets) + process mem.
+ * Snapshot yoksa boş döner; sayfa yine açılır, MariaDB doldurulmaz.
  */
 export async function listingFacets(tenantId: string, brandId: string, modelId?: string) {
-  const key = `${tenantId}:${brandId}:${modelId ?? ""}`;
-  const hit = brandFacetMem.get(key);
+  const memKey = `${tenantId}:${brandId}:${modelId ?? ""}`;
+  const hit = brandFacetMem.get(memKey);
   if (hit && hit.exp > Date.now()) return hit.value;
-  const value = await listingFacetsUncached(tenantId, brandId, modelId);
+
+  const snap = await readFacetSnapshot<BrandFacetSnapshot>(brandFacetKey(tenantId, brandId, modelId));
+  const value = snap?.payload ?? EMPTY_BRAND_FACETS;
   if (brandFacetMem.size > 400) {
     const now = Date.now();
     for (const [k, v] of brandFacetMem) if (v.exp < now) brandFacetMem.delete(k);
     if (brandFacetMem.size > 400) brandFacetMem.clear();
   }
-  brandFacetMem.set(key, { value, exp: Date.now() + BRAND_FACET_TTL_MS });
+  brandFacetMem.set(memKey, { value, exp: Date.now() + BRAND_FACET_TTL_MS });
   return value;
 }
 
-async function listingFacetsUncached(tenantId: string, brandId: string, modelId?: string): Promise<BrandFacets> {
+/** Cron / backfill: canlıda çağrılmaz. Ağır facet + ürün sayısı hesaplayıp snapshot yazar. */
+export async function computeAndStoreBrandFacets(tenantId: string, brandId: string, modelId?: string): Promise<BrandFacets> {
   const seesAll = await tenantSeesAllCatalog(tenantId);
   const visible = tenantVisibleSql(tenantId, seesAll);
-  // Fitment satırından başla: product_fitments_brand_product_idx / model_product_idx kullanılır.
   const fitScope = [
     eq(productFitments.vehicleBrandId, brandId),
     ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
   ];
   const sellableScope = [sellableSql(), visible, ...fitScope];
 
-  const [catLeaves, mfrs, engines] = await Promise.all([
+  const fitIds = db
+    .selectDistinct({ productId: productFitments.productId })
+    .from(productFitments)
+    .where(and(...fitScope))
+    .as("facet_fit_ids");
+
+  const [catLeaves, mfrs, engines, totalRows] = await Promise.all([
     db
       .select({
         id: categories.id,
         name: categories.name,
         slug: categories.slug,
         parentId: categories.parentId,
-        count: count(sql`distinct ${productFitments.productId}`),
+        count: count(sql`distinct ${fitIds.productId}`),
       })
-      .from(productFitments)
-      .innerJoin(products, eq(products.id, productFitments.productId))
-      .innerJoin(productCategories, eq(productCategories.productId, productFitments.productId))
+      .from(fitIds)
+      .innerJoin(products, eq(products.id, fitIds.productId))
+      .innerJoin(productCategories, eq(productCategories.productId, fitIds.productId))
       .innerJoin(categories, eq(categories.id, productCategories.categoryId))
-      .where(and(...sellableScope))
+      .where(and(sellableSql(), visible))
       .groupBy(categories.id, categories.name, categories.slug, categories.parentId),
     db
       .select({
@@ -600,10 +646,10 @@ async function listingFacetsUncached(tenantId: string, brandId: string, modelId?
         slug: manufacturers.slug,
         logo: manufacturerLogoSql,
       })
-      .from(productFitments)
-      .innerJoin(products, eq(products.id, productFitments.productId))
+      .from(fitIds)
+      .innerJoin(products, eq(products.id, fitIds.productId))
       .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-      .where(and(...sellableScope))
+      .where(and(sellableSql(), visible))
       .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug, manufacturers.logoUrl, manufacturers.updatedAt),
     db
       .select({
@@ -616,6 +662,11 @@ async function listingFacetsUncached(tenantId: string, brandId: string, modelId?
       .innerJoin(products, eq(products.id, productFitments.productId))
       .where(and(...sellableScope))
       .groupBy(vehicleEngines.id, vehicleEngines.name, vehicleEngines.slug),
+    db
+      .select({ value: sql<number>`cast(count(*) as unsigned)` })
+      .from(fitIds)
+      .innerJoin(products, eq(products.id, fitIds.productId))
+      .where(and(sellableSql(), visible)),
   ]);
 
   const parentIds = [...new Set(catLeaves.map((c) => c.parentId).filter((id): id is string => Boolean(id)))];
@@ -640,34 +691,42 @@ async function listingFacetsUncached(tenantId: string, brandId: string, modelId?
     }
   }
   const cats = [...rolled.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "tr"));
-
-  return { categories: cats, manufacturers: mfrs, engines };
+  const value: BrandFacets = {
+    categories: cats,
+    manufacturers: mfrs,
+    engines,
+    productTotal: Number(totalRows[0]?.value ?? 0),
+  };
+  await writeFacetSnapshot(brandFacetKey(tenantId, brandId, modelId), value);
+  brandFacetMem.set(`${tenantId}:${brandId}:${modelId ?? ""}`, { value, exp: Date.now() + BRAND_FACET_TTL_MS });
+  return value;
 }
 
-type CategoryFacets = {
-  manufacturers: { id: string; name: string; slug: string; logo: string | null; count: number }[];
-  brands: { id: string; name: string; slug: string; count: number }[];
-  children: { id: string; name: string; slug: string; count: number }[];
-};
+type CategoryFacets = CategoryFacetSnapshot;
 
-const CATEGORY_FACET_TTL_MS = 10 * 60_000;
+const CATEGORY_FACET_TTL_MS = 30 * 60_000;
 const categoryFacetMem = new Map<string, { exp: number; value: CategoryFacets }>();
+const EMPTY_CATEGORY_FACETS: CategoryFacets = { manufacturers: [], brands: [], children: [], productTotal: 0 };
 
-/** Kategori sayfası için üretici + alt kategori facet’leri. */
+/** Kategori facet’leri — istek yolunda COUNT yok; snapshot + mem. */
 export async function listingFacetsForCategory(tenantId: string, categoryId: string) {
   const key = `${tenantId}:${categoryId}`;
   const hit = categoryFacetMem.get(key);
   if (hit && hit.exp > Date.now()) return hit.value;
-  const value = await listingFacetsForCategoryUncached(tenantId, categoryId);
+  const snap = await readFacetSnapshot<CategoryFacetSnapshot>(categoryFacetKey(tenantId, categoryId));
+  const value = snap?.payload ?? EMPTY_CATEGORY_FACETS;
   if (categoryFacetMem.size > 200) categoryFacetMem.clear();
   categoryFacetMem.set(key, { value, exp: Date.now() + CATEGORY_FACET_TTL_MS });
   return value;
 }
 
-async function listingFacetsForCategoryUncached(tenantId: string, categoryId: string): Promise<CategoryFacets> {
+/** Cron: kategori facet snapshot’ı hesaplar ve yazar. */
+export async function computeAndStoreCategoryFacets(tenantId: string, categoryId: string): Promise<CategoryFacets> {
   const categoryIds = await categoryFilterIds(categoryId);
   if (categoryIds.length === 0) {
-    return { manufacturers: [], brands: [], children: [] };
+    const empty = EMPTY_CATEGORY_FACETS;
+    await writeFacetSnapshot(categoryFacetKey(tenantId, categoryId), empty);
+    return empty;
   }
 
   const seesAll = await tenantSeesAllCatalog(tenantId);
@@ -691,9 +750,6 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
     .orderBy(desc(productCount))
     .limit(40);
 
-  // Alt kategori say\u0131lar\u0131 kozmetik bir rakam; products tablosuna hi\u00e7 dokunmadan
-  // (status kontrol\u00fc olmadan) hesaplamak, planlayıcının products'ı tam taramasını
-  // \u00f6nler (t4g.micro'da bu tarama disk I/O'ya d\u00fc\u015f\u00fcp saniyeler s\u00fcrebiliyordu).
   const childrenQuery = db
     .select({
       id: categories.id,
@@ -707,8 +763,6 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
     .groupBy(categories.id, categories.name, categories.slug)
     .orderBy(desc(sql`count(distinct ${productCategories.productId})`));
 
-  // Ana kategoride tüm fitment’lerle COUNT DISTINCT marka = saniye mertebesi.
-  // Yaprak kategoride ürün azdır; orada hesapla. Üst kategoride alt kategori yeterli.
   const isLeaf = categoryIds.length === 1;
   const brandsQuery = isLeaf
     ? db
@@ -728,13 +782,23 @@ async function listingFacetsForCategoryUncached(tenantId: string, categoryId: st
         .limit(40)
     : Promise.resolve([] as { id: string; name: string; slug: string; count: number }[]);
 
-  const [mfrs, brands, children] = await Promise.all([mfrsQuery, brandsQuery, childrenQuery]);
+  const totalQuery = db
+    .select({ value: sql<number>`cast(count(distinct ${productCategories.productId}) as unsigned)` })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(and(inTheseCategories, sellableSql(), visible));
 
-  return {
+  const [mfrs, brands, children, totalRows] = await Promise.all([mfrsQuery, brandsQuery, childrenQuery, totalQuery]);
+
+  const value: CategoryFacets = {
     manufacturers: mfrs.map((m) => ({ ...m, count: Number(m.count) })),
     brands: brands.map((b) => ({ ...b, count: Number(b.count) })),
     children: children.map((c) => ({ ...c, count: Number(c.count) })),
+    productTotal: Number(totalRows[0]?.value ?? 0),
   };
+  await writeFacetSnapshot(categoryFacetKey(tenantId, categoryId), value);
+  categoryFacetMem.set(`${tenantId}:${categoryId}`, { value, exp: Date.now() + CATEGORY_FACET_TTL_MS });
+  return value;
 }
 
 export async function getProductBySlug(tenantId: string, slug: string) {

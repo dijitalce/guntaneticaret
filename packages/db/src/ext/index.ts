@@ -21,3 +21,4 @@ export * from "./payment-links";
 export * from "./blog";
 export * from "./blog-html";
 export * from "./blog-plan";
+export * from "./facet-snapshots";

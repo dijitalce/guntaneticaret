@@ -179,7 +179,7 @@ export function cachedListProducts(query: ListingQuery) {
 export function cachedListingFacets(tenantId: string, brandId: string, modelId?: string) {
   return unstable_cache(
     () => listingFacets(tenantId, brandId, modelId),
-    ["listing-facets-v2", tenantId, brandId, modelId ?? "all"],
+    ["listing-facets-v3-snap", tenantId, brandId, modelId ?? "all"],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }
@@ -187,7 +187,7 @@ export function cachedListingFacets(tenantId: string, brandId: string, modelId?:
 export function cachedListingFacetsForCategory(tenantId: string, categoryId: string) {
   return unstable_cache(
     () => listingFacetsForCategory(tenantId, categoryId),
-    ["listing-facets-cat", tenantId, categoryId],
+    ["listing-facets-cat-v3-snap", tenantId, categoryId],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }

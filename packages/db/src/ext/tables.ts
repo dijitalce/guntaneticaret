@@ -313,6 +313,12 @@ const TABLES = [
     primary key (article_id, slug),
     index blog_article_tags_tenant_idx (tenant_id, slug)
   )`,
+  // Marka/model/kategori facet + ürün sayısı; istek yolunda COUNT DISTINCT yok (cron doldurur).
+  sql`create table if not exists catalog_facet_snapshots (
+    cache_key varchar(191) not null primary key,
+    payload json not null,
+    updated_at timestamp not null default current_timestamp on update current_timestamp
+  )`,
 ];
 
 const CUSTOMER_COLUMNS = [
