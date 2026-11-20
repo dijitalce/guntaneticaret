@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   cartItems,
   carts,
@@ -327,7 +327,7 @@ export type CheckoutAddressInput = {
   postalCode?: string;
 };
 
-export async function checkout(input: {
+type CheckoutInput = {
   tenantId: string;
   cartId: string;
   customerId?: string | null;
@@ -351,7 +351,93 @@ export async function checkout(input: {
   visitorSessionId?: string | null;
   clientIp?: string | null;
   userAgent?: string | null;
-}) {
+};
+
+function buildShippingAddress(
+  input: CheckoutInput,
+  opts: { installments?: number; installmentFee?: string; couponId?: string | null },
+): Record<string, string> {
+  return {
+    city: input.shipping.city,
+    district: input.shipping.district,
+    line1: input.shipping.line1,
+    postalCode: input.shipping.postalCode ?? "",
+    shipFullName: input.shipping.fullName ?? input.fullName,
+    shipPhone: input.shipping.phone ?? input.phone,
+    shipDifferent: input.shipDifferent ? "1" : "0",
+    invoiceType: input.invoiceType,
+    companyName: input.companyName ?? "",
+    taxOffice: input.taxOffice ?? "",
+    taxNumber: input.taxNumber ?? "",
+    nationalId: input.nationalId ?? "",
+    billingCity: input.billing.city,
+    billingDistrict: input.billing.district,
+    billingLine1: input.billing.line1,
+    billingPostalCode: input.billing.postalCode ?? "",
+    acceptMarketing: input.acceptMarketing ? "1" : "0",
+    paymentMethod: input.card ? PAYMENT_METHOD.CREDIT_CARD : PAYMENT_METHOD.BANK_TRANSFER,
+    ...(input.card
+      ? {
+          installments: String(opts.installments ?? 1),
+          installmentFee: opts.installmentFee ?? "0.00",
+          cartId: input.cartId,
+          ...(opts.couponId ? { couponId: opts.couponId } : {}),
+        }
+      : {}),
+  };
+}
+
+/** Aynı sepet için hâlâ ödeme bekleyen kart siparişi (3D retry’de yeni sipariş açılmasın). */
+async function findPendingCardOrderForCart(tenantId: string, cartId: string) {
+  const [row] = await db
+    .select()
+    .from(orders)
+    .where(
+      and(
+        eq(orders.tenantId, tenantId),
+        eq(orders.status, ORDER_STATUS.PENDING_PAYMENT),
+        sql`json_unquote(json_extract(${orders.shippingAddress}, '$.cartId')) = ${cartId}`,
+        sql`json_unquote(json_extract(${orders.shippingAddress}, '$.paymentMethod')) = ${PAYMENT_METHOD.CREDIT_CARD}`,
+      ),
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+async function replaceOrderItems(
+  orderId: string,
+  items: Awaited<ReturnType<typeof getCartView>>["items"],
+  opts: { releaseOld: boolean },
+) {
+  if (opts.releaseOld) {
+    const oldItems = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    for (const item of oldItems) {
+      await db
+        .update(products)
+        .set({ reservedQty: sql`greatest(${products.reservedQty} - ${item.qty}, 0)` })
+        .where(eq(products.id, item.productId));
+    }
+    await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+  }
+  for (const item of items) {
+    await db.insert(orderItems).values({
+      orderId,
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      imageUrl: item.imageUrl,
+      qty: item.qty,
+      unitPrice: item.price,
+    });
+    await db
+      .update(products)
+      .set({ reservedQty: sql`${products.reservedQty} + ${item.qty}` })
+      .where(eq(products.id, item.productId));
+  }
+}
+
+export async function checkout(input: CheckoutInput) {
   const garanti = input.card ? await garantiConfig() : null;
   if (input.card && !garanti) throw new Error("Kartla ödeme şu an kullanılamıyor.");
   await expireStaleCardOrders().catch(() => undefined);
@@ -399,8 +485,59 @@ export async function checkout(input: {
     if (installments > 1 && baseTotal < garanti.installmentMinAmount) throw new Error("Bu tutarda taksit yok.");
     grand = amountWithInstallment(baseTotal, installments, garanti);
   }
-  const orderNo = nextOrderNo();
 
+  // Havale seçildiyse aynı sepetin bekleyen kart siparişini kapat (çift rezervasyon olmasın).
+  if (!input.card) {
+    const pendingCard = await findPendingCardOrderForCart(input.tenantId, input.cartId);
+    if (pendingCard) {
+      await cancelOrder(pendingCard.id, { reason: "Müşteri havale ile devam etti; bekleyen kart denemesi kapatıldı." }).catch(() => undefined);
+    }
+  }
+
+  // Kart: aynı sepet için pending siparişi güncelleyip yeniden kullan (İptal+Ödendi çifti oluşmaz).
+  if (input.card) {
+    const existing = await findPendingCardOrderForCart(input.tenantId, input.cartId);
+    if (existing) {
+      const address = buildShippingAddress(input, {
+        installments,
+        installmentFee: (grand - baseTotal).toFixed(2),
+        couponId,
+      });
+      await replaceOrderItems(existing.id, view.items, { releaseOld: true });
+      await db
+        .update(orders)
+        .set({
+          customerId: input.customerId ?? null,
+          email: input.email,
+          phone: input.phone,
+          fullName: input.fullName,
+          shippingAddress: address,
+          subtotal: view.subtotal.toFixed(2),
+          shippingTotal: shipping.toFixed(2),
+          discountTotal: discount.toFixed(2),
+          grandTotal: grand.toFixed(2),
+          couponCode,
+          notes: input.notes?.trim() || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, existing.id));
+      await db
+        .update(payments)
+        .set({ amount: grand.toFixed(2), status: PAYMENT_STATUS.AWAITING, providerRef: existing.orderNo })
+        .where(and(eq(payments.orderId, existing.id), eq(payments.method, PAYMENT_METHOD.CREDIT_CARD)));
+      await addOrderEventSafe({
+        orderId: existing.id,
+        kind: "payment",
+        title: "Kart ödemesi yeniden denendi",
+        body: couponCode ? `Kupon: ${couponCode} (-${discount.toFixed(2)} TL)` : null,
+        actor: "Müşteri",
+      });
+      const [savedOrder] = await db.select().from(orders).where(eq(orders.id, existing.id)).limit(1);
+      return { order: savedOrder!, intent: null };
+    }
+  }
+
+  const orderNo = nextOrderNo();
   const order = {
     id: newId(),
     tenantId: input.tenantId,
@@ -410,33 +547,11 @@ export async function checkout(input: {
     email: input.email,
     phone: input.phone,
     fullName: input.fullName,
-    shippingAddress: {
-      city: input.shipping.city,
-      district: input.shipping.district,
-      line1: input.shipping.line1,
-      postalCode: input.shipping.postalCode ?? "",
-      shipFullName: input.shipping.fullName ?? input.fullName,
-      shipPhone: input.shipping.phone ?? input.phone,
-      shipDifferent: input.shipDifferent ? "1" : "0",
-      invoiceType: input.invoiceType,
-      companyName: input.companyName ?? "",
-      taxOffice: input.taxOffice ?? "",
-      taxNumber: input.taxNumber ?? "",
-      nationalId: input.nationalId ?? "",
-      billingCity: input.billing.city,
-      billingDistrict: input.billing.district,
-      billingLine1: input.billing.line1,
-      billingPostalCode: input.billing.postalCode ?? "",
-      acceptMarketing: input.acceptMarketing ? "1" : "0",
-      paymentMethod: input.card ? PAYMENT_METHOD.CREDIT_CARD : PAYMENT_METHOD.BANK_TRANSFER,
-      ...(input.card
-        ? {
-            installments: String(installments),
-            installmentFee: (grand - baseTotal).toFixed(2),
-            cartId: input.cartId,
-          }
-        : {}),
-    },
+    shippingAddress: buildShippingAddress(input, {
+      installments,
+      installmentFee: (grand - baseTotal).toFixed(2),
+      couponId,
+    }),
     subtotal: view.subtotal.toFixed(2),
     shippingTotal: shipping.toFixed(2),
     discountTotal: discount.toFixed(2),
@@ -445,22 +560,7 @@ export async function checkout(input: {
     notes: input.notes?.trim() || null,
   };
   await db.insert(orders).values(order);
-
-  for (const item of view.items) {
-    await db.insert(orderItems).values({
-      orderId: order.id,
-      productId: item.productId,
-      name: item.name,
-      sku: item.sku,
-      imageUrl: item.imageUrl,
-      qty: item.qty,
-      unitPrice: item.price,
-    });
-    await db
-      .update(products)
-      .set({ reservedQty: sql`${products.reservedQty} + ${item.qty}` })
-      .where(eq(products.id, item.productId));
-  }
+  await replaceOrderItems(order.id, view.items, { releaseOld: false });
 
   await db.insert(payments).values({
     orderId: order.id,
@@ -471,7 +571,8 @@ export async function checkout(input: {
     providerRef: orderNo,
   });
 
-  if (couponId) await markCouponUsed(couponId).catch(() => undefined);
+  // Kartta kupon, ödeme onaylanınca işaretlenir (başarısız 3D denemesinde yanmasın).
+  if (couponId && !input.card) await markCouponUsed(couponId).catch(() => undefined);
   await addOrderEventSafe({
     orderId: order.id,
     kind: "created",
@@ -554,7 +655,7 @@ export async function cancelOrder(orderId: string, opts: { actor?: string; reaso
   if (opts.notify) notifyOrderInBackground(orderId, "order_cancelled");
 }
 
-const CARD_ORDER_TTL_MINUTES = 30;
+const CARD_ORDER_TTL_MINUTES = 60;
 
 /** Banka sayfasında yarım bırakılan kart siparişlerinin stok rezervasyonunu bırakır. */
 export async function expireStaleCardOrders() {
@@ -566,7 +667,8 @@ export async function expireStaleCardOrders() {
       and(
         eq(orders.status, ORDER_STATUS.PENDING_PAYMENT),
         eq(payments.method, PAYMENT_METHOD.CREDIT_CARD),
-        sql`${orders.createdAt} < now() - interval ${sql.raw(String(CARD_ORDER_TTL_MINUTES))} minute`,
+        // updatedAt: yeniden denenen siparişlerin süresini uzatır.
+        sql`coalesce(${orders.updatedAt}, ${orders.createdAt}) < now() - interval ${sql.raw(String(CARD_ORDER_TTL_MINUTES))} minute`,
       ),
     )
     .limit(50);
@@ -628,18 +730,30 @@ export async function confirmCardPayment(
 
   const cartId = order.shippingAddress?.cartId;
   if (cartId) await db.delete(cartItems).where(eq(cartItems.cartId, cartId));
+  const couponId = order.shippingAddress?.couponId;
+  if (couponId) await markCouponUsed(couponId).catch(() => undefined);
   await addOrderEventSafe({ orderId: order.id, kind: "payment", title: "Kart ödemesi onaylandı", body: ref ? `Banka referansı: ${ref}` : null, actor: "Garanti BBVA" });
   notifyOrderInBackground(order.id, "order_created");
   sendServerPurchaseInBackground(order.id);
   return { order, alreadyPaid: false };
 }
 
-/** Başarısız/iptal edilen kart ödemesinde siparişi iptal edip rezervasyonu bırakır; sepet yerinde kalır. */
+/**
+ * Başarısız 3D/provizyon: siparişi İptal etme — pending kalsın, müşteri aynı siparişle tekrar denesin.
+ * Eski davranış her denemede yeni sipariş + İptal kaydı üretiyordu (admin’de İptal→Ödendi çiftleri).
+ */
 export async function failCardPayment(orderNo: string, bank?: { reason: string; detail: string }) {
   const found = await getCardOrder(orderNo);
   if (!found || found.order.status !== ORDER_STATUS.PENDING_PAYMENT) return;
-  const why = bank ? ` Banka: ${bank.reason} (${bank.detail})` : "";
-  await cancelOrder(found.order.id, { reason: `Kart ödemesi banka tarafından onaylanmadı.${why}` });
+  const why = bank ? `${bank.reason} (${bank.detail})` : "Banka onayı alınamadı";
+  await db.update(orders).set({ updatedAt: new Date() }).where(eq(orders.id, found.order.id));
+  await addOrderEventSafe({
+    orderId: found.order.id,
+    kind: "payment",
+    title: "Kart ödemesi başarısız — sipariş beklemeye alındı",
+    body: why,
+    actor: "Garanti BBVA",
+  });
 }
 
 export async function markOrderPreparing(orderId: string, actor?: string) {

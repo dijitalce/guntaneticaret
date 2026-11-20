@@ -540,15 +540,43 @@ async function attachListingExtras(
   };
 }
 
+type BrandFacets = {
+  categories: { id: string; name: string; slug: string; count: number }[];
+  manufacturers: { id: string; name: string; slug: string; logo: string | null }[];
+  engines: { id: string; name: string; slug: string }[];
+};
+
+const BRAND_FACET_TTL_MS = 10 * 60_000;
+const brandFacetMem = new Map<string, { exp: number; value: BrandFacets }>();
+
+/**
+ * Marka/model sayfası facet’leri. product_categories’ten başlayan 4’lü JOIN
+ * 1.5M katalogda 4–16 sn sürebiliyordu; fitment indeksinden (brand/model → product)
+ * başlayıp process cache ile tekrarlayan taramayı kesiyoruz.
+ */
 export async function listingFacets(tenantId: string, brandId: string, modelId?: string) {
+  const key = `${tenantId}:${brandId}:${modelId ?? ""}`;
+  const hit = brandFacetMem.get(key);
+  if (hit && hit.exp > Date.now()) return hit.value;
+  const value = await listingFacetsUncached(tenantId, brandId, modelId);
+  if (brandFacetMem.size > 400) {
+    const now = Date.now();
+    for (const [k, v] of brandFacetMem) if (v.exp < now) brandFacetMem.delete(k);
+    if (brandFacetMem.size > 400) brandFacetMem.clear();
+  }
+  brandFacetMem.set(key, { value, exp: Date.now() + BRAND_FACET_TTL_MS });
+  return value;
+}
+
+async function listingFacetsUncached(tenantId: string, brandId: string, modelId?: string): Promise<BrandFacets> {
   const seesAll = await tenantSeesAllCatalog(tenantId);
   const visible = tenantVisibleSql(tenantId, seesAll);
-  const scope = [
-    visible,
+  // Fitment satırından başla: product_fitments_brand_product_idx / model_product_idx kullanılır.
+  const fitScope = [
     eq(productFitments.vehicleBrandId, brandId),
-    sellableSql(),
     ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
   ];
+  const sellableScope = [sellableSql(), visible, ...fitScope];
 
   const [catLeaves, mfrs, engines] = await Promise.all([
     db
@@ -557,13 +585,13 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
         name: categories.name,
         slug: categories.slug,
         parentId: categories.parentId,
-        count: count(sql`distinct ${products.id}`),
+        count: count(sql`distinct ${productFitments.productId}`),
       })
-      .from(productCategories)
-      .innerJoin(categories, eq(productCategories.categoryId, categories.id))
-      .innerJoin(products, eq(products.id, productCategories.productId))
-      .innerJoin(productFitments, eq(productFitments.productId, products.id))
-      .where(and(...scope))
+      .from(productFitments)
+      .innerJoin(products, eq(products.id, productFitments.productId))
+      .innerJoin(productCategories, eq(productCategories.productId, productFitments.productId))
+      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .where(and(...sellableScope))
       .groupBy(categories.id, categories.name, categories.slug, categories.parentId),
     db
       .select({
@@ -572,10 +600,10 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
         slug: manufacturers.slug,
         logo: manufacturerLogoSql,
       })
-      .from(products)
-      .innerJoin(productFitments, eq(productFitments.productId, products.id))
+      .from(productFitments)
+      .innerJoin(products, eq(products.id, productFitments.productId))
       .innerJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-      .where(and(...scope))
+      .where(and(...sellableScope))
       .groupBy(manufacturers.id, manufacturers.name, manufacturers.slug, manufacturers.logoUrl, manufacturers.updatedAt),
     db
       .select({
@@ -586,14 +614,7 @@ export async function listingFacets(tenantId: string, brandId: string, modelId?:
       .from(productFitments)
       .innerJoin(vehicleEngines, eq(productFitments.vehicleEngineId, vehicleEngines.id))
       .innerJoin(products, eq(products.id, productFitments.productId))
-      .where(
-        and(
-          visible,
-          eq(productFitments.vehicleBrandId, brandId),
-          sellableSql(),
-          ...(modelId ? [eq(productFitments.vehicleModelId, modelId)] : []),
-        ),
-      )
+      .where(and(...sellableScope))
       .groupBy(vehicleEngines.id, vehicleEngines.name, vehicleEngines.slug),
   ]);
 

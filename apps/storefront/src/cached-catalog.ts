@@ -179,7 +179,7 @@ export function cachedListProducts(query: ListingQuery) {
 export function cachedListingFacets(tenantId: string, brandId: string, modelId?: string) {
   return unstable_cache(
     () => listingFacets(tenantId, brandId, modelId),
-    ["listing-facets", tenantId, brandId, modelId ?? "all"],
+    ["listing-facets-v2", tenantId, brandId, modelId ?? "all"],
     { revalidate: NAV_CACHE_TTL_SECONDS },
   )();
 }

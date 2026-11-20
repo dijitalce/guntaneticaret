@@ -158,7 +158,7 @@ export default async function CheckoutPage({
       )}
       {sp.hata === "kart" && (
         <p className="account-alert is-bad" role="alert">
-          Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetiniz duruyor; tekrar deneyebilir veya
+          Kart ödemesi tamamlanamadı{sp.mesaj ? `: ${sp.mesaj}` : "."} Sepetiniz ve siparişiniz duruyor; aynı siparişle tekrar deneyebilir veya
           havale ile ödeyebilirsiniz.
         </p>
       )}
