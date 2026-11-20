@@ -25,5 +25,6 @@ fi
 
 export GOMAXPROCS="${GOMAXPROCS:-1}" UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-1}"
 
-cd "$ROOT/packages/catalog"
-"$NODE" --v8-pool-size=1 --max-old-space-size=1024 --import tsx src/refresh-facets-cli.ts "$@" >> "$LOG" 2>&1
+# tsx @guntan/import bağımlılığında (catalog'a eklenmedi — lockfile şişmesin / frozen-lockfile kırılmasın).
+cd "$ROOT/packages/import"
+"$NODE" --v8-pool-size=1 --max-old-space-size=1024 --import tsx ../catalog/src/refresh-facets-cli.ts "$@" >> "$LOG" 2>&1

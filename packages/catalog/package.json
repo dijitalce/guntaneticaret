@@ -6,15 +6,11 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "lint": "echo ok",
-    "test": "vitest run",
-    "refresh-facets": "tsx src/refresh-facets-cli.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@guntan/db": "workspace:*",
     "@guntan/types": "workspace:*",
     "drizzle-orm": "^0.45.2"
-  },
-  "devDependencies": {
-    "tsx": "^4.19.3"
   }
 }

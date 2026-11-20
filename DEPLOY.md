@@ -148,7 +148,9 @@ Marka/model/kategori sayfalarındaki üretici facet’leri ve ürün sayımları
 
 ```bash
 bash /PROJE_YOLU/scripts/refresh-facets.sh --tenant=guntan
+# veya: pnpm --filter @guntan/import refresh-facets -- --tenant=guntan
 ```
+
 
 ### Altay ürün görselleri (otoparcasan.com, izinli)
 
