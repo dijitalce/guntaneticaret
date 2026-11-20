@@ -110,6 +110,7 @@ export default async function CategoryPage({
   const description = categoryDescription(tenant.siteName, cat.slug, name, cat.seoContent);
   const guides = await cachedGuidesForCategory(tenant.tenant.id, cat.slug);
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+  const hasNext = result.items.length >= result.pageSize || page < totalPages;
   const activeFilterCount = [manufacturerSlug, brandSlug].filter(Boolean).length;
 
   function href(overrides: Record<string, string | undefined> = {}) {
@@ -229,13 +230,13 @@ export default async function CategoryPage({
               </Link>
             </div>
           )}
-          {totalPages > 1 && (
+          {(page > 1 || hasNext) && (
             <nav className="catalog-pagination" aria-label="Sayfalar">
               {page > 1 && <Link href={href({ page: String(page - 1) })}>Önceki</Link>}
               <span>
-                {page} / {totalPages}
+                {page}{totalPages > page ? ` / ${totalPages}` : hasNext ? " / …" : ""}
               </span>
-              {page < totalPages && <Link href={href({ page: String(page + 1) })}>Sonraki</Link>}
+              {hasNext && <Link href={href({ page: String(page + 1) })}>Sonraki</Link>}
             </nav>
           )}
         </section>

@@ -73,6 +73,8 @@ export async function CatalogListing({
     (a, b) => Number(b.count) - Number(a.count) || a.name.localeCompare(b.name, "tr"),
   );
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Dolu sayfada Sonraki her zaman (yanlış düşük total sayfalamaı kesmesin).
+  const hasNext = items.length >= pageSize || page < totalPages;
   const paginationBase = listBasePath ?? categoryBase;
   const oemBy = await cardOems(items.map((p) => p.id));
 
@@ -141,15 +143,15 @@ export async function CatalogListing({
               <p>Başka bir model veya kategori dene.</p>
             </div>
           )}
-          {paginationBase && totalPages > 1 && (
+          {paginationBase && (page > 1 || hasNext) && (
             <nav className="catalog-pagination" aria-label="Sayfalar">
               {page > 1 && (
                 <Link href={pageHref(paginationBase, page - 1, sort)}>Önceki</Link>
               )}
               <span>
-                {page} / {totalPages}
+                {page}{totalPages > page ? ` / ${totalPages}` : hasNext ? " / …" : ""}
               </span>
-              {page < totalPages && (
+              {hasNext && (
                 <Link href={pageHref(paginationBase, page + 1, sort)}>Sonraki</Link>
               )}
             </nav>

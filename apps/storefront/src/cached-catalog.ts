@@ -159,7 +159,7 @@ export function cachedListProducts(query: ListingQuery) {
   return unstable_cache(
     () => listProducts(query),
     [
-      "listing-fitv4-total",
+      "listing-fitv5-hasmore",
       query.tenantId,
       query.brandId ?? "",
       query.modelId ?? "",

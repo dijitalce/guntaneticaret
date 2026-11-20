@@ -335,15 +335,18 @@ function listingOrder(sort: ListingSort) {
 }
 
 /**
- * Snapshot toplamı yalnızca pozitifse güvenilir.
- * Yoksa / 0 ise soft total eski haliyle ~1–2 sayfaya kilitliyordu (kategori “çok az ürün” gibi görünüyordu).
- * Tam sayfada en az ~100 sayfalık alan açılır; gerçek sayı refresh-facets sonrası gelir.
+ * Toplam sayı: snapshot varsa ve tutarlıysa kullan.
+ * Tam sayfa gelmişse her zaman en az +1 sayfa aç (yanlış düşük snapshot / soft total
+ * kategori sayfalarını 1–2 sayfaya kilitlemesin).
  */
 function resolveListingTotal(snap: number | undefined, offset: number, rowCount: number, pageSize: number) {
-  if (typeof snap === "number" && snap > 0) return snap;
-  if (rowCount === 0) return offset;
-  if (rowCount < pageSize) return offset + rowCount;
-  return offset + rowCount + pageSize * 99;
+  if (rowCount === 0) return typeof snap === "number" && snap >= 0 && offset === 0 ? snap : offset;
+  if (rowCount < pageSize) {
+    const exact = offset + rowCount;
+    return typeof snap === "number" && snap >= exact ? snap : exact;
+  }
+  const atLeastNext = offset + rowCount + pageSize;
+  return typeof snap === "number" && snap > atLeastNext ? snap : atLeastNext;
 }
 
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
@@ -364,7 +367,7 @@ function listingCacheKey(query: ListingQuery) {
     query.maxPrice ?? "",
     query.sort ?? "",
     query.page ?? 1,
-    "fitv4-total",
+    "fitv5-hasmore",
   ].join("|");
 }
 
@@ -467,15 +470,13 @@ async function listProductsUncached(query: ListingQuery) {
   }
 
   if (useCategories) {
-    const whereClause = and(...conditions, inArray(productCategories.categoryId, categoryIds!));
-    const fromCategory = () =>
-      db
-        .select(listingSelect)
-        .from(productCategories)
-        .innerJoin(products, eq(products.id, productCategories.productId))
-        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-        .where(whereClause);
-
+    // products + EXISTS(category): parent kategoride GROUP BY / DISTINCT yok.
+    conditions.push(sql`exists (
+      select 1 from product_categories pc
+      where pc.product_id = ${products.id}
+        and pc.category_id in (${sql.join(categoryIds!.map((id) => sql`${id}`), sql`, `)})
+    )`);
+    const whereClause = and(...conditions);
     const canUseCatSnap =
       Boolean(query.categoryId) &&
       !query.manufacturerId &&
@@ -487,25 +488,14 @@ async function listProductsUncached(query: ListingQuery) {
           .productTotal
       : undefined;
 
-    const pageRows =
-      categoryIds!.length === 1
-        ? await fromCategory().orderBy(order).limit(LISTING_PAGE_SIZE).offset(offset)
-        : await fromCategory()
-            .groupBy(
-              products.id,
-              products.name,
-              products.slug,
-              products.sku,
-              products.price,
-              products.compareAtPrice,
-              products.stockStatus,
-              manufacturers.name,
-              products.createdAt,
-              products.stockQty,
-            )
-            .orderBy(order)
-            .limit(LISTING_PAGE_SIZE)
-            .offset(offset);
+    const pageRows = await db
+      .select(listingSelect)
+      .from(products)
+      .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+      .where(whereClause)
+      .orderBy(order)
+      .limit(LISTING_PAGE_SIZE)
+      .offset(offset);
 
     return attachListingExtras(
       pageRows,
