@@ -334,6 +334,18 @@ function listingOrder(sort: ListingSort) {
   return desc(products.stockQty);
 }
 
+/**
+ * Snapshot toplamı yalnızca pozitifse güvenilir.
+ * Yoksa / 0 ise soft total eski haliyle ~1–2 sayfaya kilitliyordu (kategori “çok az ürün” gibi görünüyordu).
+ * Tam sayfada en az ~100 sayfalık alan açılır; gerçek sayı refresh-facets sonrası gelir.
+ */
+function resolveListingTotal(snap: number | undefined, offset: number, rowCount: number, pageSize: number) {
+  if (typeof snap === "number" && snap > 0) return snap;
+  if (rowCount === 0) return offset;
+  if (rowCount < pageSize) return offset + rowCount;
+  return offset + rowCount + pageSize * 99;
+}
+
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
 
 const LISTING_MEM_TTL_MS = 10 * 60_000;
@@ -352,7 +364,7 @@ function listingCacheKey(query: ListingQuery) {
     query.maxPrice ?? "",
     query.sort ?? "",
     query.page ?? 1,
-    "fitv3-exists",
+    "fitv4-total",
   ].join("|");
 }
 
@@ -451,12 +463,7 @@ async function listProductsUncached(query: ListingQuery) {
       .limit(LISTING_PAGE_SIZE)
       .offset(offset);
 
-    // Snapshot yoksa COUNT yapma — soft total (sonraki sayfa varsa +1 sayfa kadar pay).
-    const total =
-      snapTotal != null
-        ? snapTotal
-        : offset + rows.length + (rows.length >= LISTING_PAGE_SIZE ? LISTING_PAGE_SIZE : 0);
-    return attachListingExtras(rows, total, page);
+    return attachListingExtras(rows, resolveListingTotal(snapTotal, offset, rows.length, LISTING_PAGE_SIZE), page);
   }
 
   if (useCategories) {
@@ -500,11 +507,11 @@ async function listProductsUncached(query: ListingQuery) {
             .limit(LISTING_PAGE_SIZE)
             .offset(offset);
 
-    const total =
-      catSnapTotal != null
-        ? catSnapTotal
-        : offset + pageRows.length + (pageRows.length >= LISTING_PAGE_SIZE ? LISTING_PAGE_SIZE : 0);
-    return attachListingExtras(pageRows, total, page);
+    return attachListingExtras(
+      pageRows,
+      resolveListingTotal(catSnapTotal, offset, pageRows.length, LISTING_PAGE_SIZE),
+      page,
+    );
   }
 
   const whereClause = and(...conditions);
