@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Tedarikçi senkronu kuyruğu. Cron (dakikada bir):
-#   * * * * *  bash /path/to/guntaneticaret/scripts/sync-queue.sh
+# Tedarikçi senkronu kuyruğu. Cron (5 dakikada bir yeterli; her dakika CPU/IO gürültüsü):
+#   */5 * * * *  bash /path/to/guntaneticaret/scripts/sync-queue.sh
 #
 # 1. Panelin bıraktığı isteği (guntan-sync-request) alır ve senkronu başlatır. Senkron böylece web
 #    sürecinin altında çalışmaz; site yeniden başladığında öldürülmez.
-# 2. İstek yoksa, paneldeki saatlerde (guntan-sync-hours, Türkiye saati; yoksa 6,18) zamanlanmış
-#    senkronu başlatır. Barındırma süreç sınırı yüzünden başlayamazsa bir sonraki dakika yeniden dener.
+# 2. İstek yoksa, paneldeki saatlerde (guntan-sync-hours, Türkiye saati; yoksa 3,5) zamanlanmış
+#    senkronu başlatır. Gündüz (09–22) planlı senkron atlanır — MariaDB/CPU rahatlar; panel isteği her zaman çalışır.
 # Bu cron varken ayrıca supplier-sync.sh için cron tanımlamayın.
 set -uo pipefail
 
@@ -52,7 +52,7 @@ if [[ -f "$REQ" ]]; then
   TRIGGER="${TRIGGER:-panel}"
 else
   HOURS="$(tr -cd '0-9,' < "$SYNC_DIR/guntan-sync-hours" 2>/dev/null || true)"
-  HOURS="${HOURS:-6,18}"
+  HOURS="${HOURS:-3,5}"
   HOUR="$(TZ=Europe/Istanbul date +%-H)"
   [[ ",$HOURS," == *",$HOUR,"* ]] || exit 0
   SLOT="$(TZ=Europe/Istanbul date +%Y-%m-%d-%H)"
@@ -60,6 +60,15 @@ else
   [[ "$(cat "$STAMP" 2>/dev/null)" == "$SLOT" ]] && exit 0
   echo "$SLOT" > "$STAMP"
   TRIGGER="cron"
+fi
+
+# Planlı senkronu gündüz peake alma (CPU %90+ uyarısı); panel tetikleyicisi etkilenmez.
+if [[ "$TRIGGER" == "cron" ]]; then
+  HOUR_NOW="$(TZ=Europe/Istanbul date +%-H)"
+  if (( 10#$HOUR_NOW >= 9 && 10#$HOUR_NOW < 22 )); then
+    note "Kuyruk: planlı senkron gündüz atlandı (saat $HOUR_NOW)."
+    exit 0
+  fi
 fi
 
 note "Kuyruk: senkron başlatılıyor ($TRIGGER${FLAGS:+, $FLAGS})."

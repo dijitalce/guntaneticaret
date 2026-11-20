@@ -29,7 +29,7 @@ import {
   pagination,
 } from "../../../src/seo";
 
-export const revalidate = 300;
+export const revalidate = 600;
 
 export async function generateMetadata({
   params,

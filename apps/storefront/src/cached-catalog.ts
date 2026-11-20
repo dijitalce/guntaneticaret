@@ -24,7 +24,7 @@ import { NAV_CACHE_TTL_SECONDS } from "@guntan/config";
 import { banners, db } from "@guntan/db";
 import { and, asc, eq } from "drizzle-orm";
 
-const LISTING_CACHE_TTL_SECONDS = 90;
+const LISTING_CACHE_TTL_SECONDS = 600;
 const PRODUCT_CACHE_TTL_SECONDS = 300;
 
 export const cachedVisibleBrands = cache(async (tenantId: string) => {
@@ -159,7 +159,7 @@ export function cachedListProducts(query: ListingQuery) {
   return unstable_cache(
     () => listProducts(query),
     [
-      "listing-fitv1",
+      "listing-fitv3-exists",
       query.tenantId,
       query.brandId ?? "",
       query.modelId ?? "",

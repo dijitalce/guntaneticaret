@@ -336,7 +336,7 @@ function listingOrder(sort: ListingSort) {
 
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
 
-const LISTING_MEM_TTL_MS = 5 * 60_000;
+const LISTING_MEM_TTL_MS = 10 * 60_000;
 const listingMem = new Map<string, { exp: number; value: ListingResult }>();
 
 function listingCacheKey(query: ListingQuery) {
@@ -352,7 +352,7 @@ function listingCacheKey(query: ListingQuery) {
     query.maxPrice ?? "",
     query.sort ?? "",
     query.page ?? 1,
-    "fitv1",
+    "fitv3-exists",
   ].join("|");
 }
 
@@ -412,10 +412,15 @@ async function listProductsUncached(query: ListingQuery) {
   const useCategories = Boolean(categoryIds?.length) && !useFitments;
 
   if (useFitments) {
-    const fitmentConds = [];
-    if (query.brandId) fitmentConds.push(eq(productFitments.vehicleBrandId, query.brandId));
-    if (query.modelId) fitmentConds.push(eq(productFitments.vehicleModelId, query.modelId));
-    if (query.engineId) fitmentConds.push(eq(productFitments.vehicleEngineId, query.engineId));
+    // products + EXISTS(fitment): DISTINCT alt sorgu 1–2M satır materialize etmesin.
+    // stock/price indeksi + LIMIT ile sayfa dolar; tam COUNT istek yolunda yok.
+    conditions.push(sql`exists (
+      select 1 from product_fitments pf
+      where pf.product_id = ${products.id}
+        ${query.brandId ? sql`and pf.vehicle_brand_id = ${query.brandId}` : sql``}
+        ${query.modelId ? sql`and pf.vehicle_model_id = ${query.modelId}` : sql``}
+        ${query.engineId ? sql`and pf.vehicle_engine_id = ${query.engineId}` : sql``}
+    )`);
     if (categoryIds?.length) {
       conditions.push(sql`exists (
         select 1 from product_categories pc
@@ -423,13 +428,7 @@ async function listProductsUncached(query: ListingQuery) {
           and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}`), sql`, `)})
       )`);
     }
-    const fitIds = db
-      .selectDistinct({ productId: productFitments.productId })
-      .from(productFitments)
-      .where(and(...fitmentConds))
-      .as("fit_ids");
     const whereClause = and(...conditions);
-    // Filtresiz marka/model: toplam sayı snapshot’tan (cron); istekte 1–2M satır COUNT yok.
     const canUseSnapTotal =
       Boolean(query.brandId) &&
       !query.engineId &&
@@ -443,29 +442,21 @@ async function listProductsUncached(query: ListingQuery) {
           .productTotal
       : undefined;
 
-    const rowsPromise = db
+    const rows = await db
       .select(listingSelect)
-      .from(fitIds)
-      .innerJoin(products, eq(products.id, fitIds.productId))
+      .from(products)
       .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
       .where(whereClause)
       .orderBy(order)
       .limit(LISTING_PAGE_SIZE)
       .offset(offset);
 
-    if (snapTotal != null) {
-      return attachListingExtras(await rowsPromise, snapTotal, page);
-    }
-
-    const [rows, countRows] = await Promise.all([
-      rowsPromise,
-      db
-        .select({ value: sql<number>`cast(count(*) as unsigned)` })
-        .from(fitIds)
-        .innerJoin(products, eq(products.id, fitIds.productId))
-        .where(whereClause),
-    ]);
-    return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
+    // Snapshot yoksa COUNT yapma — soft total (sonraki sayfa varsa +1 sayfa kadar pay).
+    const total =
+      snapTotal != null
+        ? snapTotal
+        : offset + rows.length + (rows.length >= LISTING_PAGE_SIZE ? LISTING_PAGE_SIZE : 0);
+    return attachListingExtras(rows, total, page);
   }
 
   if (useCategories) {
@@ -476,14 +467,6 @@ async function listProductsUncached(query: ListingQuery) {
         .from(productCategories)
         .innerJoin(products, eq(products.id, productCategories.productId))
         .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-        .where(whereClause);
-    const countFromCategory = () =>
-      db
-        .select({
-          value: sql<number>`cast(count(distinct ${productCategories.productId}) as unsigned)`,
-        })
-        .from(productCategories)
-        .innerJoin(products, eq(products.id, productCategories.productId))
         .where(whereClause);
 
     const canUseCatSnap =
@@ -499,8 +482,8 @@ async function listProductsUncached(query: ListingQuery) {
 
     const pageRows =
       categoryIds!.length === 1
-        ? fromCategory().orderBy(order).limit(LISTING_PAGE_SIZE).offset(offset)
-        : fromCategory()
+        ? await fromCategory().orderBy(order).limit(LISTING_PAGE_SIZE).offset(offset)
+        : await fromCategory()
             .groupBy(
               products.id,
               products.name,
@@ -517,12 +500,11 @@ async function listProductsUncached(query: ListingQuery) {
             .limit(LISTING_PAGE_SIZE)
             .offset(offset);
 
-    if (catSnapTotal != null) {
-      return attachListingExtras(await pageRows, catSnapTotal, page);
-    }
-
-    const [rows, countRows] = await Promise.all([pageRows, countFromCategory()]);
-    return attachListingExtras(rows, countRows[0]?.value ?? 0, page);
+    const total =
+      catSnapTotal != null
+        ? catSnapTotal
+        : offset + pageRows.length + (pageRows.length >= LISTING_PAGE_SIZE ? LISTING_PAGE_SIZE : 0);
+    return attachListingExtras(pageRows, total, page);
   }
 
   const whereClause = and(...conditions);

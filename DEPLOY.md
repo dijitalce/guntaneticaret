@@ -126,6 +126,15 @@ Kurulum:
 Aynı anda iki senkron çalışmaz (kilit dosyası). Başbuğ tek oturuma izin verir; senkron bitince oturumu kapatır.
 Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
+### Senkron kuyruğu (CPU)
+
+```bash
+# Eskiden * * * * * idi; 5 dk yeterli. Planlı senkron varsayılan 03 ve 05 (TR); gündüz 09–22 atlanır.
+*/5 * * * * bash /PROJE_YOLU/scripts/sync-queue.sh
+```
+
+Panel “şimdi senkron” her zaman çalışır. Saatleri değiştirmek: `guntan-sync-hours` dosyasına `3,5` gibi yazın.
+
 ### Katalog facet snapshot (MariaDB yükü)
 
 Marka/model/kategori sayfalarındaki üretici facet’leri ve ürün sayımları istek anında `COUNT DISTINCT` ile 1–2M satır tarıyordu. Artık `catalog_facet_snapshots` tablosundan okunur; tabloyu cron doldurur:
