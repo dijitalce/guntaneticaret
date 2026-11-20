@@ -135,6 +135,14 @@ Başbuğ stoğu devre dışı bırakmak için `.env`: `BASBUG_USE_STOCK=0`.
 
 Panel “şimdi senkron” her zaman çalışır. Saatleri değiştirmek: `guntan-sync-hours` dosyasına `3,5` gibi yazın.
 
+### Kategori ağacı onarımı (üst kategori ürünleri)
+
+Üst kategori sayfaları (`/kategori/motor` vb.) alt kategorileri `parent_id` + `path` ile toplar. Path kökte kalmış alt kategoriler ürünleri gizler. Deploy sonrası bir kez:
+
+```bash
+cd /PROJE_YOLU/packages/import && node --import tsx src/assign-categories-cli.ts --repair-tree
+```
+
 ### Katalog facet snapshot (MariaDB yükü)
 
 Marka/model/kategori sayfalarındaki üretici facet’leri ve ürün sayımları istek anında `COUNT DISTINCT` ile 1–2M satır tarıyordu. Artık `catalog_facet_snapshots` tablosundan okunur; tabloyu cron doldurur:

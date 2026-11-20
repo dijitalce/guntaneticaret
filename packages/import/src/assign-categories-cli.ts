@@ -6,15 +6,25 @@
 import { sql } from "drizzle-orm";
 import { db, pool, productCategories } from "@guntan/db";
 import { inferCategory, type InferredCategory } from "./category-from-name";
-import { resolveInferredCategory } from "./category-resolve";
+import { repairCategoryTree, resolveInferredCategory } from "./category-resolve";
 
 const BATCH = 5000;
 
 async function main() {
   const apply = process.argv.includes("--apply");
+  const repairTree = process.argv.includes("--repair-tree");
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : Infinity;
   if (!(limit > 0)) throw new Error("--limit pozitif bir sayı olmalı.");
+
+  if (repairTree || apply) {
+    const { fixed } = await repairCategoryTree();
+    console.log(`Kategori ağacı onarıldı: ${fixed} satır path/parent güncellendi.`);
+    if (repairTree && !apply) {
+      await pool.end();
+      return;
+    }
+  }
 
   const counts = new Map<string, { inferred: InferredCategory; n: number }>();
   const unmatched: string[] = [];

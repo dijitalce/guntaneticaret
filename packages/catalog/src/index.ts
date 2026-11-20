@@ -247,6 +247,10 @@ const CAT_ID_TTL_MS = 10 * 60_000;
 const catIdMem = new Map<string, { exp: number; value: string[] }>();
 
 /** Category + all descendants via path prefix (supports nested trees). */
+/**
+ * Kategori + tüm altları. Path bozuk olsa bile parent_id ağacıyla toplar
+ * (motor altında path'i kökte kalmış piston vb. ürünler kaybolmasın).
+ */
 async function categoryFilterIds(categoryId: string) {
   const hit = catIdMem.get(categoryId);
   if (hit && hit.exp > Date.now()) return hit.value;
@@ -255,16 +259,36 @@ async function categoryFilterIds(categoryId: string) {
     .from(categories)
     .where(eq(categories.id, categoryId))
     .limit(1);
-  const ids = !cat
-    ? [categoryId]
-    : (await db
-        .select({ id: categories.id })
-        .from(categories)
-        .where(or(eq(categories.id, categoryId), sql`${categories.path} like ${`${cat.path}/%`}`))
-      ).map((r) => r.id);
+  if (!cat) {
+    catIdMem.set(categoryId, { value: [categoryId], exp: Date.now() + CAT_ID_TTL_MS });
+    return [categoryId];
+  }
+
+  const ids = new Set<string>([categoryId]);
+  const byPath = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(sql`${categories.path} like ${`${cat.path}/%`}`);
+  for (const r of byPath) ids.add(r.id);
+
+  let frontier = [categoryId];
+  while (frontier.length) {
+    const children = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(inArray(categories.parentId, frontier));
+    frontier = [];
+    for (const child of children) {
+      if (ids.has(child.id)) continue;
+      ids.add(child.id);
+      frontier.push(child.id);
+    }
+  }
+
+  const value = [...ids];
   if (catIdMem.size > 400) catIdMem.clear();
-  catIdMem.set(categoryId, { value: ids, exp: Date.now() + CAT_ID_TTL_MS });
-  return ids;
+  catIdMem.set(categoryId, { value, exp: Date.now() + CAT_ID_TTL_MS });
+  return value;
 }
 
 async function primaryImagesByProductIds(ids: string[]) {
@@ -367,7 +391,7 @@ function listingCacheKey(query: ListingQuery) {
     query.maxPrice ?? "",
     query.sort ?? "",
     query.page ?? 1,
-    "fitv5-hasmore",
+    "fitv6-cat-tree",
   ].join("|");
 }
 

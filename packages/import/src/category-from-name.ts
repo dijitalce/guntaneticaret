@@ -8,7 +8,7 @@ import { SEO_CATEGORIES, seoCategoryParentSlug } from "@guntan/types";
 export type InferredCategory = { slug: string; name: string; parentSlug: string | null; parentName: string | null };
 
 /** SEO haritasında olmayan ama katalogda kullanılan (ya da bu dosyanın açtığı) kategoriler. */
-const EXTRA: Record<string, { name: string; parent: string | null }> = {
+export const EXTRA_CATEGORY_PARENTS: Record<string, { name: string; parent: string | null }> = {
   "fren-aksami-muhtelif": { name: "Fren Parçaları", parent: "fren-aksami" },
   "motor-aksami": { name: "Motor Aksamı", parent: "motor" },
   "kece-aksami": { name: "Keçeler", parent: "motor" },
@@ -182,7 +182,7 @@ function fold(value: string) {
 function describe(slug: string): { name: string; parent: string | null } {
   const seo = SEO_CATEGORIES[slug];
   if (seo) return { name: seo.name, parent: seoCategoryParentSlug(seo) ?? null };
-  const extra = EXTRA[slug];
+  const extra = EXTRA_CATEGORY_PARENTS[slug];
   if (!extra) throw new Error(`Tanımsız kategori: ${slug}`);
   return extra;
 }
