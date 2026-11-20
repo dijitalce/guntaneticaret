@@ -171,7 +171,13 @@ Ayrı cron gerekmez: `otoparcasan-images.sh` saatin ilk çeyreğindeki çalışm
 
 ### Diğer ürün görselleri (parcatedarik.com)
 
-Ayrı cron gerekmez: `otoparcasan-images.sh` işini bitirince kalan süreyle `scripts/parcatedarik-images.sh`'yi çalıştırır (toplam ≤ 14 dk).
+Ayrı cron (otoparcasan zincirinden ayrıldı — CPU/403 gürültüsü olmasın):
+
+```bash
+# Gece dilimi önerilir; her çalışma ≤ 14 dk
+10 0-2 * * * bash /PROJE_YOLU/scripts/parcatedarik-images.sh
+```
+
 
 - Görseli olmayan tüm aktif ürünler (çoğu Başbuğ) hedeflenir. Site haritasında ürün yok; üreticilerimize karşılık gelen marka listeleme sayfaları (`/psa?pagesize=120&pagenumber=N`) taranır ve `guntan-images/parcatedarik-index.tsv`'ye yazılır. Ayda bir baştan taranır (`--recrawl` ile elle).
 - Eşleme ürün başlığındaki marka + parça numarasıyla yapılır; `psa` sayfası GM (Opel) orijinallerini de listeler. Üretici adı tutmayan markalar `BRAND_ALIASES` / `SLUG_ALIASES` içinde.

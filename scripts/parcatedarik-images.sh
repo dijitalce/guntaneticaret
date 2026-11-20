@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# otoparcasan-images.sh kalan süreyle bunu çağırır; elle de çalıştırılabilir:
+# Ayrı cron veya elle:
 #   bash /path/to/guntaneticaret/scripts/parcatedarik-images.sh [--recrawl] [--limit=N]
 # Kilit dosyası sayesinde üst üste binmez.
 set -uo pipefail
