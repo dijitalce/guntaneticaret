@@ -40,7 +40,7 @@ export async function writeFacetSnapshot(cacheKey: string, payload: unknown) {
   await ensureExtTables();
   const json = JSON.stringify(payload);
   await exec(
-    sql`insert into catalog_facet_snapshots (cache_key, payload) values (${cacheKey}, cast(${json} as json))
+    sql`insert into catalog_facet_snapshots (cache_key, payload) values (${cacheKey}, ${json})
         on duplicate key update payload = values(payload), updated_at = current_timestamp`,
   );
 }
