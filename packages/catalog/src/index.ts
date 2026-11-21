@@ -375,8 +375,31 @@ function resolveListingTotal(snap: number | undefined, offset: number, rowCount:
 
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
 
-const LISTING_MEM_TTL_MS = 10 * 60_000;
-const listingMem = new Map<string, { exp: number; value: ListingResult }>();
+/** Taze süre: bu sürede DB'ye hiç gidilmez. Bayat süre: eski sonuç hemen dönülür, yenileme arka planda. */
+const LISTING_FRESH_MS = 15 * 60_000;
+const LISTING_STALE_MS = 6 * 60 * 60_000;
+const LISTING_MEM_MAX = 1500;
+const listingMem = new Map<string, { fresh: number; stale: number; value: ListingResult }>();
+const listingInflight = new Map<string, Promise<ListingResult>>();
+
+/** Aynı anda en fazla N ağır listeleme sorgusu MariaDB'ye gider; fazlası kuyrukta bekler. */
+const LISTING_MAX_CONCURRENT = Number(process.env.LISTING_MAX_CONCURRENT || 2);
+let listingActive = 0;
+const listingWaiters: Array<() => void> = [];
+async function withListingSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (listingActive >= LISTING_MAX_CONCURRENT) {
+    await new Promise<void>((resolve) => listingWaiters.push(resolve));
+  } else {
+    listingActive += 1;
+  }
+  try {
+    return await fn();
+  } finally {
+    const next = listingWaiters.shift();
+    if (next) next();
+    else listingActive -= 1;
+  }
+}
 
 function listingCacheKey(query: ListingQuery) {
   return [
@@ -395,34 +418,40 @@ function listingCacheKey(query: ListingQuery) {
   ].join("|");
 }
 
-function listingMemGet(key: string): ListingResult | undefined {
-  const hit = listingMem.get(key);
-  if (!hit) return undefined;
-  if (hit.exp < Date.now()) {
-    listingMem.delete(key);
-    return undefined;
+function listingMemSet(key: string, value: ListingResult) {
+  listingMem.delete(key); // Map sırası = en son yazılan sonda (basit LRU)
+  listingMem.set(key, { value, fresh: Date.now() + LISTING_FRESH_MS, stale: Date.now() + LISTING_STALE_MS });
+  while (listingMem.size > LISTING_MEM_MAX) {
+    const oldest = listingMem.keys().next().value;
+    if (oldest === undefined) break;
+    listingMem.delete(oldest);
   }
-  return hit.value;
 }
 
-function listingMemSet(key: string, value: ListingResult) {
-  if (listingMem.size > 250) {
-    const now = Date.now();
-    for (const [k, v] of listingMem) {
-      if (v.exp < now) listingMem.delete(k);
-    }
-    if (listingMem.size > 250) listingMem.clear();
-  }
-  listingMem.set(key, { value, exp: Date.now() + LISTING_MEM_TTL_MS });
+function loadListing(key: string, query: ListingQuery): Promise<ListingResult> {
+  const running = listingInflight.get(key);
+  if (running) return running;
+  const p = withListingSlot(() => listProductsUncached(query))
+    .then((value) => {
+      listingMemSet(key, value);
+      return value;
+    })
+    .finally(() => listingInflight.delete(key));
+  listingInflight.set(key, p);
+  return p;
 }
 
 export async function listProducts(query: ListingQuery) {
   const key = listingCacheKey(query);
-  const cached = listingMemGet(key);
-  if (cached) return cached;
-  const value = await listProductsUncached(query);
-  listingMemSet(key, value);
-  return value;
+  const hit = listingMem.get(key);
+  const now = Date.now();
+  if (hit && hit.fresh > now) return hit.value;
+  if (hit && hit.stale > now) {
+    void loadListing(key, query).catch(() => undefined);
+    return hit.value;
+  }
+  if (hit) listingMem.delete(key);
+  return loadListing(key, query);
 }
 
 async function listProductsUncached(query: ListingQuery) {
@@ -1062,9 +1091,47 @@ export async function cartProductExtras(ids: string[]) {
   return { byProduct, firstModelId };
 }
 
+const FEATURED_SNAPSHOT_TTL_MS = 6 * 60 * 60_000;
+const featuredInflight = new Map<string, Promise<string[]>>();
+
+/**
+ * Vitrin ürün ID'leri: 1M satırlık stok sıralaması (~15 sn) her süreç/yeniden başlatmada tekrarlanmasın.
+ * Sonuç `catalog_facet_snapshots` içinde süreçler arası paylaşılır; bayatsa eski liste dönülür,
+ * yenileme arka planda ve tek seferde yapılır.
+ */
+async function featuredProductIds(tenantId: string, limit: number): Promise<string[]> {
+  const key = `featured:${tenantId}:${limit}`;
+  const refresh = () => {
+    const running = featuredInflight.get(key);
+    if (running) return running;
+    const p = (async () => {
+      const seesAll = await tenantSeesAllCatalog(tenantId);
+      const rows = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(and(sellableSql(), tenantVisibleSql(tenantId, seesAll)))
+        .orderBy(desc(products.stockQty), desc(products.updatedAt))
+        .limit(limit);
+      const ids = rows.map((r) => r.id);
+      if (ids.length > 0) await writeFacetSnapshot(key, { ids });
+      return ids;
+    })().finally(() => featuredInflight.delete(key));
+    featuredInflight.set(key, p);
+    return p;
+  };
+
+  const snap = await readFacetSnapshot<{ ids: string[] }>(key);
+  if (snap?.payload.ids?.length) {
+    if (Date.now() - snap.updatedAt.getTime() > FEATURED_SNAPSHOT_TTL_MS) void refresh().catch(() => undefined);
+    return snap.payload.ids;
+  }
+  return refresh();
+}
+
 export async function featuredProducts(tenantId: string, limit = 8) {
-  const seesAll = await tenantSeesAllCatalog(tenantId);
-  const rows = await db
+  const orderedIds = await featuredProductIds(tenantId, limit);
+  if (orderedIds.length === 0) return [];
+  const found = await db
     .select({
       id: products.id,
       name: products.name,
@@ -1078,12 +1145,9 @@ export async function featuredProducts(tenantId: string, limit = 8) {
     })
     .from(products)
     .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-    .where(and(
-      sellableSql(),
-      tenantVisibleSql(tenantId, seesAll),
-    ))
-    .orderBy(desc(products.stockQty), desc(products.updatedAt))
-    .limit(limit);
+    .where(and(inArray(products.id, orderedIds), sellableSql()));
+  const byId = new Map(found.map((r) => [r.id, r]));
+  const rows = orderedIds.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
   const ids = rows.map((r) => r.id);
   const [imageBy, fitBy] = await Promise.all([
     primaryImagesByProductIds(ids),
