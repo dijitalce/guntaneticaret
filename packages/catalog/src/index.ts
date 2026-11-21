@@ -376,6 +376,8 @@ function resolveListingTotal(snap: number | undefined, offset: number, rowCount:
 type ListingResult = Awaited<ReturnType<typeof listProductsUncached>>;
 
 /** Taze süre: bu sürede DB'ye hiç gidilmez. Bayat süre: eski sonuç hemen dönülür, yenileme arka planda. */
+/** Marka/model eşleşmesi bu sayının altındaysa listeleme product_fitments'ten başlar. */
+const LISTING_FIT_DRIVE_MAX = Number(process.env.LISTING_FIT_DRIVE_MAX || 40_000);
 const LISTING_FRESH_MS = 15 * 60_000;
 const LISTING_STALE_MS = 6 * 60 * 60_000;
 const LISTING_MEM_MAX = 1500;
@@ -480,15 +482,22 @@ async function listProductsUncached(query: ListingQuery) {
   const useCategories = Boolean(categoryIds?.length) && !useFitments;
 
   if (useFitments) {
-    // products + EXISTS(fitment): DISTINCT alt sorgu 1–2M satır materialize etmesin.
-    // stock/price indeksi + LIMIT ile sayfa dolar; tam COUNT istek yolunda yok.
-    conditions.push(sql`exists (
-      select 1 from product_fitments pf
-      where pf.product_id = ${products.id}
-        ${query.brandId ? sql`and pf.vehicle_brand_id = ${query.brandId}` : sql``}
-        ${query.modelId ? sql`and pf.vehicle_model_id = ${query.modelId}` : sql``}
-        ${query.engineId ? sql`and pf.vehicle_engine_id = ${query.engineId}` : sql``}
-    )`);
+    // Büyük eşleşme (marka 1M+ ürün): stock indeksi + LIMIT ile EXISTS ucuz; küçük eşleşmede ise
+    // indeksi baştan taramak yerine eşleşen ürünlerden başlayıp yalnızca onları sıralamak çok daha hızlı.
+    const fitFilters = [
+      query.brandId ? eq(productFitments.vehicleBrandId, query.brandId) : undefined,
+      query.modelId ? eq(productFitments.vehicleModelId, query.modelId) : undefined,
+      query.engineId ? eq(productFitments.vehicleEngineId, query.engineId) : undefined,
+    ].filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+    const brandSnapTotal = query.brandId
+      ? (await readFacetSnapshot<BrandFacetSnapshot>(brandFacetKey(query.tenantId, query.brandId, query.modelId)))?.payload
+          .productTotal
+      : undefined;
+    // Model/motor daraltması snapshot toplamını yalnızca küçültür; üst sınır olarak güvenlidir.
+    const driveFromFitments =
+      typeof brandSnapTotal === "number" && brandSnapTotal > 0 && brandSnapTotal <= LISTING_FIT_DRIVE_MAX;
+
     if (categoryIds?.length) {
       conditions.push(sql`exists (
         select 1 from product_categories pc
@@ -496,7 +505,6 @@ async function listProductsUncached(query: ListingQuery) {
           and pc.category_id in (${sql.join(categoryIds.map((id) => sql`${id}`), sql`, `)})
       )`);
     }
-    const whereClause = and(...conditions);
     const canUseSnapTotal =
       Boolean(query.brandId) &&
       !query.engineId &&
@@ -505,19 +513,45 @@ async function listProductsUncached(query: ListingQuery) {
       query.minPrice == null &&
       query.maxPrice == null &&
       !categoryIds?.length;
-    const snapTotal = canUseSnapTotal
-      ? (await readFacetSnapshot<BrandFacetSnapshot>(brandFacetKey(query.tenantId, query.brandId!, query.modelId)))?.payload
-          .productTotal
-      : undefined;
+    const snapTotal = canUseSnapTotal ? brandSnapTotal : undefined;
 
-    const rows = await db
-      .select(listingSelect)
-      .from(products)
-      .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
-      .where(whereClause)
-      .orderBy(order)
-      .limit(LISTING_PAGE_SIZE)
-      .offset(offset);
+    let rows;
+    if (driveFromFitments) {
+      const fitIds = db
+        .selectDistinct({ productId: productFitments.productId })
+        .from(productFitments)
+        .where(and(...fitFilters))
+        .as("listing_fit_ids");
+      rows = await db
+        .select(listingSelect)
+        .from(fitIds)
+        .innerJoin(products, eq(products.id, fitIds.productId))
+        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+        .where(and(...conditions))
+        .orderBy(order)
+        .limit(LISTING_PAGE_SIZE)
+        .offset(offset);
+    } else {
+      rows = await db
+        .select(listingSelect)
+        .from(products)
+        .leftJoin(manufacturers, eq(products.manufacturerId, manufacturers.id))
+        .where(
+          and(
+            ...conditions,
+            sql`exists (
+              select 1 from product_fitments pf
+              where pf.product_id = ${products.id}
+                ${query.brandId ? sql`and pf.vehicle_brand_id = ${query.brandId}` : sql``}
+                ${query.modelId ? sql`and pf.vehicle_model_id = ${query.modelId}` : sql``}
+                ${query.engineId ? sql`and pf.vehicle_engine_id = ${query.engineId}` : sql``}
+            )`,
+          ),
+        )
+        .orderBy(order)
+        .limit(LISTING_PAGE_SIZE)
+        .offset(offset);
+    }
 
     return attachListingExtras(rows, resolveListingTotal(snapTotal, offset, rows.length, LISTING_PAGE_SIZE), page);
   }
